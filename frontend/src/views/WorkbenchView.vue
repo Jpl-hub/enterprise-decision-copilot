@@ -1,18 +1,17 @@
 <template>
-  <div class="page-stack workbench-page">
-    <PagePanel title="企业分析" eyebrow="Enterprise Analysis" description="围绕一家公司连续分析，不需要你自己在多个页面之间拼信息。">
+  <div class="page-stack workbench-page refined-workbench">
+    <PagePanel title="企业分析台" eyebrow="Enterprise Analysis">
       <template #actions>
         <div class="toolbar-cluster">
           <select v-model="selectedCode" class="select-input toolbar-select">
             <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
           </select>
-          <button class="button-primary" @click="loadAll">刷新分析</button>
+          <button class="button-primary" @click="loadAll">刷新</button>
         </div>
       </template>
 
-      <div class="analysis-hero" v-if="report">
+      <div class="analysis-hero compact-analysis-hero" v-if="report">
         <div class="analysis-hero-main">
-          <p class="section-tag">当前对象</p>
           <h3>{{ report.company_name }}</h3>
           <p class="panel-description strong-copy">{{ report.summary }}</p>
         </div>
@@ -36,40 +35,33 @@
         <div class="analysis-main-stack">
           <div class="sub-panel">
             <div class="sub-panel-header">
-              <h3>现在该怎么判断</h3>
-              <span class="badge-subtle">当前结论</span>
+              <h3>当前判断</h3>
+              <RouterLink :to="`/competition/${selectedCode}`">导出材料</RouterLink>
             </div>
-            <div v-if="briefLoading" class="empty-state">正在生成决策结论...</div>
+            <div v-if="briefLoading" class="empty-state">正在生成判断...</div>
             <div v-else-if="brief" class="stack-list">
               <div class="info-card compact emphasis-card">
                 <strong>{{ brief.verdict }}</strong>
-                <p class="muted">{{ brief.summary }}</p>
+                <p>{{ brief.summary }}</p>
               </div>
               <div class="info-card compact">
                 <strong>关键判断</strong>
-                <p class="muted">{{ brief.key_judgements.join('；') }}</p>
+                <p>{{ brief.key_judgements.join('；') }}</p>
               </div>
               <div class="info-card compact">
                 <strong>建议动作</strong>
-                <p class="muted">{{ brief.action_recommendations.join('；') }}</p>
-              </div>
-              <div class="info-card compact" v-if="brief.evidence_highlights.length">
-                <strong>证据摘要</strong>
-                <p class="muted">{{ brief.evidence_highlights.join('；') }}</p>
+                <p>{{ brief.action_recommendations.join('；') }}</p>
               </div>
             </div>
           </div>
 
           <div class="sub-panel">
-            <div class="sub-panel-header">
-              <h3>经营分析展开</h3>
-              <RouterLink :to="`/competition/${selectedCode}`">导出分析材料</RouterLink>
-            </div>
-            <div v-if="reportLoading" class="empty-state">正在生成综合报告...</div>
+            <h3>经营分析</h3>
+            <div v-if="reportLoading" class="empty-state">正在生成分析...</div>
             <div v-else-if="report" class="stack-list">
               <div v-for="section in report.sections" :key="section.title" class="info-card compact section-card">
                 <strong>{{ section.title }}</strong>
-                <p class="muted">{{ section.content }}</p>
+                <p>{{ section.content }}</p>
               </div>
             </div>
           </div>
@@ -82,22 +74,15 @@
             <div v-else-if="risk" class="stack-list">
               <div class="info-card compact">
                 <strong>{{ risk.summary }}</strong>
-                <p class="muted">规则引擎 {{ risk.heuristic_score.toFixed(1) }} 分</p>
+                <p>规则引擎 {{ risk.heuristic_score.toFixed(1) }} 分</p>
               </div>
               <div class="info-card compact" v-if="risk.model_prediction">
                 <strong>AI 风险模型</strong>
-                <p class="muted">
-                  高风险概率 {{ formatPercent(risk.model_prediction.high_risk_probability) }} ·
-                  AUC {{ formatMetric(risk.model_prediction.model_summary.metrics.roc_auc) }}
-                </p>
+                <p>高风险概率 {{ formatPercent(risk.model_prediction.high_risk_probability) }} · AUC {{ formatMetric(risk.model_prediction.model_summary.metrics.roc_auc) }}</p>
               </div>
               <div class="info-card compact">
                 <strong>主要驱动</strong>
-                <p class="muted">{{ risk.drivers.join('；') }}</p>
-              </div>
-              <div class="info-card compact">
-                <strong>监测项</strong>
-                <p class="muted">{{ risk.monitoring_items.join('；') }}</p>
+                <p>{{ risk.drivers.join('；') }}</p>
               </div>
             </div>
           </div>
@@ -110,46 +95,43 @@
       </div>
     </PagePanel>
 
-    <PagePanel title="继续问这家公司" eyebrow="Follow-up" description="保留当前对象上下文，适合把结论继续拆细。">
-      <div class="hero-command">
-        <input v-model="question" class="text-input hero-input" placeholder="例如：把风险拆成财务、经营、行业三层" @keydown.enter="runAgent" />
-        <button class="button-primary hero-button" @click="runAgent" :disabled="agentStore.loading">继续提问</button>
-      </div>
-      <div class="quick-prompt-row left-align top-gap" v-if="agentStore.latest?.suggested_questions?.length">
-        <button v-for="item in agentStore.latest.suggested_questions.slice(0, 4)" :key="item" class="button-ghost chip-button" @click="applySuggestedQuestion(item)">
-          {{ item }}
-        </button>
-      </div>
-      <div class="panel-split two-cols top-gap">
+    <PagePanel title="Agent 对话区" eyebrow="Agent Thread">
+      <div class="agent-workspace-grid">
         <div class="sub-panel">
-          <h3>本轮回答</h3>
-          <p v-if="agentStore.loading" class="empty-state">正在分析...</p>
-          <div v-else-if="agentStore.latest" class="stack-list">
-            <div class="info-card compact emphasis-card">
-              <strong>{{ agentStore.latest.title }}</strong>
-              <p class="muted">{{ agentStore.latest.summary }}</p>
-            </div>
-            <div v-for="item in agentStore.latest.highlights" :key="item" class="info-card compact">
-              <p class="muted">{{ item }}</p>
-            </div>
+          <div class="hero-command compact-agent-command">
+            <input v-model="question" class="text-input hero-input" placeholder="继续拆解这家企业的问题" @keydown.enter="runAgent" />
+            <button class="button-primary hero-button" @click="runAgent" :disabled="agentStore.loading">发送</button>
+          </div>
+          <div class="quick-prompt-row left-align top-gap" v-if="agentStore.latest?.suggested_questions?.length">
+            <button v-for="item in agentStore.latest.suggested_questions.slice(0, 4)" :key="item" class="button-ghost chip-button" @click="applySuggestedQuestion(item)">
+              {{ item }}
+            </button>
+          </div>
+          <div class="stack-list top-gap">
+            <div v-if="agentStore.loading" class="empty-state">正在分析...</div>
+            <template v-else-if="agentStore.latest">
+              <div class="info-card compact emphasis-card">
+                <strong>{{ agentStore.latest.title }}</strong>
+                <p>{{ agentStore.latest.summary }}</p>
+              </div>
+              <div v-for="item in agentStore.latest.highlights" :key="item" class="info-card compact">
+                <p>{{ item }}</p>
+              </div>
+            </template>
           </div>
         </div>
-        <div class="sub-panel">
-          <h3>本次计划</h3>
-          <TracePanel :trace="agentStore.latest?.plan" />
-        </div>
-      </div>
-    </PagePanel>
 
-    <PagePanel title="分析线程" eyebrow="Thread" description="同一家公司下的追问会进入同一条上下文线程。">
-      <div class="thread-header" v-if="agentStore.threadTitle">
-        <div>
-          <strong>{{ agentStore.threadTitle }}</strong>
-          <p class="muted">当前关注对象：{{ agentStore.focusCompanyName || report?.company_name || '未固定' }}</p>
+        <div class="sub-panel">
+          <div class="sub-panel-header">
+            <h3>本轮计划</h3>
+            <button class="button-ghost" @click="resetThread">新建线程</button>
+          </div>
+          <TracePanel :trace="agentStore.latest?.plan" />
+          <div class="top-gap">
+            <AgentThreadPanel :messages="agentStore.messages" />
+          </div>
         </div>
-        <button class="button-ghost" @click="resetThread">新建线程</button>
       </div>
-      <AgentThreadPanel :messages="agentStore.messages" />
     </PagePanel>
   </div>
 </template>

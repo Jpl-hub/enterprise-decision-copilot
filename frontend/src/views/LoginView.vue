@@ -1,28 +1,34 @@
 <template>
-  <div class="login-shell">
-    <div class="login-panel">
-      <p class="section-tag">Secure Access</p>
-      <h1>登录企智策源</h1>
-      <p class="muted">登录后可以继续查看你的分析记录、常看企业和导出材料。</p>
+  <div class="login-shell refined-login-shell">
+    <div class="login-panel refined-login-panel">
+      <div class="login-brand-block">
+        <p class="section-tag">Secure Access</p>
+        <h1>登录企智策源</h1>
+        <div class="login-capability-row">
+          <span>分析记录</span>
+          <span>导出材料</span>
+          <span>团队权限</span>
+        </div>
+      </div>
+
       <div class="login-tabs">
         <button class="button-ghost" :class="{ active: mode === 'login' }" @click="mode = 'login'">登录</button>
         <button class="button-ghost" :class="{ active: mode === 'register' }" @click="mode = 'register'">注册</button>
       </div>
+
       <div class="stack-list top-gap">
         <input v-model="displayName" class="text-input" placeholder="显示名称" v-if="mode === 'register'" />
         <input v-model="username" class="text-input" placeholder="用户名" />
-        <input v-model="password" class="text-input" type="password" placeholder="密码，至少 8 位" @keydown.enter="submit" />
+        <input v-model="password" class="text-input" type="password" placeholder="密码" @keydown.enter="submit" />
       </div>
+
       <div class="button-row top-gap left-align">
-        <button class="button-primary" @click="submit" :disabled="authStore.loading">
-          {{ mode === 'login' ? '登录进入系统' : '注册并进入系统' }}
+        <button class="button-primary login-submit-button" @click="submit" :disabled="authStore.loading">
+          {{ mode === 'login' ? '进入系统' : '创建账号' }}
         </button>
       </div>
+
       <p v-if="authStore.error" class="error-box top-gap">{{ authStore.error }}</p>
-      <div class="info-card compact top-gap">
-        <strong>登录后你可以</strong>
-        <p class="muted">保存分析线程，继续上次的问题，查看治理记录，并按你的账号管理导出内容。</p>
-      </div>
     </div>
   </div>
 </template>

@@ -1,173 +1,128 @@
 <template>
-  <div class="page-stack overview-page">
-    <section class="hero-panel">
-      <div class="hero-copy">
-        <p class="section-tag">Start Here</p>
-        <h2>先选企业，再把问题交给系统。</h2>
-        <p class="hero-text">
-          你可以直接问经营质量、竞争格局、风险变化和后续动作。财报、研报、宏观指标和图表表格里的关键信息会被整理成一份可追溯结论。
-        </p>
-        <div class="hero-command company-question-row">
+  <div class="page-stack overview-page refined-overview">
+    <section class="command-stage">
+      <div class="command-stage-main">
+        <div>
+          <p class="section-tag">Agent Command</p>
+          <h2>先选企业，再问一个经营问题。</h2>
+        </div>
+        <div class="command-bar">
           <select v-model="selectedCode" class="select-input hero-select">
             <option v-for="item in store.targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
           </select>
           <input
             v-model="question"
             class="text-input hero-input"
-            placeholder="例如：这家公司未来两年的主要风险和机会是什么？"
+            placeholder="例如：未来两年的主要风险和机会是什么？"
             @keydown.enter="runAgent"
           />
           <button class="button-primary hero-button" @click="runAgent" :disabled="agentStore.loading">开始分析</button>
         </div>
-        <div class="quick-prompt-row">
-          <button v-for="prompt in quickPrompts" :key="prompt" class="button-ghost chip-button" @click="applyPrompt(prompt)">
-            {{ prompt }}
+        <div class="prompt-card-grid">
+          <button v-for="prompt in quickPrompts" :key="prompt" class="prompt-card" @click="applyPrompt(prompt)">
+            <strong>{{ prompt }}</strong>
           </button>
         </div>
-      </div>
-      <div class="hero-side">
-        <div class="hero-highlight-card">
-          <p class="section-tag">你可以直接问</p>
-          <ul class="hero-list">
-            <li>这家公司现在更值得扩张、观望还是重点防风险？</li>
-            <li>和同行相比，它的盈利、成长和研发投入处在什么位置？</li>
-            <li>这份结论分别来自哪些财报字段、研报观点和宏观信号？</li>
-          </ul>
-        </div>
-        <div class="hero-stat-strip" v-if="store.payload?.metrics">
-          <div class="hero-stat">
-            <span>企业样本</span>
-            <strong>{{ store.payload.metrics.sample_count }}</strong>
-          </div>
-          <div class="hero-stat">
-            <span>个股研报</span>
-            <strong>{{ store.payload.metrics.research_report_count }}</strong>
-          </div>
-          <div class="hero-stat">
-            <span>行业研报</span>
-            <strong>{{ store.payload.metrics.industry_report_count }}</strong>
-          </div>
+        <div class="entry-grid compact-entry-grid">
+          <RouterLink :to="selectedCode ? `/workbench/${selectedCode}` : '/workbench'" class="entry-card">
+            <span>单家公司</span>
+            <strong>进入企业分析台</strong>
+          </RouterLink>
+          <RouterLink to="/compare" class="entry-card">
+            <span>多家公司</span>
+            <strong>进入企业对比</strong>
+          </RouterLink>
+          <RouterLink to="/quality" class="entry-card">
+            <span>数据底座</span>
+            <strong>查看可信度</strong>
+          </RouterLink>
         </div>
       </div>
-    </section>
 
-    <section class="three-card-grid">
-      <RouterLink to="/workbench" class="capability-card capability-card-agent">
-        <p class="section-tag">单家公司</p>
-        <h3>我想看一家企业现在是什么状态</h3>
-        <p>进入企业分析页，直接拿到经营结论、风险画像、关键证据和可继续追问的线程。</p>
-      </RouterLink>
-      <RouterLink to="/compare" class="capability-card capability-card-compare">
-        <p class="section-tag">多家公司</p>
-        <h3>我想知道谁更值得重点跟踪</h3>
-        <p>对比盈利、成长、研发和风险，不用自己在多张表之间来回切换。</p>
-      </RouterLink>
-      <RouterLink to="/quality" class="capability-card capability-card-data">
-        <p class="section-tag">可信度</p>
-        <h3>我想确认数据够不够全、结论靠不靠谱</h3>
-        <p>查看官方资料覆盖、抽取质量和待复核问题，判断结果是否可直接使用。</p>
-      </RouterLink>
-    </section>
-
-    <PagePanel title="当前分析结果" eyebrow="Answer" description="先给判断，再给来源，再告诉你下一步还能怎么问。">
-      <div v-if="agentStore.loading" class="empty-state">正在整合资料并生成结论...</div>
-      <div v-else-if="agentStore.latest" class="panel-split two-cols agent-answer-grid">
-        <div class="sub-panel emphasis-panel">
-          <p class="section-tag">结论</p>
-          <h3>{{ agentStore.latest.title }}</h3>
-          <p class="panel-description strong-copy">{{ agentStore.latest.summary }}</p>
-          <div class="stack-list" v-if="agentStore.latest.highlights.length">
-            <div v-for="item in agentStore.latest.highlights.slice(0, 5)" :key="item" class="info-card compact answer-card">
+      <div class="command-stage-side">
+        <div class="agent-live-card">
+          <div class="trace-title-row">
+            <strong>Agent 当前回答</strong>
+            <span class="badge-subtle" v-if="agentStore.focusCompanyName">{{ agentStore.focusCompanyName }}</span>
+          </div>
+          <div v-if="agentStore.loading" class="empty-state">正在生成判断...</div>
+          <div v-else-if="agentStore.latest" class="stack-list">
+            <div class="answer-hero-card">
+              <strong>{{ agentStore.latest.title }}</strong>
+              <p>{{ agentStore.latest.summary }}</p>
+            </div>
+            <div v-for="item in agentStore.latest.highlights.slice(0, 3)" :key="item" class="answer-line-card">
               <p>{{ item }}</p>
             </div>
+            <div class="next-action-strip" v-if="agentStore.latest.suggested_questions?.length">
+              <button
+                v-for="item in agentStore.latest.suggested_questions.slice(0, 3)"
+                :key="item"
+                class="button-ghost chip-button"
+                @click="applyPrompt(item)"
+              >
+                {{ item }}
+              </button>
+            </div>
           </div>
-          <div class="stack-list" v-if="agentStore.latest.suggested_questions?.length">
-            <div class="info-card compact suggestion-block">
-              <strong>下一步可以继续问</strong>
-              <div class="quick-prompt-row left-align top-gap">
-                <button
-                  v-for="item in agentStore.latest.suggested_questions.slice(0, 3)"
-                  :key="item"
-                  class="button-ghost chip-button"
-                  @click="applyPrompt(item)"
-                >
-                  {{ item }}
-                </button>
-              </div>
+          <div v-else class="starter-stack">
+            <div class="starter-step">
+              <span>1</span>
+              <p>选一家企业</p>
+            </div>
+            <div class="starter-step">
+              <span>2</span>
+              <p>问经营、风险或竞争问题</p>
+            </div>
+            <div class="starter-step">
+              <span>3</span>
+              <p>继续追问，直到形成动作判断</p>
             </div>
           </div>
         </div>
-        <div class="sub-panel">
-          <p class="section-tag">本次计划</p>
-          <TracePanel :trace="agentStore.latest.plan" />
-        </div>
-      </div>
-      <div v-else class="empty-state">输入一个问题后，你会先看到判断，再看到来源和下一步建议。</div>
-    </PagePanel>
 
-    <PagePanel title="分析线程" eyebrow="Thread" description="你的问题、系统回答和上下文对象会保留在同一条线程里。">
-      <div class="thread-header" v-if="agentStore.threadTitle">
-        <div>
-          <strong>{{ agentStore.threadTitle }}</strong>
-          <p class="muted">当前关注对象：{{ agentStore.focusCompanyName || '未固定' }}</p>
-        </div>
-        <button class="button-ghost" @click="resetThread">新建线程</button>
-      </div>
-      <AgentThreadPanel :messages="agentStore.messages" />
-    </PagePanel>
-
-    <PagePanel title="这些结论来自哪里" eyebrow="Sources" description="系统先理解资料，再生成答案。技术细节藏在后面，证据链留给你核对。">
-      <div class="source-grid">
-        <div class="source-card">
-          <p class="section-tag">官方财报</p>
-          <h3>{{ qualitySummary ? `${qualitySummary.official_report_downloaded_slots} / ${qualitySummary.official_report_expected_slots}` : '加载中' }}</h3>
-          <p class="muted">来自交易所披露的正式年报，覆盖率越高，经营分析越完整。</p>
-        </div>
-        <div class="source-card">
-          <p class="section-tag">研究报告</p>
-          <h3>{{ store.payload?.metrics ? store.payload.metrics.research_report_count + store.payload.metrics.industry_report_count : '加载中' }}</h3>
-          <p class="muted">个股研报和行业研报一起提供市场观点、竞争格局和景气判断。</p>
-        </div>
-        <div class="source-card">
-          <p class="section-tag">宏观指标</p>
-          <h3>{{ store.payload?.macro?.length ?? 0 }}</h3>
-          <p class="muted">国家统计局公开指标用来判断行业周期、需求环境和外部压力。</p>
-        </div>
-        <div class="source-card">
-          <p class="section-tag">图表与表格</p>
-          <h3>{{ qualitySummary ? `${(qualitySummary.multimodal_extract_coverage_ratio * 100).toFixed(0)}%` : '加载中' }}</h3>
-          <p class="muted">复杂 PDF 里的表格和版面会被补成结构化证据，减少漏字段和读错表的问题。</p>
-        </div>
-      </div>
-    </PagePanel>
-
-    <PagePanel title="现在可以从这几家公司开始" eyebrow="Targets" description="系统先把常用分析对象准备好，避免你一进来不知道该点哪里。">
-      <div class="target-spotlight-grid" v-if="store.payload?.targets?.length">
-        <div v-for="item in store.payload.targets.slice(0, 6)" :key="item.company_code" class="target-spotlight-card">
+        <div class="mini-thread-card">
           <div class="trace-title-row">
-            <strong>{{ item.company_name }}</strong>
-            <span class="badge-subtle">{{ item.exchange }}</span>
+            <strong>最近对话</strong>
+            <RouterLink to="/threads">全部记录</RouterLink>
           </div>
-          <p class="muted">{{ item.segment }} · {{ item.industry }}</p>
-          <div class="button-row left-align">
-            <button class="button-ghost" @click="openTarget(item.company_code, item.company_name)">直接提问</button>
-            <RouterLink class="button-ghost" :to="`/workbench/${item.company_code}`">查看企业分析</RouterLink>
-          </div>
+          <AgentThreadPanel :messages="agentStore.messages.slice(-4)" />
         </div>
       </div>
-    </PagePanel>
+    </section>
+
+    <section class="signal-band">
+      <div class="signal-box">
+        <span>财报覆盖</span>
+        <strong>{{ officialCoverageText }}</strong>
+        <div class="signal-meter"><div class="signal-meter-fill" :style="{ width: `${officialCoverageRatio * 100}%` }"></div></div>
+      </div>
+      <div class="signal-box">
+        <span>图表抽取</span>
+        <strong>{{ multimodalCoverageText }}</strong>
+        <div class="signal-meter"><div class="signal-meter-fill accent" :style="{ width: `${multimodalCoverageRatio * 100}%` }"></div></div>
+      </div>
+      <div class="signal-box">
+        <span>研报接入</span>
+        <strong>{{ researchCountText }}</strong>
+        <div class="signal-meter"><div class="signal-meter-fill dark" :style="{ width: researchMeterWidth }"></div></div>
+      </div>
+      <div class="signal-box warning">
+        <span>待复核</span>
+        <strong>{{ pendingReviewText }}</strong>
+        <div class="signal-meter"><div class="signal-meter-fill warning" :style="{ width: pendingReviewWidth }"></div></div>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { api } from '../api/client';
 import type { QualitySummaryResponse } from '../api/types';
 import AgentThreadPanel from '../components/AgentThreadPanel.vue';
-import PagePanel from '../components/PagePanel.vue';
-import TracePanel from '../components/TracePanel.vue';
 import { useAgentThreadStore } from '../stores/agentThread';
 import { useDashboardStore } from '../stores/dashboard';
 
@@ -175,13 +130,40 @@ const store = useDashboardStore();
 const agentStore = useAgentThreadStore();
 const qualitySummary = ref<QualitySummaryResponse | null>(null);
 const selectedCode = ref('');
-const question = ref('迈瑞医疗当前最值得关注的经营问题是什么？');
+const question = ref('当前最值得关注的经营问题是什么？');
 
 const quickPrompts = [
-  '这家公司未来两年的主要风险和机会是什么？',
-  '把这家公司的风险拆成财务、经营、行业三层',
-  '如果我要继续跟踪它，接下来最该盯哪些指标？',
+  '当前最值得关注的经营问题是什么？',
+  '未来两年的主要风险和机会是什么？',
+  '把风险拆成财务、经营、行业三层',
 ];
+
+const officialCoverageRatio = computed(() => qualitySummary.value?.official_report_coverage_ratio ?? 0);
+const multimodalCoverageRatio = computed(() => qualitySummary.value?.multimodal_extract_coverage_ratio ?? 0);
+const officialCoverageText = computed(() => {
+  if (!qualitySummary.value) return '加载中';
+  return `${qualitySummary.value.official_report_downloaded_slots} / ${qualitySummary.value.official_report_expected_slots}`;
+});
+const multimodalCoverageText = computed(() => {
+  if (!qualitySummary.value) return '加载中';
+  return `${Math.round((qualitySummary.value.multimodal_extract_coverage_ratio || 0) * 100)}%`;
+});
+const researchCountText = computed(() => {
+  if (!store.payload?.metrics) return '加载中';
+  return String(store.payload.metrics.research_report_count + store.payload.metrics.industry_report_count);
+});
+const researchMeterWidth = computed(() => {
+  const count = (store.payload?.metrics?.research_report_count || 0) + (store.payload?.metrics?.industry_report_count || 0);
+  return `${Math.min(100, Math.max(18, count / 4))}%`;
+});
+const pendingReviewText = computed(() => {
+  if (!qualitySummary.value) return '加载中';
+  return `${qualitySummary.value.pending_review_count} 条`;
+});
+const pendingReviewWidth = computed(() => {
+  const pending = qualitySummary.value?.pending_review_count || 0;
+  return `${Math.min(100, Math.max(10, pending * 10))}%`;
+});
 
 function currentCompany() {
   return store.targets.find((item) => item.company_code === selectedCode.value) || null;
@@ -189,24 +171,12 @@ function currentCompany() {
 
 function normalizeQuestion(prompt: string) {
   const companyName = currentCompany()?.company_name || '这家公司';
-  return prompt.replace(/这家公司/g, companyName);
+  return prompt.replace(/这家?公司/g, companyName);
 }
 
 function applyPrompt(prompt: string) {
   question.value = normalizeQuestion(prompt);
   void runAgent();
-}
-
-function openTarget(companyCode: string, companyName: string) {
-  selectedCode.value = companyCode;
-  agentStore.resetThread(companyCode, companyName);
-  question.value = `${companyName}当前最值得关注的经营问题是什么？`;
-  void runAgent();
-}
-
-function resetThread() {
-  const company = currentCompany();
-  agentStore.resetThread(company?.company_code, company?.company_name);
 }
 
 async function runAgent() {
@@ -222,6 +192,9 @@ watch(selectedCode, (value) => {
   const company = store.targets.find((item) => item.company_code === value);
   if (company) {
     agentStore.setFocus(company.company_code, company.company_name);
+    if (!question.value.includes(company.company_name)) {
+      question.value = `${company.company_name}${quickPrompts[0]}`;
+    }
   }
 });
 
@@ -234,12 +207,9 @@ onMounted(async () => {
     const company = currentCompany();
     if (company) {
       agentStore.resetThread(company.company_code, company.company_name);
-      question.value = `${company.company_name}当前最值得关注的经营问题是什么？`;
+      question.value = `${company.company_name}${quickPrompts[0]}`;
     }
   }
   qualitySummary.value = await api.getQualitySummary();
-  if (!agentStore.latest) {
-    await runAgent();
-  }
 });
 </script>

@@ -5,32 +5,27 @@
     </main>
   </div>
   <div v-else class="app-shell">
-    <header class="app-header">
-      <div class="brand-block">
+    <header class="app-header refined-header">
+      <div class="brand-block compact-brand-block">
         <p class="eyebrow">Enterprise Decision Intelligence</p>
         <div class="brand-title-row">
           <h1>企智策源</h1>
-          <span class="brand-pill">企业决策系统</span>
+          <span class="brand-pill">Agent + Data + AI</span>
         </div>
-        <p class="brand-subtitle">把财报、研报和风险信号整理成可直接使用的经营判断。</p>
       </div>
-      <nav class="top-nav">
+
+      <nav class="top-nav refined-top-nav">
         <RouterLink to="/" class="nav-chip">开始分析</RouterLink>
         <RouterLink to="/workbench" class="nav-chip">企业分析</RouterLink>
         <RouterLink to="/compare" class="nav-chip">企业对比</RouterLink>
         <RouterLink to="/quality" class="nav-chip">数据治理</RouterLink>
         <RouterLink to="/threads" class="nav-chip">分析记录</RouterLink>
-        <RouterLink v-if="authStore.canViewAudit" to="/audit" class="nav-chip">操作审计</RouterLink>
       </nav>
-      <div class="header-note header-user-bar">
-        <div class="header-note-inline">
-          <span class="status-dot"></span>
-          <span>选企业、提问题、看证据、拿建议动作</span>
-        </div>
-        <div class="header-user-actions" v-if="authStore.user">
-          <span>{{ authStore.user.display_name }} · {{ authStore.user.role }}</span>
-          <button class="button-ghost" @click="logout">退出登录</button>
-        </div>
+
+      <div class="header-user-actions refined-user-actions" v-if="authStore.user">
+        <span class="user-identity">{{ authStore.user.display_name }}</span>
+        <RouterLink v-if="authStore.canViewAudit" to="/audit" class="button-ghost compact-action">审计</RouterLink>
+        <button class="button-ghost compact-action" @click="logout">退出</button>
       </div>
     </header>
 

@@ -864,3 +864,356 @@ select {
   color: var(--text-muted);
   font-size: 0.88rem;
 }
+
+.refined-header {
+  grid-template-columns: minmax(220px, 0.9fr) minmax(520px, 1.4fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.compact-brand-block .eyebrow,
+.compact-brand-block .brand-subtitle {
+  display: none;
+}
+
+.refined-top-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.refined-top-nav .nav-chip {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 10px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(21, 62, 117, 0.1);
+}
+
+.refined-user-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.user-identity {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.compact-action {
+  min-width: 68px;
+}
+
+.refined-overview .page-panel,
+.refined-overview .hero-panel {
+  padding: 0;
+}
+
+.command-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(360px, 0.92fr);
+  gap: 20px;
+}
+
+.command-stage-main,
+.command-stage-side,
+.agent-live-card,
+.mini-thread-card,
+.signal-box {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border-radius: 26px;
+  box-shadow: var(--shadow);
+}
+
+.command-stage-main {
+  padding: 28px;
+  background: linear-gradient(150deg, rgba(21, 62, 117, 0.96), rgba(26, 82, 143, 0.92));
+  color: #f3f7fb;
+  display: grid;
+  gap: 20px;
+}
+
+.command-stage-main h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 46px;
+  line-height: 1.08;
+  max-width: 10ch;
+}
+
+.command-stage-main .section-tag {
+  color: rgba(243, 247, 251, 0.72);
+}
+
+.command-bar {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr) 140px;
+  gap: 12px;
+}
+
+.prompt-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.prompt-card {
+  min-height: 110px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  text-align: left;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.prompt-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.compact-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.entry-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(8, 24, 44, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  display: grid;
+  gap: 6px;
+}
+
+.entry-card span {
+  color: rgba(243, 247, 251, 0.68);
+  font-size: 0.86rem;
+}
+
+.command-stage-side {
+  display: grid;
+  gap: 16px;
+}
+
+.agent-live-card,
+.mini-thread-card {
+  padding: 22px;
+}
+
+.answer-hero-card,
+.answer-line-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(245, 248, 252, 0.92);
+  border: 1px solid rgba(23, 36, 47, 0.08);
+}
+
+.answer-hero-card strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 1.08rem;
+}
+
+.answer-hero-card p,
+.answer-line-card p {
+  margin: 0;
+}
+
+.next-action-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.starter-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.starter-step {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(23, 36, 47, 0.08);
+}
+
+.starter-step:last-child {
+  border-bottom: 0;
+}
+
+.starter-step span {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(21, 62, 117, 0.08);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.starter-step p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.signal-band {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.signal-box {
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.signal-box span {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.signal-box strong {
+  font-size: 1.6rem;
+  color: var(--brand);
+}
+
+.signal-meter {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(21, 62, 117, 0.08);
+  overflow: hidden;
+}
+
+.signal-meter-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2c6cb0, #153e75);
+}
+
+.signal-meter-fill.accent {
+  background: linear-gradient(90deg, #d86137, #f08a4b);
+}
+
+.signal-meter-fill.dark {
+  background: linear-gradient(90deg, #1f4a63, #153e75);
+}
+
+.signal-meter-fill.warning {
+  background: linear-gradient(90deg, #f08a4b, #d86137);
+}
+
+.refined-workbench .page-panel .panel-description,
+.refined-overview .muted,
+.refined-overview .panel-description,
+.refined-login-panel .muted {
+  display: none;
+}
+
+.compact-analysis-hero {
+  padding: 22px;
+}
+
+.agent-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  gap: 18px;
+}
+
+.compact-agent-command {
+  margin: 0;
+}
+
+.refined-login-shell {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 56px);
+}
+
+.refined-login-panel {
+  width: min(480px, 100%);
+  padding: 30px;
+  display: grid;
+  gap: 18px;
+}
+
+.login-brand-block h1 {
+  margin: 8px 0 0;
+}
+
+.login-capability-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.login-capability-row span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(21, 62, 117, 0.08);
+  color: var(--brand);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.login-submit-button {
+  min-width: 140px;
+}
+
+.trace-card p,
+.thread-message p,
+.info-card p,
+.section-card p {
+  margin: 0;
+}
+
+.trace-card .muted,
+.thread-message .muted {
+  display: block;
+}
+
+@media (max-width: 1200px) {
+  .refined-header {
+    grid-template-columns: 1fr;
+  }
+
+  .refined-top-nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .refined-user-actions {
+    justify-content: flex-start;
+  }
+
+  .command-stage,
+  .agent-workspace-grid,
+  .signal-band {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .refined-top-nav,
+  .prompt-card-grid,
+  .compact-entry-grid,
+  .command-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .command-stage-main h2 {
+    font-size: 34px;
+  }
+}
