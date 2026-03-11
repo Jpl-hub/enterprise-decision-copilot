@@ -25,18 +25,18 @@
 
           <div class="tower-side-grid">
             <div class="tower-stat-card">
-              <span>财报覆盖</span>
-              <strong>{{ percent(summary.official_report_coverage_ratio) }}</strong>
+              <span>核心样本</span>
+              <strong>{{ summary.target_pool_ready ? '已就绪' : '未完成' }}</strong>
               <div class="signal-meter"><div class="signal-meter-fill" :style="{ width: `${summary.official_report_coverage_ratio * 100}%` }"></div></div>
             </div>
             <div class="tower-stat-card">
-              <span>图表抽取</span>
-              <strong>{{ percent(summary.multimodal_extract_coverage_ratio) }}</strong>
+              <span>扩展样本</span>
+              <strong>{{ summary.universe_report_downloaded_slots }}/{{ summary.universe_report_expected_slots }}</strong>
               <div class="signal-meter"><div class="signal-meter-fill accent" :style="{ width: `${summary.multimodal_extract_coverage_ratio * 100}%` }"></div></div>
             </div>
             <div class="tower-stat-card warning">
-              <span>数据提醒</span>
-              <strong>{{ summary.pending_review_count }}</strong>
+              <span>图表补全</span>
+              <strong>{{ summary.multimodal_extract_report_count }}/{{ summary.multimodal_expected_report_count }}</strong>
               <div class="signal-meter"><div class="signal-meter-fill warning" :style="{ width: pendingWidth }"></div></div>
             </div>
           </div>
@@ -50,15 +50,15 @@
           </div>
           <div class="flow-arrow">→</div>
           <div class="flow-card">
-            <span>多模态抽取</span>
-            <strong>{{ summary.multimodal_extract_report_count }}/{{ summary.multimodal_expected_report_count }}</strong>
-            <p>图表、表格和跨页版式补成结构化字段。</p>
+            <span>扩展样本</span>
+            <strong>{{ summary.universe_report_downloaded_slots }}/{{ summary.universe_report_expected_slots }}</strong>
+            <p>扩展企业池的年报下载进度，决定后续可扩到多大范围。</p>
           </div>
           <div class="flow-arrow">→</div>
           <div class="flow-card">
-            <span>数据提醒</span>
-            <strong>{{ summary.top_anomalies.length }}</strong>
-            <p>自动识别覆盖缺口和字段异常，形成当前需要补齐的事项。</p>
+            <span>图表补全</span>
+            <strong>{{ summary.multimodal_extract_report_count }}/{{ summary.multimodal_expected_report_count }}</strong>
+            <p>复杂图表和表格是否已经补成结构化证据。</p>
           </div>
           <div class="flow-arrow">→</div>
           <div class="flow-card accent-card">
@@ -91,17 +91,37 @@
 
           <div class="sub-panel compact-data-panel">
             <div class="sub-panel-header">
-              <h3>重点补齐企业</h3>
+              <h3>当前缺口</h3>
               <span class="badge-subtle">先看这些</span>
             </div>
             <div class="stack-list">
-              <div v-for="item in summary.top_anomalies.slice(0, 5)" :key="`${item.company_code}-${item.report_year}`" class="anomaly-heat-card">
+              <div class="anomaly-heat-card">
                 <div class="trace-title-row">
-                  <strong>{{ item.company_name }}</strong>
-                  <span>{{ impactLevel(item.anomaly_score) }}</span>
+                  <strong>缺报告</strong>
+                  <span>{{ summary.issue_breakdown.missing_reports }} 项</span>
                 </div>
-                <div class="signal-meter top-gap"><div class="signal-meter-fill warning" :style="{ width: `${Math.min(100, item.anomaly_score)}%` }"></div></div>
-                <p>覆盖率 {{ percent(item.field_coverage_ratio) }} · {{ item.critical_fields_missing.join('、') || '字段齐备' }}</p>
+                <p>主样本或扩展样本里，仍未下载到位的官方年报。</p>
+              </div>
+              <div class="anomaly-heat-card">
+                <div class="trace-title-row">
+                  <strong>字段缺口</strong>
+                  <span>{{ summary.issue_breakdown.field_gaps }} 项</span>
+                </div>
+                <p>关键字段缺失或版式异常，可能影响经营与风险判断。</p>
+              </div>
+              <div class="anomaly-heat-card">
+                <div class="trace-title-row">
+                  <strong>图表待补</strong>
+                  <span>{{ summary.issue_breakdown.multimodal_missing }} 项</span>
+                </div>
+                <p>已下载年报但还没有完成图表与表格补全。</p>
+              </div>
+              <div class="anomaly-heat-card">
+                <div class="trace-title-row">
+                  <strong>图表偏少</strong>
+                  <span>{{ summary.issue_breakdown.multimodal_low_coverage }} 项</span>
+                </div>
+                <p>已做图表补全，但识别字段仍然偏少。</p>
               </div>
             </div>
           </div>
@@ -158,26 +178,30 @@ const summary = ref<QualitySummaryResponse | null>(null);
 
 const readinessHeadline = computed(() => {
   if (!summary.value) return '加载中';
-  if (summary.value.pending_review_count >= 5) return '当前底座仍有较多资料提醒';
-  if (summary.value.official_report_coverage_ratio >= 0.8) return '数据底座已进入稳定运行';
+  if (!summary.value.target_pool_ready) return '核心样本还没有全部就绪';
+  if (summary.value.multimodal_extract_coverage_ratio < 0.5) return '核心样本可用，但图表补全还没有做完';
+  if (summary.value.universe_report_coverage_ratio < 0.9) return '核心样本可用，扩展样本仍在补齐';
+  return '数据底座已进入稳定运行';
   return '数据底座正在持续扩充';
 });
 
 const readinessText = computed(() => {
   if (!summary.value) return '正在汇总';
-  return `当前财报覆盖 ${percent(summary.value.official_report_coverage_ratio)}，图表抽取覆盖 ${percent(summary.value.multimodal_extract_coverage_ratio)}，数据提醒 ${summary.value.pending_review_count} 项。`;
+  return `核心样本 ${summary.value.official_report_downloaded_slots}/${summary.value.official_report_expected_slots}，扩展样本 ${summary.value.universe_report_downloaded_slots}/${summary.value.universe_report_expected_slots}，图表补全 ${summary.value.multimodal_extract_report_count}/${summary.value.multimodal_expected_report_count}。`;
 });
 
 const confidenceNotes = computed(() => {
   if (!summary.value) return [];
   const notes = [
-    `当前财报覆盖达到 ${percent(summary.value.official_report_coverage_ratio)}，适合先从覆盖完整的企业开始分析。`,
-    `图表抽取覆盖 ${percent(summary.value.multimodal_extract_coverage_ratio)}，复杂版式报告会继续补齐。`,
+    `核心样本已覆盖 ${summary.value.official_report_downloaded_slots}/${summary.value.official_report_expected_slots}，主分析链路可以先围绕这些企业展开。`,
+    `扩展样本当前是 ${summary.value.universe_report_downloaded_slots}/${summary.value.universe_report_expected_slots}，后续大范围对比还要继续补齐。`,
   ];
-  if (summary.value.pending_review_count >= 5) {
-    notes.push('当前资料提醒仍然较多，正式结论前建议先看最突出的缺口。');
+  if (summary.value.multimodal_extract_coverage_ratio < 0.5) {
+    notes.push('图表补全还不够，遇到复杂图表型问题时需要谨慎引用。');
+  } else if (summary.value.universe_report_coverage_ratio < 0.9) {
+    notes.push('主样本可用，但扩展企业池还没有完全补齐。');
   } else {
-    notes.push('当前资料提醒较少，系统结论可以直接作为管理层讨论的起点。');
+    notes.push('核心样本、扩展样本和图表补全都已进入可用区间。');
   }
   return notes;
 });
@@ -191,12 +215,6 @@ function percent(value: number) {
 function formatExchange(value: string) {
   const labels: Record<string, string> = { SSE: '上交所', SZSE: '深交所', BSE: '北交所' };
   return labels[String(value || '').toUpperCase()] || value;
-}
-
-function impactLevel(score: number) {
-  if (score >= 80) return '影响较高';
-  if (score >= 50) return '需要关注';
-  return '影响较低';
 }
 
 function exchangeWidth(item: ExchangeQualityStatus) {

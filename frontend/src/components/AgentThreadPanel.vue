@@ -1,18 +1,24 @@
 <template>
-  <div v-if="messages?.length" class="thread-timeline">
-    <div v-for="(item, index) in messages" :key="`${item.created_at}-${index}`" class="thread-message" :class="item.role">
-      <div class="thread-message-meta">
-        <strong>{{ item.role === 'user' ? '你' : 'Agent' }}</strong>
-        <span>{{ formatTime(item.created_at) }}</span>
-      </div>
-      <div class="thread-message-body">
-        <p v-for="(line, lineIndex) in splitContent(item.content)" :key="`${item.created_at}-${lineIndex}`" :class="{ bullet: line.startsWith('- ') }">
-          {{ normalizeLine(line) }}
-        </p>
+  <div v-if="messages?.length" class="thread-timeline chat-bubble-timeline">
+    <div v-for="(item, index) in messages" :key="`${item.created_at}-${index}`" class="thread-message-row" :class="item.role">
+      <div class="thread-message-avatar">{{ item.role === 'user' ? '你' : 'A' }}</div>
+      <div class="thread-message" :class="item.role">
+        <div class="thread-message-meta">
+          <strong>{{ item.role === 'user' ? '你' : 'Agent' }}</strong>
+          <span>{{ formatTime(item.created_at) }}</span>
+        </div>
+        <div class="thread-message-body">
+          <p v-for="(line, lineIndex) in splitContent(item.content)" :key="`${item.created_at}-${lineIndex}`" :class="{ bullet: line.startsWith('- ') }">
+            {{ normalizeLine(line) }}
+          </p>
+        </div>
       </div>
     </div>
   </div>
-  <p v-else class="empty-state">当前线程还没有对话记录。</p>
+  <div v-else class="thread-empty-state">
+    <p>当前线程还没有对话记录。</p>
+    <span>先问一个经营、风险或行业问题，主分析区会保留上下文继续追问。</span>
+  </div>
 </template>
 
 <script setup lang="ts">

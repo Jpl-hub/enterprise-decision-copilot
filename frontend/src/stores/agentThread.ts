@@ -47,6 +47,7 @@ export const useAgentThreadStore = defineStore('agent-thread', {
       this.threadTitle = companyName || '企业分析线程';
       this.focusCompanyCode = companyCode != null ? String(companyCode) : null;
       this.focusCompanyName = companyName || null;
+      this.taskMode = null;
       this.latest = null;
       this.messages = [];
       this.error = null;
@@ -61,11 +62,12 @@ export const useAgentThreadStore = defineStore('agent-thread', {
         this.setTaskMode(options.taskMode);
       }
       try {
+        const explicitTaskMode = options?.taskMode !== undefined ? (options.taskMode || undefined) : undefined;
         const response = await api.queryAgent(question, {
           threadId: this.threadId,
           companyCode: options?.companyCode ?? this.focusCompanyCode,
           companyName: options?.companyName ?? this.focusCompanyName,
-          taskMode: options?.taskMode ?? this.taskMode,
+          taskMode: explicitTaskMode,
         });
         this.threadId = response.thread_id;
         this.threadTitle = response.thread_title;
@@ -113,3 +115,4 @@ export const useAgentThreadStore = defineStore('agent-thread', {
     },
   },
 });
+

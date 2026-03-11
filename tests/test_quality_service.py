@@ -122,6 +122,9 @@ def test_quality_service_builds_summary() -> None:
 
     assert summary["official_report_coverage_ratio"] == 0.8889
     assert summary["missing_report_slots"] == 1
+    assert summary["target_pool_ready"] is False
+    assert summary["universe_report_expected_slots"] == 18
+    assert summary["issue_breakdown"]["missing_reports"] == 1
     assert summary["anomaly_company_count"] == 1
     assert summary["multimodal_extract_report_count"] == 1
     assert summary["multimodal_extract_coverage_ratio"] == 1.0

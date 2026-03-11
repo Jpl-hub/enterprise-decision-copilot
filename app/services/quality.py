@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.config import settings
+from app.data_access import load_targets
 
 
 @dataclass(slots=True)
@@ -386,6 +387,34 @@ class DataQualityService:
             "created": [record.as_dict() for record in created_records],
         }
 
+    def _compute_issue_breakdown(self) -> dict[str, int]:
+        inventory_quality = self._read_json(self.inventory_quality_path)
+        coverage = inventory_quality.get("target_coverage", {})
+        anomalies = self.get_financial_anomalies(limit=500)
+        inventory = self._read_csv(self.inventory_path, dtype={"company_code": str, "disclosure_company_code": str})
+        multimodal_extracts = self._load_multimodal_extracts()
+        multimodal_keys = {(item["company_code"], item["report_year"]): item for item in multimodal_extracts}
+        multimodal_missing = 0
+        multimodal_low_coverage = 0
+        if not inventory.empty:
+            downloaded = inventory[(inventory["status"] == "downloaded") & (inventory["file_exists"] == True)].copy()
+            for row in downloaded.to_dict("records"):
+                key = (str(row.get("company_code") or ""), self._safe_int(row.get("year"), 0))
+                if not key[0] or key[1] <= 0:
+                    continue
+                extract = multimodal_keys.get(key)
+                if extract is None:
+                    multimodal_missing += 1
+                    continue
+                if int(extract.get("filled_field_count") or 0) < 6:
+                    multimodal_low_coverage += 1
+        return {
+            "missing_reports": int(len(coverage.get("missing_slots") or [])),
+            "field_gaps": int(len(anomalies)),
+            "multimodal_missing": int(multimodal_missing),
+            "multimodal_low_coverage": int(multimodal_low_coverage),
+        }
+
     def get_quality_summary(self) -> dict:
         inventory_quality = self._read_json(self.inventory_quality_path)
         multimodal_summary = self.get_multimodal_extract_summary()
@@ -393,14 +422,25 @@ class DataQualityService:
         anomalies = self.get_financial_anomalies(limit=8)
         pending_reviews = [item for item in queue if str(item.get("status") or "pending") == "pending"]
         coverage = inventory_quality.get("target_coverage", {})
+        exchange_status = inventory_quality.get("exchanges", [])
+        universe_expected = int(sum(int(item.get("rows") or 0) for item in exchange_status))
+        universe_downloaded = int(sum(int(item.get("downloaded_rows") or 0) for item in exchange_status))
+        issue_breakdown = self._compute_issue_breakdown()
+        target_pool = load_targets()
         return {
             "official_report_coverage_ratio": round(float(coverage.get("coverage_ratio") or 0), 4),
             "official_report_downloaded_slots": int(coverage.get("downloaded_slots") or 0),
             "official_report_expected_slots": int(coverage.get("expected_slots") or 0),
             "missing_report_slots": int(len(coverage.get("missing_slots") or [])),
+            "target_pool_company_count": int(len(target_pool)),
+            "target_pool_ready": bool(float(coverage.get("coverage_ratio") or 0) >= 0.95),
+            "universe_report_downloaded_slots": universe_downloaded,
+            "universe_report_expected_slots": universe_expected,
+            "universe_report_coverage_ratio": round(universe_downloaded / universe_expected, 4) if universe_expected else 0.0,
             "pending_review_count": int(len(pending_reviews)),
             "anomaly_company_count": int(len(anomalies)),
-            "exchange_status": inventory_quality.get("exchanges", []),
+            "issue_breakdown": issue_breakdown,
+            "exchange_status": exchange_status,
             "top_anomalies": anomalies,
             "recent_reviews": queue[:8],
             "multimodal_extract_report_count": int(multimodal_summary.get("report_count", 0)),

@@ -70,6 +70,8 @@ class AgentResponse(BaseModel):
     plan: list[AgentPlanStep] = Field(default_factory=list)
     task_mode: str = 'fallback'
     task_label: str = '问题引导'
+    skill_id: str | None = None
+    skill_label: str | None = None
     stage_label: str = '已完成'
     deliverables: list[str] = Field(default_factory=list)
     thread_id: str

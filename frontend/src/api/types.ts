@@ -377,6 +377,8 @@ export interface AgentResponse {
   plan: AgentPlanStep[];
   task_mode: string;
   task_label: string;
+  skill_id?: string | null;
+  skill_label?: string | null;
   stage_label: string;
   deliverables: string[];
   thread_id: string;
@@ -429,13 +431,26 @@ export interface MultimodalExtractItem {
   notes: string[];
 }
 
+export interface QualityIssueBreakdown {
+  missing_reports: number;
+  field_gaps: number;
+  multimodal_missing: number;
+  multimodal_low_coverage: number;
+}
+
 export interface QualitySummaryResponse {
   official_report_coverage_ratio: number;
   official_report_downloaded_slots: number;
   official_report_expected_slots: number;
   missing_report_slots: number;
+  target_pool_company_count: number;
+  target_pool_ready: boolean;
+  universe_report_downloaded_slots: number;
+  universe_report_expected_slots: number;
+  universe_report_coverage_ratio: number;
   pending_review_count: number;
   anomaly_company_count: number;
+  issue_breakdown: QualityIssueBreakdown;
   multimodal_extract_report_count: number;
   multimodal_expected_report_count: number;
   multimodal_extract_coverage_ratio: number;
@@ -515,4 +530,5 @@ export interface WarehouseOverviewResponse extends WarehouseSummaryResponse {
     latest_report_date?: string | null;
   }>;
 }
+
 

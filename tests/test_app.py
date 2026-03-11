@@ -248,3 +248,33 @@ def test_ai_stack_summary_exposes_core_engines() -> None:
     assert 'agent-orchestrator' in engine_ids
     assert 'risk-model' in engine_ids
     assert 'multimodal-extractor' in engine_ids
+
+def test_agent_returns_safe_payload_when_workflow_fails() -> None:
+    class BrokenWorkflow:
+        def execute(self, question: str, preferred_task_mode: str | None = None) -> dict:
+            raise RuntimeError('boom')
+
+    service = AgentService(BrokenWorkflow())
+    payload = service.answer('分析迈瑞医疗')
+
+    assert payload['title'] == '本轮分析暂时失败'
+    assert payload['stage_label'] == '需要重试'
+    assert payload['thread_id']
+    assert len(payload['thread_messages']) >= 2
+
+def test_agent_thread_reuses_last_task_mode_for_ambiguous_follow_up() -> None:
+    container = build_service_container()
+    first = container.agent_service.answer('把迈瑞医疗的风险拆成三层')
+    second = container.agent_service.answer('展开讲讲', thread_id=first['thread_id'])
+
+    assert second['thread_id'] == first['thread_id']
+    assert second['focus']['company_name'] == '迈瑞医疗'
+    assert second['task_mode'] == 'company_risk_forecast'
+    assert any(step['step'] == '承接上下文' for step in second['trace'])
+
+def test_agent_response_exposes_skill_metadata() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer('分析迈瑞医疗')
+
+    assert payload['skill_id'] == 'company_diagnosis'
+    assert payload['skill_label'] == '企业诊断分析'

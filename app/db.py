@@ -101,6 +101,8 @@ SCHEMA = {
             title TEXT NOT NULL,
             focus_company_code TEXT,
             focus_company_name TEXT,
+            last_task_mode TEXT,
+            last_task_label TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -140,6 +142,12 @@ INDEXES = [
 ]
 
 
+THREAD_COLUMN_MIGRATIONS = {
+    'last_task_mode': 'TEXT',
+    'last_task_label': 'TEXT',
+}
+
+
 def get_db_path() -> Path:
     return DB_PATH
 
@@ -152,10 +160,21 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
     return connection
 
 
+def _ensure_agent_thread_columns(conn: sqlite3.Connection) -> None:
+    columns = {
+        row['name']
+        for row in conn.execute("PRAGMA table_info(agent_threads)").fetchall()
+    }
+    for column_name, column_type in THREAD_COLUMN_MIGRATIONS.items():
+        if column_name not in columns:
+            conn.execute(f'ALTER TABLE agent_threads ADD COLUMN {column_name} {column_type}')
+
+
 def init_db(db_path: Path | None = None) -> None:
     with get_connection(db_path) as conn:
         for ddl in SCHEMA.values():
             conn.execute(ddl)
+        _ensure_agent_thread_columns(conn)
         for ddl in INDEXES:
             conn.execute(ddl)
         conn.commit()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.agents.models import AgentIntent, WorkflowContext
 from app.agents.router import IntentRouter
-from app.agents.tools import AgentTool
+from app.agents.tools import AgentSkillRegistry, AgentTool, build_agent_skill_registry
 from app.services.analytics import AnalyticsService
 
 
@@ -15,18 +15,8 @@ class AgentWorkflow:
     ) -> None:
         self.analytics_service = analytics_service
         self.intent_router = intent_router
-        self.tools = {tool.name: tool for tool in tools}
-        self.intent_to_tool = {
-            AgentIntent.FALLBACK: 'fallback_tool',
-            AgentIntent.OVERVIEW: 'industry_overview_tool',
-            AgentIntent.DATA_QUALITY: 'data_quality_tool',
-            AgentIntent.COMPANY_DIAGNOSIS: 'company_diagnosis_tool',
-            AgentIntent.COMPANY_REPORT: 'company_report_tool',
-            AgentIntent.COMPANY_DECISION_BRIEF: 'company_decision_brief_tool',
-            AgentIntent.COMPANY_RISK_FORECAST: 'company_risk_forecast_tool',
-            AgentIntent.COMPANY_COMPARE: 'company_compare_tool',
-            AgentIntent.INDUSTRY_TREND: 'industry_trend_tool',
-        }
+        self.skill_registry: AgentSkillRegistry = build_agent_skill_registry(tools)
+        self.tools = {skill.tool_name: skill.tool for skill in self.skill_registry.skills}
         self.intent_labels = {
             AgentIntent.FALLBACK: '问题引导',
             AgentIntent.OVERVIEW: '全局概览',
@@ -37,17 +27,6 @@ class AgentWorkflow:
             AgentIntent.COMPANY_RISK_FORECAST: '风险判断',
             AgentIntent.COMPANY_COMPARE: '企业对比',
             AgentIntent.INDUSTRY_TREND: '行业趋势',
-        }
-        self.tool_labels = {
-            'fallback_tool': '默认引导',
-            'industry_overview_tool': '全局概览分析',
-            'data_quality_tool': '数据质量分析',
-            'company_diagnosis_tool': '企业诊断分析',
-            'company_report_tool': '企业综合分析',
-            'company_decision_brief_tool': '决策建议生成',
-            'company_risk_forecast_tool': '风险预测分析',
-            'company_compare_tool': '企业对比分析',
-            'industry_trend_tool': '行业趋势分析',
         }
         self.task_mode_aliases = {
             'fallback': AgentIntent.FALLBACK,
@@ -60,20 +39,60 @@ class AgentWorkflow:
             'company_compare': AgentIntent.COMPANY_COMPARE,
             'industry_trend': AgentIntent.INDUSTRY_TREND,
         }
+        self.follow_up_keywords = (
+            '展开', '详细', '具体', '细说', '继续', '进一步', '再说', '往下', '补充', '拆开', '拆成', '分成', '为什么', '怎么看', '怎么做',
+        )
 
     def _select_tool_name(self, intent: AgentIntent) -> str:
-        return self.intent_to_tool.get(intent, 'fallback_tool')
+        skill = self.skill_registry.by_intent.get(intent) or self.skill_registry.by_intent.get(AgentIntent.FALLBACK)
+        return skill.tool_name if skill is not None else 'fallback_tool'
 
     def _intent_label(self, intent: AgentIntent) -> str:
         return self.intent_labels.get(intent, '默认分析')
 
     def _tool_label(self, tool_name: str) -> str:
-        return self.tool_labels.get(tool_name, '分析工具')
+        skill = self.skill_registry.by_tool_name.get(tool_name)
+        return skill.label if skill is not None else '分析工具'
 
     def _resolve_preferred_task_mode(self, preferred_task_mode: str | None) -> AgentIntent | None:
         if not preferred_task_mode:
             return None
         return self.task_mode_aliases.get(preferred_task_mode.strip().lower())
+
+    def _has_explicit_task_signal(self, question: str, matches: list[dict]) -> bool:
+        if len(matches) >= 2:
+            return True
+        keyword_groups = (
+            self.intent_router.compare_keywords,
+            self.intent_router.risk_keywords,
+            self.intent_router.report_keywords,
+            self.intent_router.decision_keywords,
+            self.intent_router.industry_keywords,
+            self.intent_router.quality_keywords,
+        )
+        return any(keyword in question for keywords in keyword_groups for keyword in keywords)
+
+    def _looks_like_follow_up(self, question: str) -> bool:
+        stripped = question.strip()
+        if not stripped:
+            return False
+        return any(keyword in stripped for keyword in self.follow_up_keywords) or len(stripped) <= 14
+
+    def _resolve_contextual_intent(
+        self,
+        question: str,
+        matches: list[dict],
+        detected_intent: AgentIntent,
+        context_task_mode: str | None,
+    ) -> tuple[AgentIntent, bool]:
+        context_intent = self._resolve_preferred_task_mode(context_task_mode)
+        if context_intent is None:
+            return detected_intent, False
+        if self._has_explicit_task_signal(question, matches):
+            return detected_intent, False
+        if detected_intent in {AgentIntent.OVERVIEW, AgentIntent.COMPANY_DIAGNOSIS} and self._looks_like_follow_up(question):
+            return context_intent, context_intent != detected_intent
+        return detected_intent, False
 
     def _task_meta(self, intent: AgentIntent) -> tuple[str, list[str]]:
         mapping = {
@@ -109,7 +128,12 @@ class AgentWorkflow:
         else:
             context.add_plan('问题引导', '回退到默认引导，帮助用户锁定企业与任务。')
 
-    def execute(self, question: str, preferred_task_mode: str | None = None) -> dict:
+    def execute(
+        self,
+        question: str,
+        preferred_task_mode: str | None = None,
+        context_task_mode: str | None = None,
+    ) -> dict:
         cleaned_question = question.strip()
         matches = self.analytics_service.find_company_matches(cleaned_question) if cleaned_question else []
         context = WorkflowContext(question=cleaned_question, matches=matches)
@@ -163,7 +187,17 @@ class AgentWorkflow:
                 context.add_plan('判断任务类型', f"已按任务模式进入：{self._intent_label(context.intent)}。")
                 context.add_trace('任务识别', f"当前由任务模式指定为：{self._intent_label(context.intent)}。")
             else:
-                context.intent = self.intent_router.detect_intent(cleaned_question, matches)
+                detected_intent = self.intent_router.detect_intent(cleaned_question, matches)
+                resolved_intent, adopted_context = self._resolve_contextual_intent(
+                    cleaned_question,
+                    matches,
+                    detected_intent,
+                    context_task_mode,
+                )
+                context.intent = resolved_intent
+                if adopted_context:
+                    context.add_plan('承接上下文', f"本轮问题未显式改任务，继续沿用上一轮：{self._intent_label(context.intent)}。")
+                    context.add_trace('承接上下文', f"沿用线程上一轮任务模式：{self._intent_label(context.intent)}。")
                 context.add_plan('判断任务类型', f"当前问题属于：{self._intent_label(context.intent)}。")
                 context.add_trace('任务识别', f"已识别为：{self._intent_label(context.intent)}。")
             self._plan_for_intent(context)
@@ -176,6 +210,7 @@ class AgentWorkflow:
         context.add_trace('生成结果', result.detail)
         context.add_plan('输出结果', '已汇总分析结果、建议动作与证据。')
         stage_label, deliverables = self._task_meta(context.intent)
+        skill = self.skill_registry.by_intent.get(context.intent)
         payload = dict(result.payload)
         payload['trace'] = [step.as_dict() for step in context.trace]
         payload['plan'] = [step.as_dict() for step in context.plan]
@@ -183,7 +218,8 @@ class AgentWorkflow:
         payload['intent'] = context.intent.value
         payload['task_mode'] = context.intent.value
         payload['task_label'] = self._intent_label(context.intent)
+        payload['skill_id'] = skill.skill_id if skill is not None else None
+        payload['skill_label'] = skill.label if skill is not None else None
         payload['stage_label'] = stage_label
         payload['deliverables'] = deliverables
         return payload
-

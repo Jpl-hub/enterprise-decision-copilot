@@ -1,9 +1,9 @@
 <template>
-  <section class="agent-workspace-panel" :class="{ compact }">
-    <div class="agent-workspace-head">
-      <div>
-        <p class="section-tag">{{ eyebrow }}</p>
-        <h3>{{ title }}</h3>
+  <section class="agent-workspace-panel notebook-agent-panel" :class="{ compact }">
+    <div class="agent-workspace-head" :class="{ 'headless-workspace-head': !eyebrow && !title }">
+      <div v-if="eyebrow || title">
+        <p v-if="eyebrow" class="section-tag">{{ eyebrow }}</p>
+        <h3 v-if="title">{{ title }}</h3>
       </div>
       <div class="button-row left-align">
         <button class="button-ghost compact-action" @click="resetThread">新线程</button>
@@ -23,67 +23,73 @@
       </button>
     </div>
 
-    <div class="agent-input-shell">
-      <input v-model="draft" class="text-input hero-input" :placeholder="placeholder" @keydown.enter="submit" />
-      <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading">发送</button>
-    </div>
+    <div class="agent-thread-shell">
+      <div class="notebook-thread-block">
+        <AgentThreadPanel :messages="messagePreview" />
+      </div>
 
-    <div class="quick-prompt-row left-align" v-if="visiblePrompts.length">
-      <button v-for="item in visiblePrompts" :key="item" class="button-ghost chip-button" @click="applyPrompt(item)">
-        {{ item }}
-      </button>
-    </div>
+      <div v-if="agentStore.error" class="error-banner">
+        {{ agentStore.error }}
+      </div>
 
-    <div v-if="agentStore.error" class="error-banner">
-      {{ agentStore.error }}
-    </div>
+      <div v-if="agentStore.loading" class="answer-line-card pending-answer-card pending-chat-bubble">
+        <p>正在分析，稍等片刻...</p>
+      </div>
 
-    <div class="agent-workspace-body" v-if="agentStore.latest || agentStore.messages.length || agentStore.loading || agentStore.error">
-      <div class="agent-response-column">
-        <div class="agent-mini-panel transcript-panel">
-          <div class="trace-title-row">
-            <strong>分析对话</strong>
-            <span class="badge-subtle">{{ transcriptBadge }}</span>
-          </div>
-          <div v-if="agentStore.loading" class="answer-line-card pending-answer-card">
-            <p>正在分析，稍等片刻...</p>
-          </div>
-          <AgentThreadPanel :messages="messagePreview" />
+      <div class="agent-input-shell bottom-input-shell compact-bottom-input">
+        <input v-model="draft" class="text-input hero-input" :placeholder="placeholder" @keydown.enter="submit" />
+        <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading">发送</button>
+      </div>
+
+      <div class="notebook-starter-card compact-floating-starter" v-if="!hasConversation">
+        <div class="quick-prompt-row left-align compact-prompt-row">
+          <button v-for="item in starterPrompts" :key="item" class="button-ghost chip-button" @click="applyPrompt(item)">
+            {{ item }}
+          </button>
         </div>
       </div>
 
-      <div class="agent-side-column">
-        <div class="agent-mini-panel" v-if="agentStore.latest">
-          <div class="trace-title-row">
-            <strong>本轮结论</strong>
-            <span class="badge-subtle">{{ agentStore.latest.task_label }}</span>
-          </div>
-          <div class="agent-mode-strip">
-            <span class="agent-mode-pill accent">{{ agentStore.latest.stage_label }}</span>
-            <span v-for="item in agentStore.latest.deliverables.slice(0, compact ? 2 : 3)" :key="item" class="agent-mode-pill subtle">{{ item }}</span>
-          </div>
-          <div class="agent-output-grid" v-if="outputCards.length">
-            <div v-for="item in outputCards" :key="item.label" class="agent-output-card">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
+      <div v-if="floatingPanels.length" class="agent-insight-stack">
+        <section v-for="panel in floatingPanels" :key="panel.key" class="agent-insight-card" :class="{ active: activeFloatingPanel === panel.key }">
+          <button type="button" class="agent-insight-toggle" @click="toggleFloatingPanel(panel.key)">
+            <strong>{{ panel.label }}</strong>
+            <span>{{ activeFloatingPanel === panel.key ? '收起' : '展开' }}</span>
+          </button>
+
+          <div v-if="activeFloatingPanel === panel.key" class="agent-insight-body">
+            <div v-if="panel.key === 'summary' && agentStore.latest" class="floating-panel-body">
+              <div class="agent-mode-strip">
+                <span class="agent-mode-pill accent">{{ agentStore.latest.stage_label }}</span>
+                <span v-for="item in agentStore.latest.deliverables.slice(0, compact ? 2 : 3)" :key="item" class="agent-mode-pill subtle">{{ item }}</span>
+              </div>
+              <div class="agent-output-grid" v-if="outputCards.length">
+                <div v-for="item in outputCards" :key="item.label" class="agent-output-card">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                </div>
+              </div>
+              <div class="answer-hero-card">
+                <strong>{{ agentStore.latest.title }}</strong>
+                <p>{{ agentStore.latest.summary }}</p>
+              </div>
+              <div v-for="item in agentStore.latest.highlights.slice(0, compact ? 3 : 5)" :key="item" class="answer-line-card">
+                <p>{{ item }}</p>
+              </div>
+            </div>
+
+            <div v-else-if="panel.key === 'plan' && agentStore.latest?.plan?.length" class="floating-panel-body">
+              <TracePanel :trace="agentStore.latest.plan" />
+            </div>
+
+            <div v-else-if="panel.key === 'followup' && followUpQuestions.length" class="floating-panel-body">
+              <div class="follow-up-stack">
+                <button v-for="item in followUpQuestions" :key="item" class="follow-up-card" @click="applyPrompt(item)">
+                  {{ item }}
+                </button>
+              </div>
             </div>
           </div>
-          <div class="answer-hero-card">
-            <strong>{{ agentStore.latest.title }}</strong>
-            <p>{{ agentStore.latest.summary }}</p>
-          </div>
-          <div v-for="item in agentStore.latest.highlights.slice(0, compact ? 3 : 5)" :key="item" class="answer-line-card">
-            <p>{{ item }}</p>
-          </div>
-        </div>
-
-        <div class="agent-mini-panel" v-if="agentStore.latest?.plan?.length">
-          <div class="trace-title-row">
-            <strong>执行步骤</strong>
-            <span class="badge-subtle" v-if="agentStore.focusCompanyName">{{ agentStore.focusCompanyName }}</span>
-          </div>
-          <TracePanel :trace="agentStore.latest.plan" />
-        </div>
+        </section>
       </div>
     </div>
   </section>
@@ -122,7 +128,9 @@ const taskModes = [
 
 const agentStore = useAgentThreadStore();
 const draft = ref(props.seedQuestion);
-const activeTaskMode = computed(() => agentStore.taskMode || 'company_diagnosis');
+const manualTaskMode = ref<string | null>(null);
+const activeFloatingPanel = ref<'summary' | 'plan' | 'followup' | null>(null);
+const activeTaskMode = computed(() => manualTaskMode.value || agentStore.taskMode || 'company_diagnosis');
 
 const basePrompts = computed(() => {
   const companyName = props.companyName || '这家公司';
@@ -156,21 +164,17 @@ const basePrompts = computed(() => {
   return promptMap[activeTaskMode.value] || promptMap.company_diagnosis;
 });
 
-const visiblePrompts = computed(() => {
-  if (agentStore.latest?.suggested_questions?.length) {
-    return agentStore.latest.suggested_questions.slice(0, props.compact ? 3 : 4);
-  }
-  return basePrompts.value.slice(0, props.compact ? 2 : 3);
-});
+const starterPrompts = computed(() => basePrompts.value.slice(0, props.compact ? 2 : 3));
+const followUpQuestions = computed(() => agentStore.latest?.suggested_questions?.slice(0, props.compact ? 3 : 4) || []);
+const hasConversation = computed(() => agentStore.messages.length > 0);
+const messagePreview = computed(() => props.compact ? agentStore.messages.slice(-4) : agentStore.messages);
 
-const messagePreview = computed(() => {
-  return props.compact ? agentStore.messages.slice(-4) : agentStore.messages;
-});
-
-const transcriptBadge = computed(() => {
-  if (agentStore.focusCompanyName) return agentStore.focusCompanyName;
-  if (agentStore.threadTitle) return agentStore.threadTitle;
-  return '当前线程';
+const floatingPanels = computed(() => {
+  const panels: Array<{ key: 'summary' | 'plan' | 'followup'; label: string }> = [];
+  if (agentStore.latest) panels.push({ key: 'summary', label: '本轮结论' });
+  if (agentStore.latest?.plan?.length) panels.push({ key: 'plan', label: '执行步骤' });
+  if (followUpQuestions.value.length) panels.push({ key: 'followup', label: '推荐追问' });
+  return panels;
 });
 
 const outputCards = computed(() => {
@@ -198,11 +202,14 @@ const outputCards = computed(() => {
 });
 
 function resetThread() {
+  manualTaskMode.value = null;
   agentStore.resetThread(props.companyCode, props.companyName);
   draft.value = props.seedQuestion || basePrompts.value[0];
+  activeFloatingPanel.value = null;
 }
 
 function selectTaskMode(taskMode: string) {
+  manualTaskMode.value = taskMode;
   agentStore.setTaskMode(taskMode);
   draft.value = basePrompts.value[0];
 }
@@ -212,13 +219,17 @@ function applyPrompt(text: string) {
   void submit();
 }
 
+function toggleFloatingPanel(key: 'summary' | 'plan' | 'followup') {
+  activeFloatingPanel.value = activeFloatingPanel.value === key ? null : key;
+}
+
 async function submit() {
   const question = draft.value.trim();
   if (!question) return;
   await agentStore.ask(question, {
     companyCode: props.companyCode,
     companyName: props.companyName,
-    taskMode: activeTaskMode.value,
+    taskMode: manualTaskMode.value ?? undefined,
   });
   draft.value = '';
 }
@@ -230,8 +241,15 @@ watch(() => props.seedQuestion, (value) => {
 }, { immediate: true });
 
 watch(() => [props.companyCode, props.companyName], ([companyCode, companyName]) => {
+  manualTaskMode.value = null;
   if (companyCode || companyName) {
     agentStore.setFocus(companyCode, companyName);
   }
 });
+
+watch(floatingPanels, (panels) => {
+  if (!panels.length || !panels.some((item) => item.key === activeFloatingPanel.value)) {
+    activeFloatingPanel.value = null;
+  }
+}, { immediate: true });
 </script>

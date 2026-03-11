@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,8 @@ from app.agents.models import ThreadMessage
 from app.agents.workflow import AgentWorkflow
 from app.db import get_connection, init_db
 from app.services.audit import AuditService
+
+logger = logging.getLogger(__name__)
 
 
 class AgentService:
@@ -27,7 +30,7 @@ class AgentService:
         with get_connection(self.db_path) as conn:
             row = conn.execute(
                 '''
-                SELECT thread_id, user_id, title, focus_company_code, focus_company_name, created_at, updated_at
+                SELECT thread_id, user_id, title, focus_company_code, focus_company_name, last_task_mode, last_task_label, created_at, updated_at
                 FROM agent_threads
                 WHERE thread_id = ?
                 ''',
@@ -43,14 +46,36 @@ class AgentService:
             'title': title,
             'focus_company_code': company_code,
             'focus_company_name': company_name,
+            'last_task_mode': None,
+            'last_task_label': None,
             'created_at': now,
             'updated_at': now,
         }
         with get_connection(self.db_path) as conn:
             conn.execute(
                 '''
-                INSERT INTO agent_threads (thread_id, user_id, title, focus_company_code, focus_company_name, created_at, updated_at)
-                VALUES (:thread_id, :user_id, :title, :focus_company_code, :focus_company_name, :created_at, :updated_at)
+                INSERT INTO agent_threads (
+                    thread_id,
+                    user_id,
+                    title,
+                    focus_company_code,
+                    focus_company_name,
+                    last_task_mode,
+                    last_task_label,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    :thread_id,
+                    :user_id,
+                    :title,
+                    :focus_company_code,
+                    :focus_company_name,
+                    :last_task_mode,
+                    :last_task_label,
+                    :created_at,
+                    :updated_at
+                )
                 ''',
                 payload,
             )
@@ -115,7 +140,19 @@ class AgentService:
         for placeholder in replacements:
             if placeholder in normalized:
                 normalized = normalized.replace(placeholder, str(focus_name))
+        matches = self.workflow.analytics_service.find_company_matches(normalized) if normalized else []
+        short_follow_up_keywords = ('展开', '详细', '具体', '继续', '补充', '细说', '往下', '再说', '怎么看', '怎么做')
+        if not matches and (len(normalized) <= 16 or any(keyword in normalized for keyword in short_follow_up_keywords)):
+            normalized = f'{focus_name}{normalized}'
         return normalized
+
+    def _resolve_context_task_mode(self, thread: dict, explicit_task_mode: str | None) -> str | None:
+        if explicit_task_mode:
+            return explicit_task_mode
+        last_task_mode = thread.get('last_task_mode')
+        if isinstance(last_task_mode, str) and last_task_mode.strip():
+            return last_task_mode.strip()
+        return None
 
     def _update_focus(self, thread: dict, payload: dict[str, Any]) -> dict:
         matches = payload.get('matched_companies') or []
@@ -126,17 +163,21 @@ class AgentService:
             updated['focus_company_name'] = str(match.get('company_name') or updated.get('focus_company_name') or '') or None
             if updated['focus_company_name']:
                 updated['title'] = updated['focus_company_name']
+        updated['last_task_mode'] = str(payload.get('task_mode') or updated.get('last_task_mode') or '') or None
+        updated['last_task_label'] = str(payload.get('task_label') or updated.get('last_task_label') or '') or None
         with get_connection(self.db_path) as conn:
             conn.execute(
                 '''
                 UPDATE agent_threads
-                SET title = ?, focus_company_code = ?, focus_company_name = ?, updated_at = ?
+                SET title = ?, focus_company_code = ?, focus_company_name = ?, last_task_mode = ?, last_task_label = ?, updated_at = ?
                 WHERE thread_id = ?
                 ''',
                 (
                     updated['title'],
                     updated.get('focus_company_code'),
                     updated.get('focus_company_name'),
+                    updated.get('last_task_mode'),
+                    updated.get('last_task_label'),
                     self._now(),
                     updated['thread_id'],
                 ),
@@ -158,6 +199,39 @@ class AgentService:
                 lines.append(f'- {content}')
         return '\n'.join(lines) or '已完成本轮分析。'
 
+    def _build_failure_payload(self, thread: dict, question: str, error: Exception) -> dict[str, Any]:
+        focus_name = thread.get('focus_company_name') or '这家公司'
+        last_task_label = thread.get('last_task_label') or '当前分析'
+        return {
+            'title': '本轮分析暂时失败',
+            'summary': '系统没有完成这轮推理，但上下文已经保留。建议缩小问题范围或换一种问法继续追问。',
+            'highlights': [
+                '当前线程和上下文已保留，不需要重新开始。',
+                f'上一轮任务模式仍保留为：{last_task_label}。',
+                f'如需继续，可直接追问：{focus_name}当前最值得关注的经营问题是什么？',
+            ],
+            'suggested_questions': [
+                f'{focus_name}当前最值得关注的经营问题是什么？',
+                f'先给我{focus_name}的核心结论，再展开原因。',
+                f'把{focus_name}的风险拆成财务、经营、行业三层。',
+            ],
+            'evidence': {
+                'error_type': error.__class__.__name__,
+            },
+            'trace': [
+                {'step': '生成结果', 'status': 'failed', 'detail': '本轮分析过程中发生异常，已返回安全结果。'},
+            ],
+            'plan': [
+                {'step': '保留线程', 'status': 'completed', 'detail': '已保留当前企业、上一轮任务模式与追问上下文。'},
+                {'step': '建议重试', 'status': 'completed', 'detail': '建议缩小问题范围后继续追问。'},
+            ],
+            'task_mode': str(thread.get('last_task_mode') or 'fallback'),
+            'task_label': str(thread.get('last_task_label') or '问题引导'),
+            'stage_label': '需要重试',
+            'deliverables': ['保留上下文', '建议重试'],
+            'matched_companies': [],
+        }
+
     def _ensure_access(self, thread: dict | None, user_id: str | None, role: str | None) -> dict:
         if thread is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='分析线程不存在。')
@@ -174,6 +248,8 @@ class AgentService:
                 t.title,
                 t.focus_company_code,
                 t.focus_company_name,
+                t.last_task_mode,
+                t.last_task_label,
                 t.created_at,
                 t.updated_at,
                 COUNT(m.message_id) AS message_count,
@@ -204,6 +280,8 @@ class AgentService:
                     'company_code': row['focus_company_code'],
                     'company_name': row['focus_company_name'],
                 },
+                'last_task_mode': row['last_task_mode'],
+                'last_task_label': row['last_task_label'],
                 'last_message': row['last_message'],
                 'message_count': int(row['message_count'] or 0),
                 'created_at': row['created_at'],
@@ -223,6 +301,8 @@ class AgentService:
                 'company_code': thread.get('focus_company_code'),
                 'company_name': thread.get('focus_company_name'),
             },
+            'last_task_mode': thread.get('last_task_mode'),
+            'last_task_label': thread.get('last_task_label'),
             'created_at': thread['created_at'],
             'updated_at': thread['updated_at'],
             'messages': messages,
@@ -241,10 +321,25 @@ class AgentService:
         normalized_question = self._normalize_question(question, thread)
         user_message = ThreadMessage(role='user', content=normalized_question)
         self._append_message(thread['thread_id'], user_message)
-        payload = self.workflow.execute(normalized_question, preferred_task_mode=task_mode)
-        thread = self._update_focus(thread, payload)
+
+        failed = False
+        context_task_mode = self._resolve_context_task_mode(thread, task_mode)
+        try:
+            payload = self.workflow.execute(
+                normalized_question,
+                preferred_task_mode=task_mode,
+                context_task_mode=context_task_mode,
+            )
+            thread = self._update_focus(thread, payload)
+        except Exception as error:
+            failed = True
+            logger.exception('Agent workflow failed for thread %s', thread['thread_id'])
+            payload = self._build_failure_payload(thread, normalized_question, error)
+            thread = self._update_focus(thread, payload)
+
         assistant_message = ThreadMessage(role='assistant', content=self._build_assistant_message(payload))
         self._append_message(thread['thread_id'], assistant_message)
+
         if self.audit_service is not None:
             self.audit_service.log_event(
                 event_type='agent.query',
@@ -256,8 +351,11 @@ class AgentService:
                     'title': payload.get('title'),
                     'focus_company_code': thread.get('focus_company_code'),
                     'task_mode': payload.get('task_mode'),
+                    'context_task_mode': context_task_mode,
+                    'status': 'failed' if failed else 'completed',
                 },
             )
+
         payload.pop('matched_companies', None)
         payload.pop('intent', None)
         payload['thread_id'] = thread['thread_id']
@@ -268,3 +366,4 @@ class AgentService:
         }
         payload['thread_messages'] = [item.as_dict() for item in self._list_messages(thread['thread_id'], limit=8)]
         return payload
+

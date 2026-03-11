@@ -59,13 +59,26 @@ class MultimodalExtractItem(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class QualityIssueBreakdown(BaseModel):
+    missing_reports: int = 0
+    field_gaps: int = 0
+    multimodal_missing: int = 0
+    multimodal_low_coverage: int = 0
+
+
 class DataQualitySummaryResponse(BaseModel):
     official_report_coverage_ratio: float
     official_report_downloaded_slots: int
     official_report_expected_slots: int
     missing_report_slots: int
+    target_pool_company_count: int = 0
+    target_pool_ready: bool = False
+    universe_report_downloaded_slots: int = 0
+    universe_report_expected_slots: int = 0
+    universe_report_coverage_ratio: float = 0.0
     pending_review_count: int
     anomaly_company_count: int
+    issue_breakdown: QualityIssueBreakdown = Field(default_factory=QualityIssueBreakdown)
     multimodal_extract_report_count: int = 0
     multimodal_expected_report_count: int = 0
     multimodal_extract_coverage_ratio: float = 0.0
