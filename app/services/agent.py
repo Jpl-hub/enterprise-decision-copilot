@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from fastapi import HTTPException, status
+
 from app.agents.models import ThreadMessage
 from app.agents.workflow import AgentWorkflow
 from app.db import get_connection, init_db
@@ -141,6 +143,76 @@ class AgentService:
             )
             conn.commit()
         return updated
+
+    def _ensure_access(self, thread: dict | None, user_id: str | None, role: str | None) -> dict:
+        if thread is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='分析线程不存在。')
+        is_admin = str(role or '').lower() == 'admin'
+        owner_id = thread.get('user_id')
+        if owner_id and owner_id != user_id and not is_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='你不能查看这条分析线程。')
+        return thread
+
+    def list_threads(self, user_id: str | None, role: str | None, limit: int = 20) -> dict:
+        query = '''
+            SELECT
+                t.thread_id,
+                t.title,
+                t.focus_company_code,
+                t.focus_company_name,
+                t.created_at,
+                t.updated_at,
+                COUNT(m.message_id) AS message_count,
+                (
+                    SELECT content
+                    FROM agent_messages last_m
+                    WHERE last_m.thread_id = t.thread_id
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) AS last_message
+            FROM agent_threads t
+            LEFT JOIN agent_messages m ON m.thread_id = t.thread_id
+        '''
+        params: tuple[Any, ...]
+        if str(role or '').lower() == 'admin':
+            query += ' GROUP BY t.thread_id ORDER BY t.updated_at DESC LIMIT ?'
+            params = (limit,)
+        else:
+            query += ' WHERE t.user_id = ? GROUP BY t.thread_id ORDER BY t.updated_at DESC LIMIT ?'
+            params = (user_id, limit)
+        with get_connection(self.db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
+        items = [
+            {
+                'thread_id': row['thread_id'],
+                'title': row['title'],
+                'focus': {
+                    'company_code': row['focus_company_code'],
+                    'company_name': row['focus_company_name'],
+                },
+                'last_message': row['last_message'],
+                'message_count': int(row['message_count'] or 0),
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at'],
+            }
+            for row in rows
+        ]
+        return {'total': len(items), 'items': items}
+
+    def get_thread_detail(self, thread_id: str, user_id: str | None, role: str | None) -> dict:
+        thread = self._ensure_access(self._load_thread(thread_id), user_id=user_id, role=role)
+        messages = [item.as_dict() for item in self._list_messages(thread['thread_id'], limit=100)]
+        return {
+            'thread_id': thread['thread_id'],
+            'title': thread['title'],
+            'focus': {
+                'company_code': thread.get('focus_company_code'),
+                'company_name': thread.get('focus_company_name'),
+            },
+            'created_at': thread['created_at'],
+            'updated_at': thread['updated_at'],
+            'messages': messages,
+        }
 
     def answer(
         self,

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 
 import { api } from '../api/client';
-import type { AgentResponse, AgentThreadMessage } from '../api/types';
+import type { AgentResponse, AgentThreadDetailResponse, AgentThreadMessage, AgentThreadSummary } from '../api/types';
 
 interface AgentThreadState {
   threadId: string | null;
@@ -9,9 +9,11 @@ interface AgentThreadState {
   focusCompanyCode: string | null;
   focusCompanyName: string | null;
   loading: boolean;
+  loadingHistory: boolean;
   error: string | null;
   latest: AgentResponse | null;
   messages: AgentThreadMessage[];
+  history: AgentThreadSummary[];
 }
 
 export const useAgentThreadStore = defineStore('agent-thread', {
@@ -21,9 +23,11 @@ export const useAgentThreadStore = defineStore('agent-thread', {
     focusCompanyCode: null,
     focusCompanyName: null,
     loading: false,
+    loadingHistory: false,
     error: null,
     latest: null,
     messages: [],
+    history: [],
   }),
   actions: {
     setFocus(companyCode?: string | null, companyName?: string | null) {
@@ -63,6 +67,35 @@ export const useAgentThreadStore = defineStore('agent-thread', {
         return response;
       } catch (error) {
         this.error = error instanceof Error ? error.message : 'Agent 请求失败';
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async loadHistory(limit = 20) {
+      this.loadingHistory = true;
+      try {
+        const response = await api.getAgentThreads(limit);
+        this.history = response.items;
+        return response.items;
+      } finally {
+        this.loadingHistory = false;
+      }
+    },
+    async openThread(threadId: string) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response: AgentThreadDetailResponse = await api.getAgentThread(threadId);
+        this.threadId = response.thread_id;
+        this.threadTitle = response.title;
+        this.focusCompanyCode = response.focus?.company_code || null;
+        this.focusCompanyName = response.focus?.company_name || null;
+        this.messages = response.messages;
+        this.latest = null;
+        return response;
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : '线程加载失败';
         throw error;
       } finally {
         this.loading = false;

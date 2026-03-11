@@ -19,6 +19,7 @@
         <RouterLink to="/workbench" class="nav-chip">企业分析</RouterLink>
         <RouterLink to="/compare" class="nav-chip">企业对比</RouterLink>
         <RouterLink to="/quality" class="nav-chip">数据治理</RouterLink>
+        <RouterLink to="/threads" class="nav-chip">分析记录</RouterLink>
         <RouterLink v-if="authStore.canViewAudit" to="/audit" class="nav-chip">操作审计</RouterLink>
       </nav>
       <div class="header-note header-user-bar">

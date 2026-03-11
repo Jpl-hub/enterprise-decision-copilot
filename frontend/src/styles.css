@@ -827,3 +827,40 @@ select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.thread-library-layout {
+  align-items: start;
+}
+
+.thread-record-card {
+  width: 100%;
+  border: 1px solid rgba(18, 42, 66, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 18px;
+  text-align: left;
+  display: grid;
+  gap: 10px;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.thread-record-card:hover,
+.thread-record-card.active {
+  border-color: rgba(11, 103, 110, 0.36);
+  box-shadow: 0 18px 36px rgba(19, 52, 59, 0.12);
+  transform: translateY(-1px);
+}
+
+.thread-record-header,
+.thread-record-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.thread-record-header span,
+.thread-record-meta span {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}

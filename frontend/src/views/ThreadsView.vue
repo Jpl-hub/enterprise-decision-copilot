@@ -1,0 +1,94 @@
+<template>
+  <div class="page-stack">
+    <PagePanel title="分析记录" eyebrow="Analysis Threads" description="回看最近的分析线程，恢复上下文后继续追问，不用从头再来。">
+      <template #actions>
+        <button class="button-ghost" @click="refreshHistory" :disabled="agentStore.loadingHistory">刷新记录</button>
+      </template>
+
+      <div class="panel-split two-cols top-gap thread-library-layout">
+        <div class="sub-panel">
+          <div class="sub-panel-header">
+            <h3>最近线程</h3>
+            <span class="badge-subtle">{{ agentStore.history.length }} 条</span>
+          </div>
+          <div v-if="agentStore.loadingHistory" class="empty-state">正在加载分析记录...</div>
+          <div v-else-if="!agentStore.history.length" class="empty-state">还没有历史线程，先去首页或企业分析页提一个问题。</div>
+          <div v-else class="stack-list">
+            <button
+              v-for="item in agentStore.history"
+              :key="item.thread_id"
+              type="button"
+              class="thread-record-card"
+              :class="{ active: agentStore.threadId === item.thread_id }"
+              @click="openThread(item.thread_id)"
+            >
+              <div class="thread-record-header">
+                <strong>{{ item.title }}</strong>
+                <span>{{ formatDate(item.updated_at) }}</span>
+              </div>
+              <p class="muted">{{ item.last_message || '本线程还没有摘要。' }}</p>
+              <div class="thread-record-meta">
+                <span>{{ item.focus?.company_name || '未固定企业' }}</span>
+                <span>{{ item.message_count }} 条消息</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div class="sub-panel">
+          <div class="sub-panel-header">
+            <h3>线程详情</h3>
+            <RouterLink v-if="agentStore.focusCompanyCode" :to="`/workbench/${agentStore.focusCompanyCode}`">继续分析</RouterLink>
+          </div>
+          <div v-if="!agentStore.threadId" class="empty-state">选择左侧任意线程后，这里会显示完整上下文。</div>
+          <div v-else class="stack-list">
+            <div class="thread-header">
+              <div>
+                <strong>{{ agentStore.threadTitle }}</strong>
+                <p class="muted">当前对象：{{ agentStore.focusCompanyName || '未固定企业' }}</p>
+              </div>
+              <button class="button-ghost" @click="goWorkbench">进入分析台</button>
+            </div>
+            <AgentThreadPanel :messages="agentStore.messages" />
+          </div>
+        </div>
+      </div>
+    </PagePanel>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted } from 'vue';
+import { RouterLink, useRouter } from 'vue-router';
+
+import AgentThreadPanel from '../components/AgentThreadPanel.vue';
+import PagePanel from '../components/PagePanel.vue';
+import { useAgentThreadStore } from '../stores/agentThread';
+
+const agentStore = useAgentThreadStore();
+const router = useRouter();
+
+function formatDate(value: string) {
+  return value.replace('T', ' ').replace('Z', '');
+}
+
+async function refreshHistory() {
+  await agentStore.loadHistory();
+}
+
+async function openThread(threadId: string) {
+  await agentStore.openThread(threadId);
+}
+
+async function goWorkbench() {
+  if (agentStore.focusCompanyCode) {
+    await router.push({ name: 'workbench', params: { companyCode: agentStore.focusCompanyCode } });
+    return;
+  }
+  await router.push({ name: 'workbench' });
+}
+
+onMounted(async () => {
+  await refreshHistory();
+});
+</script>

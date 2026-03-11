@@ -35,6 +35,30 @@ class AgentFocus(BaseModel):
     company_name: str | None = None
 
 
+class AgentThreadSummary(BaseModel):
+    thread_id: str
+    title: str
+    focus: AgentFocus | None = None
+    last_message: str | None = None
+    message_count: int
+    created_at: str
+    updated_at: str
+
+
+class AgentThreadListResponse(BaseModel):
+    total: int
+    items: list[AgentThreadSummary] = Field(default_factory=list)
+
+
+class AgentThreadDetailResponse(BaseModel):
+    thread_id: str
+    title: str
+    focus: AgentFocus | None = None
+    created_at: str
+    updated_at: str
+    messages: list[AgentThreadMessage] = Field(default_factory=list)
+
+
 class AgentResponse(BaseModel):
     title: str
     summary: str

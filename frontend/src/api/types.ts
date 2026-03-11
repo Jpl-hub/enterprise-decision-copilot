@@ -315,6 +315,30 @@ export interface AgentFocus {
   company_name?: string | null;
 }
 
+export interface AgentThreadSummary {
+  thread_id: string;
+  title: string;
+  focus?: AgentFocus | null;
+  last_message?: string | null;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentThreadListResponse {
+  total: number;
+  items: AgentThreadSummary[];
+}
+
+export interface AgentThreadDetailResponse {
+  thread_id: string;
+  title: string;
+  focus?: AgentFocus | null;
+  created_at: string;
+  updated_at: string;
+  messages: AgentThreadMessage[];
+}
+
 export interface AgentResponse {
   title: string;
   summary: string;
@@ -459,3 +483,4 @@ export interface WarehouseOverviewResponse extends WarehouseSummaryResponse {
     latest_report_date?: string | null;
   }>;
 }
+

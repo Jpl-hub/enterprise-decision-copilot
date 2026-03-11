@@ -35,3 +35,4 @@ router.beforeEach((to) => {
   }
   return true;
 });
+

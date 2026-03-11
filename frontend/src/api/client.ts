@@ -1,5 +1,7 @@
 import type {
   AgentResponse,
+  AgentThreadDetailResponse,
+  AgentThreadListResponse,
   AuditLogListResponse,
   AuthUser,
   CompanyCompareResponse,
@@ -105,6 +107,12 @@ export const api = {
         company_name: options?.companyName || undefined,
       }),
     });
+  },
+  getAgentThreads(limit = 20) {
+    return request<AgentThreadListResponse>(`/api/agent/threads?limit=${limit}`);
+  },
+  getAgentThread(threadId: string) {
+    return request<AgentThreadDetailResponse>(`/api/agent/threads/${threadId}`);
   },
   getQualitySummary() {
     return request<QualitySummaryResponse>('/api/quality/summary');

@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 import shutil
 import uuid
@@ -178,3 +179,54 @@ def test_agent_thread_persists_in_database() -> None:
     assert second['focus']['company_name'] == '迈瑞医疗'
     assert len(second['thread_messages']) >= 4
     assert any(item['event_type'] == 'agent.query' for item in logs)
+
+def test_agent_thread_history_lists_user_threads() -> None:
+    db_dir = Path('data') / 'test_agent_threads' / uuid.uuid4().hex
+    db_path = db_dir / 'app.db'
+    db_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        analytics = AnalyticsService()
+        retrieval = RetrievalService(analytics)
+        decision = DecisionService(analytics, retrieval)
+        risk_model = RiskModelService()
+        risk = RiskService(analytics, risk_model)
+        workflow = AgentWorkflow(
+            analytics_service=analytics,
+            intent_router=IntentRouter(),
+            tools=build_agent_tools(decision, risk, DataQualityService()),
+        )
+        service = AgentService(workflow, audit_service=AuditService(db_path), db_path=db_path)
+        first = service.answer('分析迈瑞医疗', user_id='tester')
+        service.answer('看它的行业风险', thread_id=first['thread_id'], user_id='tester')
+        history = service.list_threads(user_id='tester', role='analyst')
+    finally:
+        shutil.rmtree(db_dir, ignore_errors=True)
+
+    assert history['total'] == 1
+    assert history['items'][0]['thread_id'] == first['thread_id']
+    assert history['items'][0]['message_count'] >= 4
+
+
+def test_agent_thread_detail_blocks_other_users() -> None:
+    db_dir = Path('data') / 'test_agent_threads' / uuid.uuid4().hex
+    db_path = db_dir / 'app.db'
+    db_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        analytics = AnalyticsService()
+        retrieval = RetrievalService(analytics)
+        decision = DecisionService(analytics, retrieval)
+        risk_model = RiskModelService()
+        risk = RiskService(analytics, risk_model)
+        workflow = AgentWorkflow(
+            analytics_service=analytics,
+            intent_router=IntentRouter(),
+            tools=build_agent_tools(decision, risk, DataQualityService()),
+        )
+        service = AgentService(workflow, audit_service=AuditService(db_path), db_path=db_path)
+        first = service.answer('分析迈瑞医疗', user_id='owner')
+        with pytest.raises(Exception):
+            service.get_thread_detail(first['thread_id'], user_id='other-user', role='viewer')
+    finally:
+        shutil.rmtree(db_dir, ignore_errors=True)
+
+
