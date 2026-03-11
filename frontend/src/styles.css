@@ -1921,3 +1921,28 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+.agent-mode-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.agent-mode-pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.agent-mode-pill.accent {
+  background: rgba(240, 138, 75, 0.2);
+  border-color: rgba(240, 138, 75, 0.24);
+}
+
+.agent-mode-pill.subtle {
+  background: rgba(9, 26, 43, 0.2);
+}

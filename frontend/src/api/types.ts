@@ -347,6 +347,10 @@ export interface AgentResponse {
   evidence?: Record<string, unknown> | null;
   trace: AgentTraceStep[];
   plan: AgentPlanStep[];
+  task_mode: string;
+  task_label: string;
+  stage_label: string;
+  deliverables: string[];
   thread_id: string;
   thread_title: string;
   focus?: AgentFocus | null;

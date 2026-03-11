@@ -22,6 +22,12 @@
       </button>
     </div>
 
+    <div class="agent-mode-strip" v-if="agentStore.latest && !agentStore.loading">
+      <span class="agent-mode-pill">{{ agentStore.latest.task_label }}</span>
+      <span class="agent-mode-pill accent">{{ agentStore.latest.stage_label }}</span>
+      <span v-for="item in agentStore.latest.deliverables.slice(0, compact ? 2 : 3)" :key="item" class="agent-mode-pill subtle">{{ item }}</span>
+    </div>
+
     <div class="agent-workspace-body" v-if="agentStore.latest || agentStore.messages.length || agentStore.loading">
       <div class="agent-response-column">
         <div v-if="agentStore.loading" class="empty-state">正在分析...</div>

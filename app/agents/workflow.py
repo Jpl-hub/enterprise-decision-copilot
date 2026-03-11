@@ -59,6 +59,20 @@ class AgentWorkflow:
     def _tool_label(self, tool_name: str) -> str:
         return self.tool_labels.get(tool_name, '分析工具')
 
+    def _task_meta(self, intent: AgentIntent) -> tuple[str, list[str]]:
+        mapping = {
+            AgentIntent.FALLBACK: ('等待用户锁定任务', ['对象范围', '问题方向']),
+            AgentIntent.OVERVIEW: ('已形成全局扫描', ['样本概览', '外部环境', '优先对象']),
+            AgentIntent.DATA_QUALITY: ('已形成治理结论', ['覆盖状态', '异常热区', '复核队列']),
+            AgentIntent.COMPANY_DIAGNOSIS: ('已形成企业诊断', ['经营判断', '风险信号', '建议动作']),
+            AgentIntent.COMPANY_REPORT: ('已形成综合报告', ['经营概况', '趋势变化', '证据引用']),
+            AgentIntent.COMPANY_DECISION_BRIEF: ('已形成决策建议', ['结论摘要', '行动建议', '证据引用']),
+            AgentIntent.COMPANY_RISK_FORECAST: ('已形成风险判断', ['风险等级', '模型概率', '监测项']),
+            AgentIntent.COMPANY_COMPARE: ('已形成对比判断', ['赢家结论', '维度差异', '证据入口']),
+            AgentIntent.INDUSTRY_TREND: ('已形成行业扫描', ['景气变化', '主题动向', '宏观摘要']),
+        }
+        return mapping.get(intent, ('已完成分析', ['分析结论']))
+
     def _plan_for_intent(self, context: WorkflowContext) -> None:
         if context.intent == AgentIntent.COMPANY_COMPARE:
             context.add_plan('确认对比范围', '确认参与对比的企业集合，并统一年度口径。')
@@ -106,6 +120,7 @@ class AgentWorkflow:
                 ),
             )
             context.add_plan('检查数据状态', '检查真实数据是否已经完成接入。')
+            stage_label, deliverables = self._task_meta(AgentIntent.FALLBACK)
             payload = {
                 'title': '真实数据尚未全部接入',
                 'summary': '当前系统骨架已完成，但还需要先抓取并整理交易所财报、东方财富研报和国家统计局宏观数据。',
@@ -117,6 +132,10 @@ class AgentWorkflow:
                 'suggested_questions': ['下一步怎么抓取交易所财报？'],
                 'matched_companies': matches,
                 'intent': AgentIntent.FALLBACK.value,
+                'task_mode': AgentIntent.FALLBACK.value,
+                'task_label': self._intent_label(AgentIntent.FALLBACK),
+                'stage_label': stage_label,
+                'deliverables': deliverables,
                 'plan': [step.as_dict() for step in context.plan],
             }
             payload['trace'] = [step.as_dict() for step in context.trace]
@@ -134,9 +153,14 @@ class AgentWorkflow:
         result = tool.run(context, self.analytics_service)
         context.add_trace('生成结果', result.detail)
         context.add_plan('输出结果', '已汇总分析结果、建议动作与证据。')
+        stage_label, deliverables = self._task_meta(context.intent)
         payload = dict(result.payload)
         payload['trace'] = [step.as_dict() for step in context.trace]
         payload['plan'] = [step.as_dict() for step in context.plan]
         payload['matched_companies'] = matches
         payload['intent'] = context.intent.value
+        payload['task_mode'] = context.intent.value
+        payload['task_label'] = self._intent_label(context.intent)
+        payload['stage_label'] = stage_label
+        payload['deliverables'] = deliverables
         return payload

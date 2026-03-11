@@ -67,6 +67,10 @@ class AgentResponse(BaseModel):
     evidence: dict[str, Any] | None = None
     trace: list[AgentTraceStep] = Field(default_factory=list)
     plan: list[AgentPlanStep] = Field(default_factory=list)
+    task_mode: str = 'fallback'
+    task_label: str = '问题引导'
+    stage_label: str = '已完成'
+    deliverables: list[str] = Field(default_factory=list)
     thread_id: str
     thread_title: str
     focus: AgentFocus | None = None
