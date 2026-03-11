@@ -122,6 +122,19 @@
       </div>
     </section>
 
+    <section class="ai-stack-board" v-if="visibleEngines.length">
+      <div v-for="engine in visibleEngines" :key="engine.engine_id" class="stack-engine-card">
+        <div class="trace-title-row">
+          <strong>{{ engine.name }}</strong>
+          <span class="badge-subtle">{{ engine.category }}</span>
+        </div>
+        <p>{{ engine.role }}</p>
+        <div class="stack-chip-row">
+          <span v-for="item in engine.primary_outputs.slice(0, 3)" :key="item" class="selected-pill">{{ item }}</span>
+        </div>
+      </div>
+    </section>
+
     <section class="ai-deck-grid">
       <div class="ai-engine-card primary-engine-card">
         <div class="trace-title-row">
@@ -173,7 +186,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 
 import { api } from '../api/client';
-import type { QualitySummaryResponse, RiskModelSummaryResponse } from '../api/types';
+import type { AIEngineSummary, AIStackSummaryResponse, QualitySummaryResponse, RiskModelSummaryResponse } from '../api/types';
 
 interface RankingRow {
   company_code: string;
@@ -197,6 +210,7 @@ const agentStore = useAgentThreadStore();
 const router = useRouter();
 const qualitySummary = ref<QualitySummaryResponse | null>(null);
 const riskModelSummary = ref<RiskModelSummaryResponse | null>(null);
+const aiStack = ref<AIStackSummaryResponse | null>(null);
 const selectedCode = ref('');
 
 const officialCoverageText = computed(() => {
@@ -249,6 +263,8 @@ function riskFlagText(value: unknown) {
   return flags.length ? flags.join('；') : '当前没有高优先级异常信号。';
 }
 
+const visibleEngines = computed<AIEngineSummary[]>(() => (aiStack.value?.engines || []).slice(0, 4));
+
 function ringStyle(value: number, color: string, base: string) {
   const angle = Math.max(0, Math.min(100, value * 100));
   return {
@@ -295,11 +311,13 @@ onMounted(async () => {
       agentStore.resetThread(company.company_code, company.company_name);
     }
   }
-  const [quality, riskSummary] = await Promise.all([
+  const [quality, riskSummary, stack] = await Promise.all([
     api.getQualitySummary(),
     api.getRiskModelSummary(),
+    api.getAIStack(),
   ]);
   qualitySummary.value = quality;
   riskModelSummary.value = riskSummary;
+  aiStack.value = stack;
 });
 </script>

@@ -6,6 +6,7 @@ from app.agents.router import IntentRouter
 from app.agents.tools import build_agent_tools
 from app.agents.workflow import AgentWorkflow
 from app.services.agent import AgentService
+from app.services.ai_stack import AIStackService
 from app.services.analytics import AnalyticsService
 from app.services.audit import AuditService
 from app.services.auth import AuthService
@@ -28,6 +29,7 @@ class ServiceContainer:
     risk_model_service: RiskModelService
     risk_service: RiskService
     quality_service: DataQualityService
+    ai_stack_service: AIStackService
     competition_report_service: CompetitionReportService
     warehouse_service: WarehouseService
     industry_universe_service: IndustryUniverseService
@@ -44,6 +46,7 @@ def build_service_container() -> ServiceContainer:
     risk_model_service = RiskModelService()
     risk_service = RiskService(analytics_service, risk_model_service)
     quality_service = DataQualityService()
+    ai_stack_service = AIStackService(risk_model_service, quality_service)
     competition_report_service = CompetitionReportService(analytics_service, decision_service, risk_service, quality_service)
     warehouse_service = WarehouseService()
     industry_universe_service = IndustryUniverseService()
@@ -61,6 +64,7 @@ def build_service_container() -> ServiceContainer:
         risk_model_service=risk_model_service,
         risk_service=risk_service,
         quality_service=quality_service,
+        ai_stack_service=ai_stack_service,
         competition_report_service=competition_report_service,
         warehouse_service=warehouse_service,
         industry_universe_service=industry_universe_service,

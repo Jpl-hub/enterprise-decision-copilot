@@ -237,3 +237,14 @@ def test_agent_respects_explicit_task_mode() -> None:
     assert payload['task_mode'] == 'company_risk_forecast'
     assert payload['task_label'] == '风险判断'
     assert '风险' in payload['title']
+
+def test_ai_stack_summary_exposes_core_engines() -> None:
+    container = build_service_container()
+    from app.services.ai_stack import AIStackService
+
+    service = AIStackService(container.risk_model_service, container.quality_service)
+    payload = service.get_stack_summary()
+    engine_ids = {item['engine_id'] for item in payload['engines']}
+    assert 'agent-orchestrator' in engine_ids
+    assert 'risk-model' in engine_ids
+    assert 'multimodal-extractor' in engine_ids

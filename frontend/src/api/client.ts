@@ -1,4 +1,5 @@
 import type {
+  AIStackSummaryResponse,
   AgentResponse,
   AgentThreadDetailResponse,
   AgentThreadListResponse,
@@ -67,6 +68,9 @@ export const api = {
     return request<{ success: boolean }>('/api/auth/logout', {
       method: 'POST',
     });
+  },
+  getAIStack() {
+    return request<AIStackSummaryResponse>('/api/ai/stack');
   },
   getAuditLogs(limit = 30) {
     return request<AuditLogListResponse>(`/api/audit/logs?limit=${limit}`);

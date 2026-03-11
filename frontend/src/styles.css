@@ -1998,3 +1998,36 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+.ai-stack-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stack-engine-card {
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+}
+
+.stack-engine-card p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.stack-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 1200px) {
+  .ai-stack-board {
+    grid-template-columns: 1fr;
+  }
+}

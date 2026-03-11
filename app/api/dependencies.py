@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.container import ServiceContainer
 from app.services.agent import AgentService
+from app.services.ai_stack import AIStackService
 from app.services.analytics import AnalyticsService
 from app.services.audit import AuditService
 from app.services.auth import AuthService
@@ -39,6 +40,11 @@ def get_auth_service(container: ServiceContainer = Depends(get_container)) -> Au
 
 def get_audit_service(container: ServiceContainer = Depends(get_container)) -> AuditService:
     return container.audit_service
+
+
+
+def get_ai_stack_service(container: ServiceContainer = Depends(get_container)) -> AIStackService:
+    return container.ai_stack_service
 
 
 

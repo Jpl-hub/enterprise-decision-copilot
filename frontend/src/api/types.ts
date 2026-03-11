@@ -1,3 +1,31 @@
+export interface AIEngineMetricSet {
+  sample_count?: number | null;
+  roc_auc?: number | null;
+  model_type?: string | null;
+  coverage_ratio?: number | null;
+  avg_filled_field_count?: number | null;
+  backends: string[];
+  official_coverage_ratio?: number | null;
+  pending_review_count?: number | null;
+  anomaly_company_count?: number | null;
+}
+
+export interface AIEngineSummary {
+  engine_id: string;
+  name: string;
+  category: string;
+  status: string;
+  role: string;
+  primary_inputs: string[];
+  primary_outputs: string[];
+  metrics?: AIEngineMetricSet | null;
+}
+
+export interface AIStackSummaryResponse {
+  engines: AIEngineSummary[];
+  design_choices: string[];
+}
+
 export interface PipelineStatus {
   has_financials: boolean;
   has_reports: boolean;

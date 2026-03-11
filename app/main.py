@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.dependencies import get_current_user
 from app.api.routes.agent import router as agent_router
+from app.api.routes.ai import router as ai_router
 from app.api.routes.audit import router as audit_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.briefs import router as briefs_router
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(web_router)
     app.include_router(auth_router)
     app.include_router(agent_router, dependencies=[Depends(get_current_user)])
+    app.include_router(ai_router, dependencies=[Depends(get_current_user)])
     app.include_router(briefs_router, dependencies=[Depends(get_current_user)])
     app.include_router(competition_router, dependencies=[Depends(get_current_user)])
     app.include_router(risk_router, dependencies=[Depends(get_current_user)])
