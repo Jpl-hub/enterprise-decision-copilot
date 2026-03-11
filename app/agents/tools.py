@@ -6,6 +6,7 @@ from typing import Protocol
 from app.agents.models import AgentIntent, ToolResult, WorkflowContext
 from app.services.analytics import AnalyticsService
 from app.services.decision import DecisionService
+from app.services.narrative import NarrativeService
 from app.services.quality import DataQualityService
 from app.services.risk import RiskService
 
@@ -241,11 +242,16 @@ class CompanyReportTool:
     description = '负责生成偏正式的企业综合报告与结构化段落。'
     supported_intents = (AgentIntent.COMPANY_REPORT,)
 
+    def __init__(self, narrative_service: NarrativeService | None = None) -> None:
+        self.narrative_service = narrative_service
+
     def run(self, context: WorkflowContext, analytics_service: AnalyticsService) -> ToolResult:
         company_code = str(context.matches[0]['company_code'])
         report = analytics_service.get_company_report(company_code)
         if report is None:
             return FallbackTool().run(context, analytics_service)
+        if self.narrative_service is not None:
+            report = self.narrative_service.enrich_company_report(report, question=context.question)
         return ToolResult(
             payload={
                 'title': f"{report['company_name']} 综合报告",
@@ -357,6 +363,9 @@ class IndustryTrendTool:
     description = '负责行业研报聚合、景气变化判断和宏观联动摘要。'
     supported_intents = (AgentIntent.INDUSTRY_TREND,)
 
+    def __init__(self, narrative_service: NarrativeService | None = None) -> None:
+        self.narrative_service = narrative_service
+
     def run(self, context: WorkflowContext, analytics_service: AnalyticsService) -> ToolResult:
         overview = analytics_service.get_industry_overview()
         macro_digest = analytics_service.get_macro_digest()
@@ -366,21 +375,28 @@ class IndustryTrendTool:
             for item in macro_digest.get('items', [])[:3]
         ) or '宏观数据待补充'
         latest_titles = [row['title'] for row in overview.get('latest_rows', [])[:4]]
-        return ToolResult(
-            payload={
-                'title': '医药赛道趋势分析',
-                'summary': f"当前已接入行业研报 {overview['count']} 篇，重点覆盖 {top_industries}。",
-                'highlights': [
-                    f"行业研报正向观点 {overview['positive']} 篇，负向观点 {overview['negative']} 篇。",
-                    f"最近的行业议题包括：{'；'.join(latest_titles) if latest_titles else '暂无'}。",
-                    f"宏观环境摘要：{macro_line}。",
-                ],
-                'suggested_questions': [
-                    '分析迈瑞医疗',
-                    '分析恒瑞医药',
-                    '生成一段行业趋势答辩摘要',
-                ],
+        payload = {
+            'title': '医药赛道趋势分析',
+            'summary': f"当前已接入行业研报 {overview['count']} 篇，重点覆盖 {top_industries}。",
+            'highlights': [
+                f"行业研报正向观点 {overview['positive']} 篇，负向观点 {overview['negative']} 篇。",
+                f"最近的行业议题包括：{'；'.join(latest_titles) if latest_titles else '暂无'}。",
+                f"宏观环境摘要：{macro_line}。",
+            ],
+            'suggested_questions': [
+                '分析迈瑞医疗',
+                '分析恒瑞医药',
+                '生成一段行业趋势答辩摘要',
+            ],
+            'evidence': {
+                'industry_overview': overview,
+                'macro_items': macro_digest.get('items', []),
             },
+        }
+        if self.narrative_service is not None:
+            payload = self.narrative_service.build_industry_narrative(payload, context.question)
+        return ToolResult(
+            payload=payload,
             detail='已完成行业研报聚合、情绪统计与宏观联动摘要。',
         )
 
@@ -389,17 +405,18 @@ def build_agent_tools(
     decision_service: DecisionService,
     risk_service: RiskService,
     quality_service: DataQualityService,
+    narrative_service: NarrativeService | None = None,
 ) -> list[AgentTool]:
     return [
         FallbackTool(),
         OverviewTool(),
         DataQualityTool(quality_service),
         CompanyDiagnosisTool(),
-        CompanyReportTool(),
+        CompanyReportTool(narrative_service=narrative_service),
         CompanyDecisionBriefTool(decision_service),
         CompanyRiskForecastTool(risk_service),
         CompareCompaniesTool(),
-        IndustryTrendTool(),
+        IndustryTrendTool(narrative_service=narrative_service),
     ]
 
 
@@ -423,3 +440,5 @@ def build_agent_skill_registry(tools: list[AgentTool]) -> AgentSkillRegistry:
             by_intent[intent] = skill
 
     return AgentSkillRegistry(skills=skills, by_intent=by_intent, by_tool_name=by_tool_name)
+
+

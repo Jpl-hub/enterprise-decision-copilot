@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.services.analytics import AnalyticsService
+from app.services.narrative import NarrativeService
 from app.services.retrieval import RetrievalService
 
 
@@ -9,9 +10,11 @@ class DecisionService:
         self,
         analytics_service: AnalyticsService,
         retrieval_service: RetrievalService,
+        narrative_service: NarrativeService | None = None,
     ) -> None:
         self.analytics_service = analytics_service
         self.retrieval_service = retrieval_service
+        self.narrative_service = narrative_service
 
     def _verdict(self, row: dict, trend: dict) -> str:
         score = float(row.get("total_score", 0) or 0)
@@ -110,7 +113,7 @@ class DecisionService:
             f"语义召回到个股证据 {len(evidence['stock_reports'])} 条、行业证据 {len(evidence['industry_reports'])} 条。"
         )
 
-        return {
+        brief = {
             "company_code": str(company_code),
             "company_name": row["company_name"],
             "question": question,
@@ -128,3 +131,6 @@ class DecisionService:
                 "trend_digest": trend,
             },
         }
+        if self.narrative_service is None:
+            return brief
+        return self.narrative_service.enrich_decision_brief(brief)

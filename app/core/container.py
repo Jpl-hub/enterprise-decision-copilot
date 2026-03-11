@@ -12,6 +12,7 @@ from app.services.audit import AuditService
 from app.services.auth import AuthService
 from app.services.competition_report import CompetitionReportService
 from app.services.decision import DecisionService
+from app.services.narrative import NarrativeService
 from app.services.quality import DataQualityService
 from app.services.retrieval import RetrievalService
 from app.services.risk import RiskService
@@ -36,13 +37,13 @@ class ServiceContainer:
     agent_service: AgentService
 
 
-
 def build_service_container() -> ServiceContainer:
     analytics_service = AnalyticsService()
     audit_service = AuditService()
     auth_service = AuthService(audit_service=audit_service)
     retrieval_service = RetrievalService(analytics_service)
-    decision_service = DecisionService(analytics_service, retrieval_service)
+    narrative_service = NarrativeService()
+    decision_service = DecisionService(analytics_service, retrieval_service, narrative_service=narrative_service)
     risk_model_service = RiskModelService()
     risk_service = RiskService(analytics_service, risk_model_service)
     quality_service = DataQualityService()
@@ -53,7 +54,12 @@ def build_service_container() -> ServiceContainer:
     workflow = AgentWorkflow(
         analytics_service=analytics_service,
         intent_router=IntentRouter(),
-        tools=build_agent_tools(decision_service, risk_service, quality_service),
+        tools=build_agent_tools(
+            decision_service,
+            risk_service,
+            quality_service,
+            narrative_service=narrative_service,
+        ),
     )
     agent_service = AgentService(workflow, audit_service=audit_service)
     return ServiceContainer(

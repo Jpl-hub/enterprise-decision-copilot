@@ -4,8 +4,9 @@ import shutil
 import uuid
 from pathlib import Path
 
+from app.agents.models import AgentIntent, WorkflowContext
 from app.agents.router import IntentRouter
-from app.agents.tools import build_agent_tools
+from app.agents.tools import CompanyReportTool, build_agent_tools
 from app.agents.workflow import AgentWorkflow
 from app.api.routes.reports import compare_companies
 from app.api.routes.risk import get_risk_model_summary
@@ -278,3 +279,55 @@ def test_agent_response_exposes_skill_metadata() -> None:
 
     assert payload['skill_id'] == 'company_diagnosis'
     assert payload['skill_label'] == '企业诊断分析'
+
+def test_decision_service_can_use_narrative_service() -> None:
+    class StubNarrativeService:
+        def enrich_decision_brief(self, brief: dict) -> dict:
+            enriched = dict(brief)
+            enriched['summary'] = 'LLM增强：' + str(brief['summary'])
+            enriched['key_judgements'] = list(brief.get('key_judgements', [])) + ['LLM补充判断']
+            enriched['evidence'] = dict(brief.get('evidence') or {})
+            enriched['evidence']['narrative_mode'] = 'stub'
+            return enriched
+
+    analytics = AnalyticsService()
+    retrieval = RetrievalService(analytics)
+    service = DecisionService(analytics, retrieval, narrative_service=StubNarrativeService())
+
+    brief = service.build_company_decision_brief('300760', '结合研报看迈瑞医疗的经营动作')
+
+    assert brief is not None
+    assert brief['summary'].startswith('LLM增强：')
+    assert brief['evidence']['narrative_mode'] == 'stub'
+    assert 'LLM补充判断' in brief['key_judgements']
+
+
+def test_company_report_tool_can_use_narrative_service() -> None:
+    class StubNarrativeService:
+        def enrich_company_report(self, report: dict, question: str | None = None) -> dict:
+            enriched = dict(report)
+            enriched['summary'] = f"重写摘要：{question}"
+            enriched['sections'] = list(report['sections'])
+            enriched['sections'][0] = {
+                'title': report['sections'][0]['title'],
+                'content': '重写首段：经营概况更适合答辩口径。',
+            }
+            enriched['evidence'] = dict(report.get('evidence') or {})
+            enriched['evidence']['narrative_mode'] = 'stub'
+            return enriched
+
+    tool = CompanyReportTool(narrative_service=StubNarrativeService())
+    context = WorkflowContext(
+        question='生成更正式的企业综合报告',
+        matches=[{'company_code': '300760', 'company_name': '迈瑞医疗'}],
+        intent=AgentIntent.COMPANY_REPORT,
+    )
+
+    result = tool.run(context, AnalyticsService())
+
+    assert result.payload['summary'] == '重写摘要：生成更正式的企业综合报告'
+    assert result.payload['highlights'][0] == '重写首段：经营概况更适合答辩口径。'
+    assert result.payload['evidence']['narrative_mode'] == 'stub'
+
+
+
