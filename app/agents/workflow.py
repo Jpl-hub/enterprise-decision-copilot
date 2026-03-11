@@ -31,6 +31,26 @@ class AgentWorkflow:
     def _select_tool_name(self, intent: AgentIntent) -> str:
         return self.intent_to_tool.get(intent, "fallback_tool")
 
+    def _plan_for_intent(self, context: WorkflowContext) -> None:
+        if context.intent == AgentIntent.COMPANY_COMPARE:
+            context.add_plan("comparison_scope", "确认参与对比的企业集合，并统一年度口径。")
+            context.add_plan("comparison_evidence", "抽取多家企业的财报、研报与风险信号进行横向比对。")
+        elif context.intent == AgentIntent.DATA_QUALITY:
+            context.add_plan("quality_scope", "检查官方财报覆盖、多模态抽取和异常分布。")
+            context.add_plan("review_queue", "汇总自动复核与人工复核队列，识别待处理问题。")
+        elif context.intent == AgentIntent.COMPANY_RISK_FORECAST:
+            context.add_plan("risk_features", "提取财务、经营和行业风险特征。")
+            context.add_plan("risk_scoring", "综合规则引擎与风险模型生成风险判断。")
+        elif context.intent in {AgentIntent.COMPANY_DECISION_BRIEF, AgentIntent.COMPANY_REPORT, AgentIntent.COMPANY_DIAGNOSIS}:
+            context.add_plan("company_evidence", "汇总企业财报、研报和趋势证据。")
+            context.add_plan("decision_synthesis", "形成经营判断、风险机会和建议动作。")
+        elif context.intent == AgentIntent.INDUSTRY_TREND:
+            context.add_plan("industry_digest", "聚合行业研报与宏观指标，识别景气与主题变化。")
+        elif context.intent == AgentIntent.OVERVIEW:
+            context.add_plan("overview_digest", "汇总样本企业、研报覆盖和宏观摘要。")
+        else:
+            context.add_plan("fallback_guidance", "回退到默认引导，帮助用户锁定企业与任务。")
+
     def execute(self, question: str) -> dict:
         cleaned_question = question.strip()
         matches = self.analytics_service.find_company_matches(cleaned_question) if cleaned_question else []
@@ -76,6 +96,7 @@ class AgentWorkflow:
         else:
             context.intent = self.intent_router.detect_intent(cleaned_question, matches)
             context.add_plan("intent_planning", f"识别当前问题属于 {context.intent.value}。")
+            self._plan_for_intent(context)
 
         context.add_trace("intent_router", f"识别意图：{context.intent.value}。")
         context.selected_tool = self._select_tool_name(context.intent)

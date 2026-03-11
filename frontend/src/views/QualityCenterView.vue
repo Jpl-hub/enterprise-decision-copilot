@@ -1,56 +1,106 @@
 <template>
-  <div class="page-stack">
-    <PagePanel title="数据治理中心" eyebrow="Trust Layer" description="这里不是附属页，而是整个 Agent 系统的可信度底座：官方数据覆盖、多模态抽取、异常复核和人工治理都在这里收口。">
-      <div class="button-row">
-        <button class="button-primary" @click="loadSummary">刷新治理状态</button>
-      </div>
-      <div v-if="loading" class="empty-state">正在加载质量摘要...</div>
+  <div class="page-stack quality-page">
+    <PagePanel title="多源数据与可信度中心" eyebrow="Trust Layer" description="先判断数据够不够全、来源够不够真、问题是否已进入复核，再决定结论能不能直接用。">
+      <template #actions>
+        <div class="toolbar-cluster">
+          <button class="button-ghost" @click="syncAutoReviews" :disabled="loading || autoSyncing">自动生成复核任务</button>
+          <button class="button-primary" @click="loadSummary" :disabled="loading">刷新状态</button>
+        </div>
+      </template>
+      <div v-if="syncMessage" class="info-banner">{{ syncMessage }}</div>
+      <div v-if="loading" class="empty-state">正在加载可信度状态...</div>
       <div v-else-if="summary" class="page-stack">
         <div class="signal-grid">
           <div class="signal-card">
             <span class="signal-label">官方财报覆盖</span>
             <strong>{{ `${(summary.official_report_coverage_ratio * 100).toFixed(1)}%` }}</strong>
-            <p>{{ summary.official_report_downloaded_slots }} / {{ summary.official_report_expected_slots }} 槽位</p>
+            <p>{{ summary.official_report_downloaded_slots }} / {{ summary.official_report_expected_slots }} 个年报槽位已入库</p>
           </div>
           <div class="signal-card">
-            <span class="signal-label">多模态抽取覆盖</span>
+            <span class="signal-label">图表与表格补全</span>
             <strong>{{ `${(summary.multimodal_extract_coverage_ratio * 100).toFixed(1)}%` }}</strong>
-            <p>{{ summary.multimodal_extract_report_count }} / {{ summary.multimodal_expected_report_count }} 份报告</p>
+            <p>{{ summary.multimodal_extract_report_count }} / {{ summary.multimodal_expected_report_count }} 份报告已完成复杂版面抽取</p>
           </div>
           <div class="signal-card">
-            <span class="signal-label">待复核任务</span>
+            <span class="signal-label">待复核问题</span>
             <strong>{{ summary.pending_review_count }}</strong>
-            <p>异常企业 {{ summary.anomaly_company_count }} 家</p>
+            <p>当前异常企业 {{ summary.anomaly_company_count }} 家</p>
           </div>
           <div class="signal-card">
             <span class="signal-label">抽取后端</span>
             <strong>{{ summary.multimodal_backends.join(' / ') || '暂无' }}</strong>
-            <p>平均识别字段 {{ summary.multimodal_avg_filled_field_count.toFixed(1) }}</p>
+            <p>平均补全字段 {{ summary.multimodal_avg_filled_field_count.toFixed(1) }} 项</p>
           </div>
         </div>
 
         <div class="panel-split two-cols">
           <div class="sub-panel">
-            <h3>高优先级异常</h3>
+            <h3>当前资料池由什么组成</h3>
             <div class="stack-list">
-              <div v-for="item in summary.top_anomalies" :key="`${item.company_code}-${item.report_year}`" class="info-card compact">
-                <div class="trace-title-row">
-                  <strong>{{ item.company_name }} {{ item.report_year }}</strong>
-                  <span class="badge-subtle">{{ item.exchange }}</span>
-                </div>
-                <p class="muted">覆盖率 {{ (item.field_coverage_ratio * 100).toFixed(1) }}% · {{ item.critical_fields_missing.join('、') || '字段齐备' }}</p>
+              <div class="info-card compact source-breakdown-card">
+                <strong>交易所财报</strong>
+                <p class="muted">三所正式披露文件是经营分析的主底座，当前已覆盖 {{ summary.official_report_downloaded_slots }} 个年报槽位。</p>
+              </div>
+              <div class="info-card compact source-breakdown-card">
+                <strong>研究报告</strong>
+                <p class="muted">个股和行业研报负责补充市场观点、竞争格局和景气判断，供 Agent 做证据交叉验证。</p>
+              </div>
+              <div class="info-card compact source-breakdown-card">
+                <strong>宏观指标</strong>
+                <p class="muted">宏观指标帮助判断外部环境与行业周期，不让结论只盯公司自己。</p>
+              </div>
+              <div class="info-card compact source-breakdown-card">
+                <strong>图表与表格证据</strong>
+                <p class="muted">复杂 PDF 里的表格、截图和跨页版式会被补成结构化证据，减少漏读和错读。</p>
               </div>
             </div>
           </div>
           <div class="sub-panel">
-            <h3>最近多模态抽取</h3>
+            <h3>三所财报接入情况</h3>
             <div class="stack-list">
-              <div v-for="item in summary.multimodal_recent_extracts" :key="`${item.company_code}-${item.report_year}`" class="info-card compact">
+              <div v-for="item in summary.exchange_status" :key="item.exchange" class="info-card compact exchange-status-card">
+                <div class="trace-title-row">
+                  <strong>{{ item.exchange }}</strong>
+                  <span class="badge-subtle">{{ item.downloaded_rows }} / {{ item.rows }}</span>
+                </div>
+                <p class="muted">Manifest {{ item.manifest_exists ? '已就绪' : '缺失' }} · 文件缺失 {{ item.file_missing_rows }} 条</p>
+                <p class="muted">覆盖企业：{{ item.companies.join('、') || '暂无' }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-split two-cols">
+          <div class="sub-panel">
+            <div class="sub-panel-header">
+              <h3>高优先级异常</h3>
+              <span class="badge-subtle">优先处理这些问题</span>
+            </div>
+            <div class="stack-list">
+              <div v-for="item in summary.top_anomalies" :key="`${item.company_code}-${item.report_year}`" class="info-card compact anomaly-detail-card">
+                <div class="trace-title-row">
+                  <strong>{{ item.company_name }} {{ item.report_year }}</strong>
+                  <span class="badge-subtle">异常分 {{ item.anomaly_score }}</span>
+                </div>
+                <p class="muted">覆盖率 {{ (item.field_coverage_ratio * 100).toFixed(1) }}% · {{ item.exchange || '交易所未标记' }}</p>
+                <p class="muted">缺失字段：{{ item.critical_fields_missing.join('、') || '字段齐备' }}</p>
+                <p class="muted">异常标记：{{ item.anomaly_flags.join('、') || '暂无' }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="sub-panel">
+            <div class="sub-panel-header">
+              <h3>最近图表与表格补全</h3>
+              <span class="badge-subtle">多模态补证据</span>
+            </div>
+            <div class="stack-list">
+              <div v-for="item in summary.multimodal_recent_extracts" :key="`${item.company_code}-${item.report_year}`" class="info-card compact multimodal-card">
                 <div class="trace-title-row">
                   <strong>{{ item.company_name || item.company_code }} {{ item.report_year }}</strong>
                   <span class="badge-subtle">{{ item.backend }}</span>
                 </div>
                 <p class="muted">识别字段 {{ item.filled_field_count }} 项 · 页面 {{ item.page_images.length }} 张</p>
+                <p class="muted">说明：{{ item.notes.join('；') || '已进入正式证据链' }}</p>
               </div>
             </div>
           </div>
@@ -58,7 +108,23 @@
 
         <div class="panel-split two-cols">
           <div class="sub-panel">
-            <h3>人工复核登记</h3>
+            <div class="sub-panel-header">
+              <h3>最近复核记录</h3>
+              <span class="badge-subtle">治理闭环</span>
+            </div>
+            <div class="stack-list">
+              <div v-for="item in summary.recent_reviews" :key="`${item.company_code}-${item.report_year}-${item.created_at}`" class="info-card compact review-record-card">
+                <div class="trace-title-row">
+                  <strong>{{ item.company_code }} {{ item.report_year }}</strong>
+                  <span class="badge-subtle">{{ item.status }}</span>
+                </div>
+                <p class="muted">{{ item.finding_level }} · {{ item.finding_type }}</p>
+                <p class="muted">{{ item.note }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="sub-panel">
+            <h3>手动补充复核</h3>
             <div class="form-grid">
               <input v-model="review.company_code" class="text-input" placeholder="公司代码" />
               <input v-model.number="review.report_year" class="text-input" type="number" placeholder="报告年度" />
@@ -66,26 +132,9 @@
               <input v-model="review.finding_type" class="text-input" placeholder="问题类型" />
             </div>
             <textarea v-model="review.note" class="text-area" rows="5" placeholder="补充说明"></textarea>
-            <div class="button-row">
+            <div class="button-row left-align">
               <button class="button-primary" @click="submitReview">提交复核</button>
               <span class="muted" v-if="submitMessage">{{ submitMessage }}</span>
-            </div>
-          </div>
-          <div class="sub-panel">
-            <h3>治理原则</h3>
-            <div class="stack-list">
-              <div class="info-card compact">
-                <strong>结论要可追溯</strong>
-                <p class="muted">每条结论都能回到官方财报、研报或多模态抽取记录。</p>
-              </div>
-              <div class="info-card compact">
-                <strong>异常要可处理</strong>
-                <p class="muted">抽取失败、字段缺失、质量异常会进入治理队列，而不是被静默忽略。</p>
-              </div>
-              <div class="info-card compact">
-                <strong>系统口径要一致</strong>
-                <p class="muted">质量中心、报告导出、Agent 回答使用同一份治理视图，避免前后口径冲突。</p>
-              </div>
             </div>
           </div>
         </div>
@@ -102,8 +151,10 @@ import type { QualitySummaryResponse } from '../api/types';
 import PagePanel from '../components/PagePanel.vue';
 
 const loading = ref(false);
+const autoSyncing = ref(false);
 const summary = ref<QualitySummaryResponse | null>(null);
 const submitMessage = ref('');
+const syncMessage = ref('');
 const review = ref({
   company_code: '300760',
   report_year: 2024,
@@ -118,6 +169,17 @@ async function loadSummary() {
     summary.value = await api.getQualitySummary();
   } finally {
     loading.value = false;
+  }
+}
+
+async function syncAutoReviews() {
+  autoSyncing.value = true;
+  try {
+    const payload = await api.syncAutoReviews(12);
+    summary.value = payload.summary;
+    syncMessage.value = `本次新增 ${payload.created_count} 条自动复核任务，跳过 ${payload.skipped_count} 条重复问题。`;
+  } finally {
+    autoSyncing.value = false;
   }
 }
 

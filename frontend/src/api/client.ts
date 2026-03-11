@@ -75,6 +75,11 @@ export const api = {
   getQualitySummary() {
     return request<QualitySummaryResponse>('/api/quality/summary');
   },
+  syncAutoReviews(limit = 12) {
+    return request<{ created_count: number; skipped_count: number; created: Array<Record<string, unknown>>; summary: QualitySummaryResponse }>(`/api/quality/reviews/auto?limit=${limit}`, {
+      method: 'POST',
+    });
+  },
   getWarehouseSummary() {
     return request<WarehouseSummaryResponse>('/api/warehouse/summary');
   },

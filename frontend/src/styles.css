@@ -771,3 +771,20 @@ select {
   margin: 10px 0 0;
   color: #1f3343;
 }
+
+.info-banner {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(21, 62, 117, 0.12);
+  background: rgba(237, 245, 255, 0.92);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.source-breakdown-card,
+.exchange-status-card,
+.anomaly-detail-card,
+.multimodal-card,
+.review-record-card {
+  background: rgba(255, 255, 255, 0.92);
+}
