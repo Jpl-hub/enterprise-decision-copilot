@@ -1,0 +1,7 @@
+source_type,source_name,domain,entry_url,usage_scope,compliance_note,priority
+financial,SSE regular reports,query.sse.com.cn,https://www.sse.com.cn/disclosure/listedinfo/regular/,定期报告列表与PDF下载,仅抓取公开披露信息并低频访问,P0
+financial,SZSE regular reports,www.szse.cn,https://www.szse.cn/disclosure/listed/fixed/index.html,定期报告列表与PDF下载,优先页面引导与公开查询接口，不做高频扫站,P0
+financial,BSE announcements,www.bse.cn,https://www.bse.cn/disclosure/announcement.html,北交所公告与定期报告,仅抓取公开披露信息并低频访问，定期报告使用公开查询接口,P0
+research,Eastmoney stock reports,data.eastmoney.com,https://data.eastmoney.com/report/stock.jshtml,个股研报与机构评级摘要,使用公开页面与公开数据接口,P0
+research,Eastmoney industry reports,data.eastmoney.com,https://data.eastmoney.com/report/industry.jshtml,行业研报,使用公开页面与公开数据接口,P1
+macro,NBS stats,stats.gov.cn,https://www.stats.gov.cn/sj/,宏观统计指标,以公开发布口径为准，优先人工核验后入库,P0

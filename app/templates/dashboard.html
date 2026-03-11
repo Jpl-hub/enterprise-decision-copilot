@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="section-tag">面向 {{ industry }} 的企业运营分析与决策支持系统</p>
+        <h1>先用真实公开数据把底盘搭稳，再把智能体能力打满</h1>
+        <p class="hero-text">
+            当前页面已接入目标公司池、数据接入状态、智能体入口，以及综合报告、决策简报、风险预测三类工作台。
+            在财报、研报、宏观数据进入 <code>data/processed/</code> 后，系统会自动切换到真实分析模式。
+        </p>
+    </div>
+    <div class="status-card">
+        <h2>数据接入状态</h2>
+        <ul>
+            <li>财报数据：{{ '已接入' if payload.status.has_financials else '未接入' }}</li>
+            <li>研报数据：{{ '已接入' if payload.status.has_reports else '未接入' }}</li>
+            <li>宏观数据：{{ '已接入' if payload.status.has_macro else '未接入' }}</li>
+        </ul>
+        {% if payload.metrics %}
+        <div class="metric-box">
+            <strong>{{ "%.1f"|format(payload.metrics.avg_score) }}</strong>
+            <span>{{ payload.metrics.latest_year }} 年平均综合评分</span>
+            <p>当前领先企业：{{ payload.metrics.leader_name }}（{{ payload.metrics.leader_score }}）</p>
+            <p>个股研报：{{ payload.metrics.research_report_count }} 篇，行业研报：{{ payload.metrics.industry_report_count }} 篇</p>
+        </div>
+        {% else %}
+        <p class="hint">当前无虚构样例。请先运行真实数据采集与处理脚本。</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="panel-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>数据质量中台</h3>
+            <p>展示官方财报覆盖率、异常项、待复核队列，支持把字段问题沉淀为人工复核任务。</p>
+        </div>
+        <div id="quality-summary" class="agent-result empty">
+            <p>数据质量概览将在这里展示。</p>
+        </div>
+        <div id="quality-anomalies" class="agent-result empty">
+            <p>高优先级异常项将在这里展示。</p>
+        </div>
+    </article>
+    <article class="panel">
+        <div class="panel-header">
+            <h3>人工复核入口</h3>
+            <p>将异常字段、疑似抽取偏差和年报版式问题登记到本地复核队列，用于后续修正和答辩展示。</p>
+        </div>
+        <form id="quality-review-form" class="agent-form review-form">
+            <div class="review-grid">
+                <input id="review-company-code" type="text" placeholder="公司代码，如 300760" />
+                <input id="review-report-year" type="number" min="2020" max="2030" value="2024" />
+                <select id="review-finding-level">
+                    <option value="high">高优先级</option>
+                    <option value="medium">中优先级</option>
+                    <option value="low">低优先级</option>
+                </select>
+                <input id="review-finding-type" type="text" placeholder="问题类型，如 净利率异常" />
+            </div>
+            <textarea id="review-note" rows="5" placeholder="补充说明：哪个字段可疑、为什么可疑、后续如何复核"></textarea>
+            <button type="submit">加入复核队列</button>
+        </form>
+        <div id="quality-review-result" class="agent-result empty">
+            <p>人工复核写入结果将在这里展示。</p>
+        </div>
+    </article>
+</section>
+
+<section class="panel-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>目标企业池</h3>
+            <p>第一阶段默认聚焦医药生物行业，可后续扩展到其他赛道。</p>
+        </div>
+        <div class="target-grid">
+            {% for item in payload.targets %}
+            <div class="target-card">
+                <span>{{ item.exchange }}</span>
+                <h4>{{ item.company_name }}</h4>
+                <p>{{ item.segment }}</p>
+                <code>{{ item.company_code }}</code>
+                <div class="card-actions">
+                    <button class="quick-report" type="button" data-company-code="{{ item.company_code }}">综合报告</button>
+                    <button class="quick-brief" type="button" data-company-code="{{ item.company_code }}" data-company-name="{{ item.company_name }}">决策简报</button>
+                    <button class="quick-risk" type="button" data-company-code="{{ item.company_code }}" data-company-name="{{ item.company_name }}">风险预测</button>
+                    <button class="quick-package" type="button" data-company-code="{{ item.company_code }}" data-company-name="{{ item.company_name }}">答辩稿</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+    <article class="panel">
+        <div class="panel-header">
+            <h3>智能体问答台</h3>
+            <p>当前已进入真实数据分析模式，可直接发起企业诊断、行业趋势分析、决策建议和风险预测。</p>
+        </div>
+        <form id="agent-form" class="agent-form">
+            <textarea id="agent-question" rows="6" placeholder="例如：分析迈瑞医疗；给恒瑞医药提经营决策建议；预测联影医疗的风险"></textarea>
+            <button type="submit">提交问题</button>
+        </form>
+        <div id="agent-result" class="agent-result empty">
+            <p>结果将在这里展示。</p>
+        </div>
+    </article>
+</section>
+
+<section class="panel-grid panel-grid-three">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>综合报告工作台</h3>
+            <p>生成企业结构化综合报告，展示经营、趋势、行业与宏观证据。</p>
+        </div>
+        <div id="report-result" class="agent-result empty">
+            <p>综合报告将在这里展示。</p>
+        </div>
+    </article>
+    <article class="panel">
+        <div class="panel-header">
+            <h3>决策简报工作台</h3>
+            <p>输出经营判断、行动建议和语义召回证据。</p>
+        </div>
+        <div id="brief-result" class="agent-result empty">
+            <p>决策简报将在这里展示。</p>
+        </div>
+    </article>
+    <article class="panel">
+        <div class="panel-header">
+            <h3>风险预测工作台</h3>
+            <p>输出下一阶段风险等级、风险驱动项和监测指标。</p>
+        </div>
+        <div id="risk-result" class="agent-result empty">
+            <p>风险预测将在这里展示。</p>
+        </div>
+    </article>
+</section>
+
+<section class="panel-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>答辩稿工作台</h3>
+            <p>输出带引用编号的章节化答辩稿骨架，并把证据包导出到本地 <code>data/exports</code>。</p>
+        </div>
+        <div id="competition-result" class="agent-result empty">
+            <p>答辩稿导出结果将在这里展示。</p>
+        </div>
+    </article>
+</section>
+
+<section class="panel-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>建议入口</h3>
+            <p>建议优先演示以下四条高分链路。</p>
+        </div>
+        <div class="list-grid">
+            {% for item in suggested_entries %}
+            <div class="list-item">
+                <div>
+                    <strong>{{ item.title }}</strong>
+                    <p>{{ item.description }}</p>
+                </div>
+                <span>{{ item.tag }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+    <article class="panel">
+        <div class="panel-header">
+            <h3>角色入口</h3>
+            <p>直接对应赛题中的三类核心用户场景。</p>
+        </div>
+        <div class="persona-grid">
+            {% for item in persona_entries %}
+            <button class="persona-card" type="button" data-prompt="{{ item.prompt }}">
+                <span class="persona-tag">{{ item.tag }}</span>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.description }}</p>
+            </button>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="panel-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>答辩亮点</h3>
+            <p>当前系统最适合在答辩时直接展示的能力组合。</p>
+        </div>
+        <div class="list-grid">
+            <div class="list-item"><div><strong>真实数据底座</strong><p>交易所财报 + 东方财富研报 + 国家统计局宏观指标</p></div><span>Data</span></div>
+            <div class="list-item"><div><strong>智能体工具链</strong><p>诊断、报告、决策简报、风险预测统一编排</p></div><span>Agent</span></div>
+            <div class="list-item"><div><strong>证据可追溯</strong><p>财报原文、研报链接、趋势摘要和执行轨迹同步展示</p></div><span>Trace</span></div>
+        </div>
+    </article>
+    <article class="panel">
+        <div class="panel-header">
+            <h3>主题对齐</h3>
+            <p>系统能力严格围绕赛题要求展开，不做无关炫技。</p>
+        </div>
+        <div class="list-grid">
+            <div class="list-item"><div><strong>智能问数</strong><p>自然语言交互、问数、对比、澄清与多轮分析</p></div><span>NLQ</span></div>
+            <div class="list-item"><div><strong>运营评估</strong><p>多维评分、趋势变化、行业对标与诊断</p></div><span>Score</span></div>
+            <div class="list-item"><div><strong>风险机会</strong><p>决策建议、风险预测、监测指标与机会挖掘</p></div><span>Insight</span></div>
+        </div>
+    </article>
+</section>
+
+{% if payload.metrics %}
+<section class="panel-grid">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>综合评分榜</h3>
+        </div>
+        <div class="list-grid">
+            {% for item in payload.ranking %}
+            <div class="list-item">
+                <strong>{{ item.company_name }}</strong>
+                <span>{{ "%.1f"|format(item.total_score) }} 分</span>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+    <article class="panel">
+        <div class="panel-header">
+            <h3>风险关注名单</h3>
+        </div>
+        <div class="list-grid">
+            {% for item in payload.watchlist %}
+            <div class="list-item">
+                <div>
+                    <strong>{{ item.company_name }}</strong>
+                    <p>{{ "；".join(item.risk_flags) if item.risk_flags else "待生成" }}</p>
+                </div>
+                <span>{{ item.risk_level }}风险</span>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% else %}
+<section class="panel">
+    <div class="panel-header">
+        <h3>建议的下一步</h3>
+        <p>为了保证后续所有分析都基于真实公开来源，建议按下面顺序推进。</p>
+    </div>
+    <ol class="roadmap">
+        <li>抓取交易所目标企业的定期报告 PDF 链接与元数据。</li>
+        <li>抓取东方财富个股研报和行业研报列表。</li>
+        <li>抓取国家统计局宏观指标并整理成时间序列。</li>
+        <li>抽取财报关键指标，生成 `financial_features.csv`。</li>
+        <li>将研报结构化为 `research_reports.csv`，然后接入评分与问答。</li>
+    </ol>
+</section>
+{% endif %}
+{% endblock %}

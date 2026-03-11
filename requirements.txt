@@ -1,0 +1,15 @@
+fastapi>=0.109
+uvicorn>=0.27
+jinja2>=3.1
+pandas>=2.1
+beautifulsoup4>=4.12
+requests>=2.32
+scikit-learn>=1.4
+plotly>=5.22
+pydantic-settings>=2.2
+python-multipart>=0.0.9
+PyPDF2>=3.0
+playwright>=1.57
+duckdb>=1.5
+httpx>=0.27
+pymupdf>=1.24
