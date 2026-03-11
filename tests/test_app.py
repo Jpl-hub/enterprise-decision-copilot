@@ -230,3 +230,10 @@ def test_agent_thread_detail_blocks_other_users() -> None:
         shutil.rmtree(db_dir, ignore_errors=True)
 
 
+
+def test_agent_respects_explicit_task_mode() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer('分析迈瑞医疗', task_mode='company_risk_forecast')
+    assert payload['task_mode'] == 'company_risk_forecast'
+    assert payload['task_label'] == '风险判断'
+    assert '风险' in payload['title']

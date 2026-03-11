@@ -41,6 +41,13 @@
       <span v-for="item in agentStore.latest.deliverables.slice(0, compact ? 2 : 3)" :key="item" class="agent-mode-pill subtle">{{ item }}</span>
     </div>
 
+    <div class="agent-output-grid" v-if="outputCards.length && !agentStore.loading">
+      <div v-for="item in outputCards" :key="item.label" class="agent-output-card">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+      </div>
+    </div>
+
     <div class="agent-workspace-body" v-if="agentStore.latest || agentStore.messages.length || agentStore.loading">
       <div class="agent-response-column">
         <div v-if="agentStore.loading" class="empty-state">正在分析...</div>
@@ -152,6 +159,30 @@ const visiblePrompts = computed(() => {
 
 const messagePreview = computed(() => {
   return props.compact ? agentStore.messages.slice(-4) : agentStore.messages;
+});
+
+const outputCards = computed(() => {
+  const latest = agentStore.latest;
+  if (!latest) return [];
+  const cards = [
+    { label: '任务模式', value: latest.task_label },
+    { label: '当前阶段', value: latest.stage_label },
+  ];
+  const evidence = latest.evidence || {};
+  if (latest.task_mode === 'company_risk_forecast') {
+    const model = evidence.model_prediction as Record<string, unknown> | undefined;
+    const probability = typeof model?.high_risk_probability === 'number' ? `${(model.high_risk_probability * 100).toFixed(1)}%` : '暂无';
+    cards.push({ label: '高风险概率', value: probability });
+  } else if (latest.task_mode === 'company_compare') {
+    const companies = (evidence.companies as unknown[] | undefined)?.length || 0;
+    cards.push({ label: '对比企业', value: `${companies} 家` });
+  } else if (latest.task_mode === 'data_quality') {
+    const anomalies = (evidence.top_anomalies as unknown[] | undefined)?.length || 0;
+    cards.push({ label: '异常条目', value: `${anomalies} 条` });
+  } else {
+    cards.push({ label: '结论要点', value: `${latest.highlights.length} 条` });
+  }
+  return cards;
 });
 
 function resetThread() {

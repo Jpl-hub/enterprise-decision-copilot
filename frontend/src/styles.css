@@ -1967,3 +1967,34 @@ select {
   border-color: rgba(240, 138, 75, 0.3);
   color: #fff;
 }
+
+.agent-output-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.agent-output-card {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  gap: 6px;
+}
+
+.agent-output-card span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.82rem;
+}
+
+.agent-output-card strong {
+  color: #fff;
+  font-size: 1.08rem;
+}
+
+@media (max-width: 1200px) {
+  .agent-output-grid {
+    grid-template-columns: 1fr;
+  }
+}
