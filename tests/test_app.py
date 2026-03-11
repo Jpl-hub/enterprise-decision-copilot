@@ -73,8 +73,8 @@ def test_agent_api_returns_execution_trace() -> None:
     payload = container.agent_service.answer("比较迈瑞医疗和联影医疗")
     assert payload["trace"]
     assert payload["evidence"]["companies"]
-    assert any(step["step"] == "tool_execution" for step in payload["trace"])
-    assert any(step["step"] == "tool_selection" for step in payload["plan"])
+    assert any(step["step"] == "生成结果" for step in payload["trace"])
+    assert any(step["step"] == "选择分析路径" for step in payload["plan"])
 
 
 def test_company_trend_digest_has_multi_year_metrics() -> None:

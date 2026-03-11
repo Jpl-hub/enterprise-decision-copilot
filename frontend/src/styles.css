@@ -1543,3 +1543,209 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+.unified-overview .command-stage-main {
+  gap: 24px;
+}
+
+.unified-command-stage .command-bar {
+  grid-template-columns: minmax(240px, 360px) 180px;
+  justify-content: flex-start;
+}
+
+.hero-jump-button {
+  min-height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-workspace-panel {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.agent-workspace-head,
+.agent-input-shell,
+.agent-workspace-body,
+.agent-side-column,
+.signal-stack-compact {
+  display: grid;
+  gap: 14px;
+}
+
+.agent-workspace-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.agent-workspace-panel .section-tag,
+.agent-workspace-panel h3,
+.agent-workspace-panel .button-ghost,
+.agent-workspace-panel .empty-state,
+.agent-workspace-panel .badge-subtle,
+.unified-overview .agent-live-card,
+.unified-overview .mini-thread-card {
+  color: #fff;
+}
+
+.agent-workspace-panel .button-ghost {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.agent-workspace-panel .button-primary {
+  background: linear-gradient(135deg, #f08a4b, #d86137);
+  border-color: transparent;
+}
+
+.agent-input-shell {
+  grid-template-columns: minmax(0, 1fr) 120px;
+}
+
+.agent-workspace-body {
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.86fr);
+}
+
+.agent-mini-panel {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(6, 18, 35, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.unified-overview .agent-live-card,
+.unified-overview .mini-thread-card {
+  background: linear-gradient(160deg, rgba(21, 62, 117, 0.96), rgba(24, 92, 111, 0.92));
+}
+
+.signal-inline-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.signal-inline-item:last-child {
+  border-bottom: 0;
+}
+
+.signal-inline-item span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.refined-top-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.nav-chip,
+.nav-chip:visited {
+  color: var(--brand);
+}
+
+.nav-chip.router-link-active,
+.nav-chip.router-link-exact-active,
+.nav-chip-exact-active {
+  background: linear-gradient(135deg, #153e75, #2c6cb0);
+  color: #fff !important;
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(21, 62, 117, 0.24);
+}
+
+.user-menu {
+  position: relative;
+}
+
+.user-menu-trigger {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(21, 62, 117, 0.1);
+  cursor: pointer;
+}
+
+.user-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #153e75, #2c6cb0);
+  color: #fff;
+  font-weight: 800;
+}
+
+.user-role {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.user-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 180px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(21, 62, 117, 0.1);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 8px;
+}
+
+.user-menu-meta {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+}
+
+.user-menu-meta span {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.user-menu-link {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: var(--brand);
+  background: transparent;
+  border: 0;
+}
+
+.user-menu-link:hover {
+  background: rgba(21, 62, 117, 0.08);
+}
+
+.user-menu-link.danger {
+  color: #b6532d;
+}
+
+.thread-record-card p,
+.thread-header p {
+  margin: 0;
+}
+
+@media (max-width: 1200px) {
+  .agent-workspace-body,
+  .agent-input-shell {
+    grid-template-columns: 1fr;
+  }
+}

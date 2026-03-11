@@ -1,11 +1,12 @@
 <template>
   <div class="page-stack workbench-page refined-workbench">
-    <PagePanel title="企业分析台" eyebrow="Enterprise Analysis">
+    <PagePanel title="企业分析" eyebrow="Enterprise Detail">
       <template #actions>
         <div class="toolbar-cluster">
           <select v-model="selectedCode" class="select-input toolbar-select">
             <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
           </select>
+          <RouterLink to="/" class="button-ghost">回到主分析区</RouterLink>
           <button class="button-primary" @click="loadAll">刷新</button>
         </div>
       </template>
@@ -94,45 +95,6 @@
         </div>
       </div>
     </PagePanel>
-
-    <PagePanel title="Agent 对话区" eyebrow="Agent Thread">
-      <div class="agent-workspace-grid">
-        <div class="sub-panel">
-          <div class="hero-command compact-agent-command">
-            <input v-model="question" class="text-input hero-input" placeholder="继续拆解这家企业的问题" @keydown.enter="runAgent" />
-            <button class="button-primary hero-button" @click="runAgent" :disabled="agentStore.loading">发送</button>
-          </div>
-          <div class="quick-prompt-row left-align top-gap" v-if="agentStore.latest?.suggested_questions?.length">
-            <button v-for="item in agentStore.latest.suggested_questions.slice(0, 4)" :key="item" class="button-ghost chip-button" @click="applySuggestedQuestion(item)">
-              {{ item }}
-            </button>
-          </div>
-          <div class="stack-list top-gap">
-            <div v-if="agentStore.loading" class="empty-state">正在分析...</div>
-            <template v-else-if="agentStore.latest">
-              <div class="info-card compact emphasis-card">
-                <strong>{{ agentStore.latest.title }}</strong>
-                <p>{{ agentStore.latest.summary }}</p>
-              </div>
-              <div v-for="item in agentStore.latest.highlights" :key="item" class="info-card compact">
-                <p>{{ item }}</p>
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <div class="sub-panel">
-          <div class="sub-panel-header">
-            <h3>本轮计划</h3>
-            <button class="button-ghost" @click="resetThread">新建线程</button>
-          </div>
-          <TracePanel :trace="agentStore.latest?.plan" />
-          <div class="top-gap">
-            <AgentThreadPanel :messages="agentStore.messages" />
-          </div>
-        </div>
-      </div>
-    </PagePanel>
   </div>
 </template>
 
@@ -142,10 +104,8 @@ import { useRoute, RouterLink } from 'vue-router';
 
 import { api } from '../api/client';
 import type { CompanyReportResponse, DecisionBriefResponse, RiskForecastResponse } from '../api/types';
-import AgentThreadPanel from '../components/AgentThreadPanel.vue';
 import EvidenceList from '../components/EvidenceList.vue';
 import PagePanel from '../components/PagePanel.vue';
-import TracePanel from '../components/TracePanel.vue';
 import { useAgentThreadStore } from '../stores/agentThread';
 import { useDashboardStore } from '../stores/dashboard';
 
@@ -160,7 +120,6 @@ const risk = ref<RiskForecastResponse | null>(null);
 const reportLoading = ref(false);
 const briefLoading = ref(false);
 const riskLoading = ref(false);
-const question = ref('把这家企业的风险拆成财务、经营、行业三层并给出动作建议');
 
 const targets = computed(() => store.targets);
 
@@ -189,11 +148,6 @@ async function loadAll() {
     report.value = reportResult;
     brief.value = briefResult;
     risk.value = riskResult;
-    question.value = `把${companyName}的风险拆成财务、经营、行业三层并给出动作建议`;
-    if (!agentStore.latest || agentStore.focusCompanyCode !== selectedCode.value) {
-      agentStore.resetThread(selectedCode.value, companyName);
-      await runAgent();
-    }
   } finally {
     reportLoading.value = false;
     briefLoading.value = false;
@@ -211,23 +165,6 @@ function formatPercent(value: number | null | undefined) {
 
 function formatMetric(value: number | null | undefined) {
   return value == null ? '暂无' : value.toFixed(3);
-}
-
-function applySuggestedQuestion(text: string) {
-  question.value = text;
-  void runAgent();
-}
-
-function resetThread() {
-  agentStore.resetThread(selectedCode.value, currentCompanyName());
-}
-
-async function runAgent() {
-  if (!question.value.trim()) return;
-  await agentStore.ask(question.value.trim(), {
-    companyCode: selectedCode.value,
-    companyName: currentCompanyName(),
-  });
 }
 
 watch(() => props.companyCode, (value) => {
