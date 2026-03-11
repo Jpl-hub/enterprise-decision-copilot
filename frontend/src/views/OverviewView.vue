@@ -5,7 +5,7 @@
         <p class="section-tag">Start Here</p>
         <h2>先选企业，再把问题交给系统。</h2>
         <p class="hero-text">
-          你可以直接问经营质量、竞争格局、风险变化和后续动作。系统会把财报、研报、宏观指标和图表表格里的关键信息组织成一份可追溯结论。
+          你可以直接问经营质量、竞争格局、风险变化和后续动作。财报、研报、宏观指标和图表表格里的关键信息会被整理成一份可追溯结论。
         </p>
         <div class="hero-command company-question-row">
           <select v-model="selectedCode" class="select-input hero-select">
@@ -102,7 +102,7 @@
           <TracePanel :trace="agentStore.latest.plan" />
         </div>
       </div>
-      <div v-else class="empty-state">输入一个问题，系统会自动组织企业分析、研报检索、风险评估和可信度检查。</div>
+      <div v-else class="empty-state">输入一个问题后，你会先看到判断，再看到来源和下一步建议。</div>
     </PagePanel>
 
     <PagePanel title="分析线程" eyebrow="Thread" description="你的问题、系统回答和上下文对象会保留在同一条线程里。">

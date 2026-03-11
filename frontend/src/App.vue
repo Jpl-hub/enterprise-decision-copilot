@@ -12,7 +12,7 @@
           <h1>企智策源</h1>
           <span class="brand-pill">企业决策系统</span>
         </div>
-        <p class="brand-subtitle">用真实资料回答企业经营问题，而不是只给一段模型输出。</p>
+        <p class="brand-subtitle">把财报、研报和风险信号整理成可直接使用的经营判断。</p>
       </div>
       <nav class="top-nav">
         <RouterLink to="/" class="nav-chip">开始分析</RouterLink>

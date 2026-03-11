@@ -35,7 +35,7 @@
           <div class="stack-list">
             <div class="info-card compact">
               <strong>优先跟踪对象</strong>
-              <p class="muted">系统先告诉你当前谁更值得重点看，而不是先扔一堆维度分数。</p>
+              <p class="muted">先给出当前更值得重点跟踪的企业，再展开原因。</p>
             </div>
             <div class="info-card compact">
               <strong>差异原因</strong>

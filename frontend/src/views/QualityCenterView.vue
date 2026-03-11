@@ -43,7 +43,7 @@
               </div>
               <div class="info-card compact source-breakdown-card">
                 <strong>研究报告</strong>
-                <p class="muted">个股和行业研报负责补充市场观点、竞争格局和景气判断，供 Agent 做证据交叉验证。</p>
+                <p class="muted">个股和行业研报补充市场观点、竞争格局和景气判断，方便你交叉核对结论。</p>
               </div>
               <div class="info-card compact source-breakdown-card">
                 <strong>宏观指标</strong>

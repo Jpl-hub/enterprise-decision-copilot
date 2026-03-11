@@ -3,7 +3,7 @@
     <div class="login-panel">
       <p class="section-tag">Secure Access</p>
       <h1>登录企智策源</h1>
-      <p class="muted">先完成身份验证，再进入企业分析、数据治理和 Agent 线程。</p>
+      <p class="muted">登录后可以继续查看你的分析记录、常看企业和导出材料。</p>
       <div class="login-tabs">
         <button class="button-ghost" :class="{ active: mode === 'login' }" @click="mode = 'login'">登录</button>
         <button class="button-ghost" :class="{ active: mode === 'register' }" @click="mode = 'register'">注册</button>
@@ -20,8 +20,8 @@
       </div>
       <p v-if="authStore.error" class="error-box top-gap">{{ authStore.error }}</p>
       <div class="info-card compact top-gap">
-        <strong>为什么要登录</strong>
-        <p class="muted">系统包含企业分析、风险判断、数据治理和材料导出，正式产品必须具备用户访问控制，不能裸露业务接口。</p>
+        <strong>登录后你可以</strong>
+        <p class="muted">保存分析线程，继续上次的问题，查看治理记录，并按你的账号管理导出内容。</p>
       </div>
     </div>
   </div>
