@@ -3,11 +3,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.dependencies import get_current_user
 from app.api.routes.agent import router as agent_router
+from app.api.routes.auth import router as auth_router
 from app.api.routes.briefs import router as briefs_router
 from app.api.routes.competition import router as competition_router
 from app.api.routes.dashboard import router as dashboard_router
@@ -48,15 +50,16 @@ def create_app() -> FastAPI:
     )
     app.mount('/static', StaticFiles(directory=BASE_DIR / 'static'), name='static')
     app.include_router(web_router)
-    app.include_router(agent_router)
-    app.include_router(briefs_router)
-    app.include_router(competition_router)
-    app.include_router(risk_router)
-    app.include_router(dashboard_router)
-    app.include_router(reports_router)
-    app.include_router(quality_router)
-    app.include_router(universe_router)
-    app.include_router(warehouse_router)
+    app.include_router(auth_router)
+    app.include_router(agent_router, dependencies=[Depends(get_current_user)])
+    app.include_router(briefs_router, dependencies=[Depends(get_current_user)])
+    app.include_router(competition_router, dependencies=[Depends(get_current_user)])
+    app.include_router(risk_router, dependencies=[Depends(get_current_user)])
+    app.include_router(dashboard_router, dependencies=[Depends(get_current_user)])
+    app.include_router(reports_router, dependencies=[Depends(get_current_user)])
+    app.include_router(quality_router, dependencies=[Depends(get_current_user)])
+    app.include_router(universe_router, dependencies=[Depends(get_current_user)])
+    app.include_router(warehouse_router, dependencies=[Depends(get_current_user)])
     app.include_router(health_router)
     return app
 

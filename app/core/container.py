@@ -7,6 +7,7 @@ from app.agents.tools import build_agent_tools
 from app.agents.workflow import AgentWorkflow
 from app.services.agent import AgentService
 from app.services.analytics import AnalyticsService
+from app.services.auth import AuthService
 from app.services.competition_report import CompetitionReportService
 from app.services.decision import DecisionService
 from app.services.quality import DataQualityService
@@ -20,6 +21,7 @@ from app.services.risk import RiskService
 @dataclass(slots=True)
 class ServiceContainer:
     analytics_service: AnalyticsService
+    auth_service: AuthService
     decision_service: DecisionService
     risk_model_service: RiskModelService
     risk_service: RiskService
@@ -30,8 +32,10 @@ class ServiceContainer:
     agent_service: AgentService
 
 
+
 def build_service_container() -> ServiceContainer:
     analytics_service = AnalyticsService()
+    auth_service = AuthService()
     retrieval_service = RetrievalService(analytics_service)
     decision_service = DecisionService(analytics_service, retrieval_service)
     risk_model_service = RiskModelService()
@@ -48,6 +52,7 @@ def build_service_container() -> ServiceContainer:
     agent_service = AgentService(workflow)
     return ServiceContainer(
         analytics_service=analytics_service,
+        auth_service=auth_service,
         decision_service=decision_service,
         risk_model_service=risk_model_service,
         risk_service=risk_service,

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     vision_llm_api_key: str = ""
     vision_llm_model: str = "Qwen/Qwen2.5-VL-72B-Instruct"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    auth_token_ttl_hours: int = 72
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

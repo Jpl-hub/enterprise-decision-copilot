@@ -73,21 +73,55 @@ SCHEMA = {
             source_url TEXT
         )
     ''',
+    'users': '''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL UNIQUE,
+            display_name TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            password_salt TEXT NOT NULL,
+            role TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_login_at TEXT
+        )
+    ''',
+    'user_sessions': '''
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            token TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            revoked_at TEXT
+        )
+    ''',
 }
+
+
+INDEXES = [
+    'CREATE INDEX IF NOT EXISTS idx_financial_features_company_year ON financial_features(company_code, report_year)',
+    'CREATE INDEX IF NOT EXISTS idx_research_reports_company_date ON research_reports(company_code, report_date)',
+    'CREATE INDEX IF NOT EXISTS idx_industry_reports_name_date ON industry_reports(industry_name, report_date)',
+    'CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)',
+]
 
 
 def get_db_path() -> Path:
     return DB_PATH
 
 
-def get_connection() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    return sqlite3.connect(DB_PATH)
+def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
+    target = db_path or DB_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(target)
+    connection.row_factory = sqlite3.Row
+    return connection
 
 
-def init_db() -> None:
-    with get_connection() as conn:
+def init_db(db_path: Path | None = None) -> None:
+    with get_connection(db_path) as conn:
         for ddl in SCHEMA.values():
+            conn.execute(ddl)
+        for ddl in INDEXES:
             conn.execute(ddl)
         conn.commit()
 

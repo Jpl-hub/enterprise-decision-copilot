@@ -4,6 +4,25 @@ export interface PipelineStatus {
   has_macro: boolean;
 }
 
+export interface AuthUser {
+  user_id: string;
+  username: string;
+  display_name: string;
+  role: string;
+  created_at: string;
+  last_login_at?: string | null;
+}
+
+export interface LoginResponse {
+  token: string;
+  expires_at: string;
+  user: AuthUser;
+}
+
+export interface RegisterResponse {
+  user: AuthUser;
+}
+
 export interface TargetCompany {
   company_code: string;
   company_name: string;

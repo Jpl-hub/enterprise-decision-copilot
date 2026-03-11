@@ -68,7 +68,8 @@ select {
 .hero-copy h2,
 .hero-highlight-card h3,
 .capability-card h3,
-.pillar-card h3 {
+.pillar-card h3,
+.login-panel h1 {
   font-family: Georgia, "Times New Roman", serif;
 }
 
@@ -78,7 +79,9 @@ select {
 .evidence-title-row,
 .sub-panel-header,
 .button-row,
-.hero-command {
+.hero-command,
+.header-note-inline,
+.header-user-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -154,6 +157,11 @@ select {
   font-size: 13px;
 }
 
+.header-user-bar {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
 .status-dot {
   width: 10px;
   height: 10px;
@@ -183,7 +191,8 @@ select {
 .signal-card,
 .target-spotlight-card,
 .hero-highlight-card,
-.mini-metric-card {
+.mini-metric-card,
+.login-panel {
   border: 1px solid var(--line);
   background: var(--panel);
   backdrop-filter: blur(12px);
@@ -400,7 +409,8 @@ select {
 .sub-panel,
 .info-card,
 .trace-card,
-.evidence-card {
+.evidence-card,
+.login-panel {
   padding: 18px;
 }
 
@@ -441,6 +451,11 @@ select {
 .chip-button {
   background: rgba(255, 255, 255, 0.9);
   color: var(--brand);
+}
+
+.button-ghost.active {
+  background: linear-gradient(135deg, #153e75, #2c6cb0);
+  color: #fff;
 }
 
 .text-input,
@@ -598,65 +613,6 @@ select {
   background: #edf5ff;
 }
 
-@media (max-width: 1200px) {
-  .app-header,
-  .hero-panel,
-  .analysis-grid.two-main-one-side,
-  .metrics-grid,
-  .panel-split.two-cols,
-  .panel-split.three-cols,
-  .form-grid,
-  .risk-score-grid,
-  .dimension-grid,
-  .compare-target-grid,
-  .three-card-grid,
-  .architecture-grid,
-  .signal-grid,
-  .target-spotlight-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .app-header {
-    position: static;
-  }
-
-  .hero-copy h2 {
-    font-size: 38px;
-  }
-
-  .hero-stat-strip {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .app-main,
-  .app-header {
-    padding: 18px;
-  }
-
-  .hero-command,
-  .toolbar-cluster,
-  .button-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .brand-title-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .hero-copy h2 {
-    font-size: 32px;
-  }
-
-  .compare-table-row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 .analysis-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
@@ -722,18 +678,6 @@ select {
   align-items: start;
 }
 
-@media (max-width: 1200px) {
-  .analysis-hero,
-  .source-grid,
-  .company-question-row {
-    grid-template-columns: 1fr;
-  }
-
-  .analysis-hero-metrics {
-    grid-template-columns: 1fr;
-  }
-}
-
 .thread-header,
 .thread-message-meta {
   display: flex;
@@ -787,4 +731,97 @@ select {
 .multimodal-card,
 .review-record-card {
   background: rgba(255, 255, 255, 0.92);
+}
+
+.auth-layout {
+  background:
+    radial-gradient(circle at top left, rgba(216, 97, 55, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(21, 62, 117, 0.2), transparent 30%),
+    linear-gradient(180deg, #f7f4ed 0%, #ecf1f7 100%);
+}
+
+.auth-main,
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.login-panel {
+  width: min(520px, 92vw);
+  padding: 28px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.login-tabs {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (max-width: 1200px) {
+  .app-header,
+  .hero-panel,
+  .analysis-grid.two-main-one-side,
+  .metrics-grid,
+  .panel-split.two-cols,
+  .panel-split.three-cols,
+  .form-grid,
+  .risk-score-grid,
+  .dimension-grid,
+  .compare-target-grid,
+  .three-card-grid,
+  .architecture-grid,
+  .signal-grid,
+  .target-spotlight-grid,
+  .analysis-hero,
+  .source-grid,
+  .company-question-row {
+    grid-template-columns: 1fr;
+  }
+
+  .app-header {
+    position: static;
+  }
+
+  .hero-copy h2 {
+    font-size: 38px;
+  }
+
+  .hero-stat-strip,
+  .analysis-hero-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-main,
+  .app-header {
+    padding: 18px;
+  }
+
+  .hero-command,
+  .toolbar-cluster,
+  .button-row,
+  .header-user-bar,
+  .header-user-actions,
+  .thread-header,
+  .thread-message-meta {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .brand-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hero-copy h2 {
+    font-size: 32px;
+  }
+
+  .compare-table-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

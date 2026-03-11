@@ -1,5 +1,10 @@
 <template>
-  <div class="app-shell">
+  <div v-if="route.name === 'login'" class="app-shell auth-layout">
+    <main class="app-main auth-main">
+      <RouterView />
+    </main>
+  </div>
+  <div v-else class="app-shell">
     <header class="app-header">
       <div class="brand-block">
         <p class="eyebrow">Enterprise Decision Intelligence</p>
@@ -15,9 +20,15 @@
         <RouterLink to="/compare" class="nav-chip">企业对比</RouterLink>
         <RouterLink to="/quality" class="nav-chip">数据治理</RouterLink>
       </nav>
-      <div class="header-note">
-        <span class="status-dot"></span>
-        <span>选企业、提问题、看证据、拿建议动作</span>
+      <div class="header-note header-user-bar">
+        <div class="header-note-inline">
+          <span class="status-dot"></span>
+          <span>选企业、提问题、看证据、拿建议动作</span>
+        </div>
+        <div class="header-user-actions" v-if="authStore.user">
+          <span>{{ authStore.user.display_name }} · {{ authStore.user.role }}</span>
+          <button class="button-ghost" @click="logout">退出登录</button>
+        </div>
       </div>
     </header>
 
@@ -28,5 +39,24 @@
 </template>
 
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router';
+import { onMounted } from 'vue';
+import { useRouter, useRoute, RouterLink, RouterView } from 'vue-router';
+
+import { useAuthStore } from './stores/auth';
+
+const authStore = useAuthStore();
+const router = useRouter();
+const route = useRoute();
+
+onMounted(async () => {
+  await authStore.restoreSession();
+  if (!authStore.user && route.name !== 'login') {
+    await router.replace({ name: 'login' });
+  }
+});
+
+async function logout() {
+  await authStore.logout();
+  await router.replace({ name: 'login' });
+}
 </script>

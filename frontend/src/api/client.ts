@@ -1,12 +1,15 @@
 import type {
   AgentResponse,
+  AuthUser,
   CompanyCompareResponse,
   CompanyReportResponse,
   CompetitionPackageResponse,
   DashboardPayload,
   DecisionBriefResponse,
+  LoginResponse,
   ManualReviewSubmitResponse,
   QualitySummaryResponse,
+  RegisterResponse,
   RiskForecastResponse,
   RiskModelSummaryResponse,
   UniversePromotionPlanResponse,
@@ -14,17 +17,24 @@ import type {
   WarehouseOverviewResponse,
   WarehouseSummaryResponse,
 } from './types';
+import { clearStoredAuthToken, getStoredAuthToken } from '../utils/auth';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getStoredAuthToken();
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers || {}),
     },
     ...init,
   });
+
+  if (response.status === 401) {
+    clearStoredAuthToken();
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -35,6 +45,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  register(username: string, displayName: string, password: string) {
+    return request<RegisterResponse>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, display_name: displayName, password }),
+    });
+  },
+  login(username: string, password: string) {
+    return request<LoginResponse>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+  },
+  getMe() {
+    return request<AuthUser>('/api/auth/me');
+  },
+  logout() {
+    return request<{ success: boolean }>('/api/auth/logout', {
+      method: 'POST',
+    });
+  },
   getDashboard() {
     return request<DashboardPayload>('/api/dashboard');
   },
