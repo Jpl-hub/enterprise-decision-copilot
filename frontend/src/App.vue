@@ -1,19 +1,26 @@
 <template>
   <div class="app-shell">
-    <aside class="app-sidebar">
-      <div>
-        <p class="eyebrow">Agent + Data + AI</p>
-        <h1>企航数策 Console</h1>
-        <p class="sidebar-text">前后端分离版本的运营分析与决策支持系统，面向比赛演示和后续扩展。</p>
+    <header class="app-header">
+      <div class="brand-block">
+        <p class="eyebrow">Enterprise Decision Intelligence</p>
+        <div class="brand-title-row">
+          <h1>企智策源</h1>
+          <span class="brand-pill">企业决策系统</span>
+        </div>
+        <p class="brand-subtitle">智能体驱动的企业运营分析与决策支持系统</p>
       </div>
-      <nav class="nav-list">
-        <RouterLink to="/" class="nav-item">系统总览</RouterLink>
-        <RouterLink to="/compare" class="nav-item">企业对比驾驶舱</RouterLink>
-        <RouterLink to="/workbench" class="nav-item">企业工作台</RouterLink>
-        <RouterLink to="/quality" class="nav-item">数据质量中台</RouterLink>
-        <RouterLink to="/competition" class="nav-item">答辩稿工作台</RouterLink>
+      <nav class="top-nav">
+        <RouterLink to="/" class="nav-chip">Agent 指挥台</RouterLink>
+        <RouterLink to="/workbench" class="nav-chip">企业分析</RouterLink>
+        <RouterLink to="/compare" class="nav-chip">企业对比</RouterLink>
+        <RouterLink to="/quality" class="nav-chip">数据治理</RouterLink>
       </nav>
-    </aside>
+      <div class="header-note">
+        <span class="status-dot"></span>
+        <span>真实数据、可追溯证据、多模态抽取、风险模型联动</span>
+      </div>
+    </header>
+
     <main class="app-main">
       <RouterView />
     </main>

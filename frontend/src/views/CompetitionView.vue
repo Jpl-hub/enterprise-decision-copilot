@@ -1,16 +1,16 @@
 <template>
   <div class="page-stack">
-    <PagePanel title="答辩稿工作台" eyebrow="Competition" description="为单家企业生成章节化答辩稿骨架、引用清单和本地证据包。">
+    <PagePanel title="分析材料导出" eyebrow="Report Export" description="为单家企业生成结构化分析材料、引用清单和本地证据包。">
       <template #actions>
         <select v-model="selectedCode" class="select-input">
           <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
         </select>
       </template>
       <div class="button-row">
-        <input v-model="question" class="text-input flex-grow" placeholder="结合真实数据生成企业运营分析答辩稿" />
-        <button class="button-primary" @click="loadPackage">导出答辩稿</button>
+        <input v-model="question" class="text-input flex-grow" placeholder="结合真实数据生成企业运营分析材料" />
+        <button class="button-primary" @click="loadPackage">导出材料</button>
       </div>
-      <div v-if="loading" class="empty-state">正在生成答辩稿骨架...</div>
+      <div v-if="loading" class="empty-state">正在生成分析材料...</div>
       <div v-else-if="result" class="page-stack">
         <div class="metrics-grid">
           <MetricCard label="引用条数" :value="result.citation_count" />
@@ -66,7 +66,7 @@ const props = defineProps<{ companyCode?: string }>();
 const route = useRoute();
 const store = useDashboardStore();
 const selectedCode = ref(props.companyCode || '');
-const question = ref('结合真实数据生成企业运营分析答辩稿');
+const question = ref('结合真实数据生成企业运营分析材料');
 const loading = ref(false);
 const result = ref<CompetitionPackageResponse | null>(null);
 const targets = computed(() => store.targets);
@@ -85,7 +85,7 @@ async function loadPackage() {
   loading.value = true;
   try {
     const companyName = targets.value.find((item) => item.company_code === selectedCode.value)?.company_name || '该企业';
-    result.value = await api.getCompetitionPackage(selectedCode.value, question.value || `结合真实数据为${companyName}生成企业运营分析答辩稿`, true);
+    result.value = await api.getCompetitionPackage(selectedCode.value, question.value || `结合真实数据为${companyName}生成企业运营分析材料`, true);
   } finally {
     loading.value = false;
   }

@@ -304,6 +304,19 @@ export interface ManualReviewRecord {
   created_at: string;
 }
 
+export interface MultimodalExtractItem {
+  company_code: string;
+  report_year: number;
+  company_name?: string | null;
+  backend: string;
+  model_id?: string | null;
+  source_url?: string | null;
+  page_images: string[];
+  field_source_count: number;
+  filled_field_count: number;
+  notes: string[];
+}
+
 export interface QualitySummaryResponse {
   official_report_coverage_ratio: number;
   official_report_downloaded_slots: number;
@@ -311,6 +324,12 @@ export interface QualitySummaryResponse {
   missing_report_slots: number;
   pending_review_count: number;
   anomaly_company_count: number;
+  multimodal_extract_report_count: number;
+  multimodal_expected_report_count: number;
+  multimodal_extract_coverage_ratio: number;
+  multimodal_avg_filled_field_count: number;
+  multimodal_backends: string[];
+  multimodal_recent_extracts: MultimodalExtractItem[];
   exchange_status: ExchangeQualityStatus[];
   top_anomalies: QualityAnomalyItem[];
   recent_reviews: ManualReviewRecord[];

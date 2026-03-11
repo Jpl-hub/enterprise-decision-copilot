@@ -1,125 +1,138 @@
 <template>
-  <div class="page-stack">
-    <PagePanel title="企业工作台" eyebrow="Workbench" description="围绕单家企业集中查看综合报告、决策简报、风险预测和 Agent 问答。">
+  <div class="page-stack workbench-page">
+    <PagePanel title="企业分析主台" eyebrow="Enterprise Analysis" description="围绕一家公司完成结论、证据、风险和追问，不让用户在多个页面之间来回拼接。">
       <template #actions>
-        <select v-model="selectedCode" class="select-input">
-          <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
-        </select>
+        <div class="toolbar-cluster">
+          <select v-model="selectedCode" class="select-input toolbar-select">
+            <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
+          </select>
+          <button class="button-primary" @click="loadAll">刷新分析</button>
+        </div>
       </template>
-      <div class="button-row">
-        <button class="button-primary" @click="loadAll">刷新三类分析</button>
-        <button class="button-ghost" @click="runAgent">运行 Agent 问答</button>
+
+      <div class="analysis-hero" v-if="report">
+        <div class="analysis-hero-main">
+          <p class="section-tag">Current Target</p>
+          <h3>{{ report.company_name }}</h3>
+          <p class="panel-description strong-copy">{{ report.summary }}</p>
+        </div>
+        <div class="analysis-hero-metrics" v-if="risk">
+          <div class="mini-metric-card">
+            <span>风险等级</span>
+            <strong>{{ risk.risk_level }}</strong>
+          </div>
+          <div class="mini-metric-card">
+            <span>风险分</span>
+            <strong>{{ risk.risk_score }}</strong>
+          </div>
+          <div class="mini-metric-card" v-if="risk.model_prediction">
+            <span>模型概率</span>
+            <strong>{{ formatPercent(risk.model_prediction.high_risk_probability) }}</strong>
+          </div>
+        </div>
       </div>
-      <div class="panel-split three-cols">
-        <div class="sub-panel">
-          <h3>综合报告</h3>
-          <p v-if="reportLoading" class="empty-state">正在生成综合报告...</p>
-          <div v-else-if="report" class="stack-list">
-            <div v-for="section in report.sections" :key="section.title" class="info-card compact">
-              <strong>{{ section.title }}</strong>
-              <p class="muted">{{ section.content }}</p>
+
+      <div class="analysis-grid two-main-one-side">
+        <div class="analysis-main-stack">
+          <div class="sub-panel">
+            <div class="sub-panel-header">
+              <h3>决策结论</h3>
+              <span class="badge-subtle">Agent-ready</span>
             </div>
-          </div>
-        </div>
-        <div class="sub-panel">
-          <h3>决策简报</h3>
-          <p v-if="briefLoading" class="empty-state">正在生成决策简报...</p>
-          <div v-else-if="brief" class="stack-list">
-            <div class="info-card compact">
-              <strong>{{ brief.verdict }}</strong>
-              <p class="muted">{{ brief.summary }}</p>
-            </div>
-            <div class="info-card compact">
-              <strong>关键判断</strong>
-              <p class="muted">{{ brief.key_judgements.join('；') }}</p>
-            </div>
-            <div class="info-card compact">
-              <strong>证据摘要</strong>
-              <p class="muted">{{ brief.evidence_highlights.join('；') || '暂无' }}</p>
-            </div>
-          </div>
-        </div>
-        <div class="sub-panel">
-          <h3>风险预测</h3>
-          <p v-if="riskLoading" class="empty-state">正在生成风险预测...</p>
-          <div v-else-if="risk" class="stack-list">
-            <div class="info-card compact">
-              <div class="trace-title-row">
-                <strong>{{ risk.risk_level }}风险</strong>
-                <span class="badge-subtle">{{ risk.risk_score }} 分</span>
+            <div v-if="briefLoading" class="empty-state">正在生成决策简报...</div>
+            <div v-else-if="brief" class="stack-list">
+              <div class="info-card compact emphasis-card">
+                <strong>{{ brief.verdict }}</strong>
+                <p class="muted">{{ brief.summary }}</p>
               </div>
-              <p class="muted">{{ risk.summary }}</p>
-            </div>
-            <div class="risk-score-grid">
               <div class="info-card compact">
-                <strong>规则引擎分值</strong>
-                <p class="metric-inline">{{ risk.heuristic_score.toFixed(1) }}</p>
+                <strong>关键判断</strong>
+                <p class="muted">{{ brief.key_judgements.join('；') }}</p>
+              </div>
+              <div class="info-card compact">
+                <strong>建议动作</strong>
+                <p class="muted">{{ brief.action_recommendations.join('；') }}</p>
+              </div>
+              <div class="info-card compact" v-if="brief.evidence_highlights.length">
+                <strong>证据摘要</strong>
+                <p class="muted">{{ brief.evidence_highlights.join('；') }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-panel">
+            <div class="sub-panel-header">
+              <h3>经营分析</h3>
+              <RouterLink :to="`/competition/${selectedCode}`">导出分析材料</RouterLink>
+            </div>
+            <div v-if="reportLoading" class="empty-state">正在生成综合报告...</div>
+            <div v-else-if="report" class="stack-list">
+              <div v-for="section in report.sections" :key="section.title" class="info-card compact section-card">
+                <strong>{{ section.title }}</strong>
+                <p class="muted">{{ section.content }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="analysis-side-stack">
+          <div class="sub-panel">
+            <h3>风险画像</h3>
+            <div v-if="riskLoading" class="empty-state">正在生成风险预测...</div>
+            <div v-else-if="risk" class="stack-list">
+              <div class="info-card compact">
+                <strong>{{ risk.summary }}</strong>
+                <p class="muted">规则引擎 {{ risk.heuristic_score.toFixed(1) }} 分</p>
               </div>
               <div class="info-card compact" v-if="risk.model_prediction">
-                <strong>模型高风险概率</strong>
-                <p class="metric-inline">{{ formatPercent(risk.model_prediction.high_risk_probability) }}</p>
-              </div>
-            </div>
-            <div class="info-card compact" v-if="risk.model_prediction">
-              <div class="trace-title-row">
                 <strong>AI 风险模型</strong>
-                <span class="badge-subtle">{{ risk.model_prediction.model_summary.model_ready ? 'Ready' : 'Pending' }}</span>
+                <p class="muted">
+                  高风险概率 {{ formatPercent(risk.model_prediction.high_risk_probability) }} ·
+                  AUC {{ formatMetric(risk.model_prediction.model_summary.metrics.roc_auc) }}
+                </p>
               </div>
-              <p class="muted">
-                训练样本 {{ risk.model_prediction.model_summary.sample_count }} 条，
-                正样本 {{ risk.model_prediction.model_summary.positive_samples }} 条，
-                ROC AUC {{ formatMetric(risk.model_prediction.model_summary.metrics.roc_auc) }}。
-              </p>
-              <div class="stack-list" v-if="risk.model_prediction.top_contributions.length">
-                <div v-for="item in risk.model_prediction.top_contributions" :key="item.feature" class="factor-row">
-                  <strong>{{ formatFeatureLabel(item.feature) }}</strong>
-                  <span :class="item.direction === 'risk_up' ? 'tag-risk' : 'tag-safe'">
-                    {{ item.direction === 'risk_up' ? '抬升风险' : '缓释风险' }} {{ item.contribution.toFixed(3) }}
-                  </span>
-                </div>
+              <div class="info-card compact">
+                <strong>主要驱动</strong>
+                <p class="muted">{{ risk.drivers.join('；') }}</p>
+              </div>
+              <div class="info-card compact">
+                <strong>监测项</strong>
+                <p class="muted">{{ risk.monitoring_items.join('；') }}</p>
               </div>
             </div>
-            <div class="info-card compact">
-              <strong>风险驱动</strong>
-              <p class="muted">{{ risk.drivers.join('；') }}</p>
-            </div>
-            <div class="info-card compact">
-              <strong>监测指标</strong>
-              <p class="muted">{{ risk.monitoring_items.join('；') }}</p>
-            </div>
+          </div>
+
+          <div class="sub-panel">
+            <h3>语义证据</h3>
+            <EvidenceList :items="brief?.evidence.semantic_stock_reports || []" />
           </div>
         </div>
       </div>
     </PagePanel>
 
-    <PagePanel title="Agent 问答与证据" eyebrow="Agent" description="面向真实数据的诊断问答，保留执行轨迹和命中证据。">
-      <div class="button-row">
-        <input v-model="question" class="text-input flex-grow" placeholder="例如：结合行业研报看迈瑞医疗的机会和风险" />
-        <button class="button-primary" @click="runAgent">提交问题</button>
+    <PagePanel title="Agent 深问" eyebrow="Follow-up" description="你可以继续追问，系统保留工具轨迹和回答证据。">
+      <div class="hero-command">
+        <input v-model="question" class="text-input hero-input" placeholder="继续追问，例如：把风险拆成财务、经营、行业三层" @keydown.enter="runAgent" />
+        <button class="button-primary hero-button" @click="runAgent">继续追问</button>
       </div>
       <div class="panel-split two-cols">
         <div class="sub-panel">
-          <h3>问答结果</h3>
+          <h3>Agent 输出</h3>
           <p v-if="agentLoading" class="empty-state">正在分析...</p>
           <div v-else-if="agentResult" class="stack-list">
-            <div class="info-card compact">
+            <div class="info-card compact emphasis-card">
               <strong>{{ agentResult.title }}</strong>
               <p class="muted">{{ agentResult.summary }}</p>
             </div>
-            <div class="info-card compact" v-if="agentResult.highlights.length">
-              <strong>关键结论</strong>
-              <p class="muted">{{ agentResult.highlights.join('；') }}</p>
+            <div v-for="item in agentResult.highlights" :key="item" class="info-card compact">
+              <p class="muted">{{ item }}</p>
             </div>
           </div>
         </div>
         <div class="sub-panel">
-          <h3>执行轨迹</h3>
+          <h3>工具轨迹</h3>
           <TracePanel :trace="agentResult?.trace" />
         </div>
-      </div>
-      <div class="sub-panel">
-        <h3>语义证据</h3>
-        <EvidenceList :items="brief?.evidence.semantic_stock_reports || []" />
       </div>
     </PagePanel>
   </div>
@@ -127,7 +140,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, RouterLink } from 'vue-router';
 
 import { api } from '../api/client';
 import type { AgentResponse, CompanyReportResponse, DecisionBriefResponse, RiskForecastResponse } from '../api/types';
@@ -135,26 +148,6 @@ import EvidenceList from '../components/EvidenceList.vue';
 import PagePanel from '../components/PagePanel.vue';
 import TracePanel from '../components/TracePanel.vue';
 import { useDashboardStore } from '../stores/dashboard';
-
-const FEATURE_LABELS: Record<string, string> = {
-  revenue_million: '营收规模',
-  net_profit_million: '净利润规模',
-  gross_margin_pct: '毛利率',
-  net_margin_pct: '净利率',
-  rd_ratio_pct: '研发强度',
-  debt_ratio_pct: '资产负债率',
-  current_ratio: '流动比率',
-  cash_to_short_debt: '现金短债比',
-  inventory_turnover: '存货周转率',
-  receivable_turnover: '应收周转率',
-  operating_cashflow_million: '经营现金流',
-  roe_pct: 'ROE',
-  revenue_yoy_pct: '营收同比',
-  profit_yoy_pct: '利润同比',
-  cashflow_yoy_change_million: '现金流同比变化',
-  debt_ratio_change_pct: '负债率变化',
-  current_ratio_change: '流动比率变化',
-};
 
 const props = defineProps<{ companyCode?: string }>();
 const route = useRoute();
@@ -168,7 +161,7 @@ const reportLoading = ref(false);
 const briefLoading = ref(false);
 const riskLoading = ref(false);
 const agentLoading = ref(false);
-const question = ref('结合行业研报看企业的机会和风险');
+const question = ref('把这家企业的风险拆成财务、经营、行业三层并给出动作建议');
 
 const targets = computed(() => store.targets);
 
@@ -183,19 +176,25 @@ async function ensureTargets() {
 
 async function loadAll() {
   if (!selectedCode.value) return;
-  reportLoading.value = briefLoading.value = riskLoading.value = true;
+  reportLoading.value = true;
+  briefLoading.value = true;
+  riskLoading.value = true;
   try {
+    const companyName = currentCompanyName();
     const [reportResult, briefResult, riskResult] = await Promise.all([
       api.getCompanyReport(selectedCode.value),
-      api.getDecisionBrief(selectedCode.value, `结合行业研报看${currentCompanyName()}的机会和风险`),
+      api.getDecisionBrief(selectedCode.value, `结合财报、研报和风险模型，给出${companyName}的经营判断和动作建议`),
       api.getRiskForecast(selectedCode.value),
     ]);
     report.value = reportResult;
     brief.value = briefResult;
     risk.value = riskResult;
-    question.value = `结合行业研报看${currentCompanyName()}的机会和风险`;
+    question.value = `把${companyName}的风险拆成财务、经营、行业三层并给出动作建议`;
+    await runAgent();
   } finally {
-    reportLoading.value = briefLoading.value = riskLoading.value = false;
+    reportLoading.value = false;
+    briefLoading.value = false;
+    riskLoading.value = false;
   }
 }
 
@@ -211,14 +210,11 @@ function formatMetric(value: number | null | undefined) {
   return value == null ? '暂无' : value.toFixed(3);
 }
 
-function formatFeatureLabel(feature: string) {
-  return FEATURE_LABELS[feature] || feature;
-}
-
 async function runAgent() {
+  if (!question.value.trim()) return;
   agentLoading.value = true;
   try {
-    agentResult.value = await api.queryAgent(question.value || `分析${currentCompanyName()}`);
+    agentResult.value = await api.queryAgent(question.value.trim());
   } finally {
     agentLoading.value = false;
   }

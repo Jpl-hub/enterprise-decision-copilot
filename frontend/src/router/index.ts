@@ -15,4 +15,7 @@ export const router = createRouter({
     { path: '/quality', name: 'quality', component: QualityCenterView },
     { path: '/competition/:companyCode?', name: 'competition', component: CompetitionView, props: true },
   ],
+  scrollBehavior() {
+    return { top: 0 };
+  },
 });
