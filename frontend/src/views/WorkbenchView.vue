@@ -113,32 +113,43 @@
     <PagePanel title="继续问这家公司" eyebrow="Follow-up" description="保留当前对象上下文，适合把结论继续拆细。">
       <div class="hero-command">
         <input v-model="question" class="text-input hero-input" placeholder="例如：把风险拆成财务、经营、行业三层" @keydown.enter="runAgent" />
-        <button class="button-primary hero-button" @click="runAgent">继续提问</button>
+        <button class="button-primary hero-button" @click="runAgent" :disabled="agentStore.loading">继续提问</button>
       </div>
-      <div class="quick-prompt-row left-align top-gap" v-if="agentResult?.suggested_questions?.length">
-        <button v-for="item in agentResult.suggested_questions.slice(0, 4)" :key="item" class="button-ghost chip-button" @click="applySuggestedQuestion(item)">
+      <div class="quick-prompt-row left-align top-gap" v-if="agentStore.latest?.suggested_questions?.length">
+        <button v-for="item in agentStore.latest.suggested_questions.slice(0, 4)" :key="item" class="button-ghost chip-button" @click="applySuggestedQuestion(item)">
           {{ item }}
         </button>
       </div>
       <div class="panel-split two-cols top-gap">
         <div class="sub-panel">
           <h3>本轮回答</h3>
-          <p v-if="agentLoading" class="empty-state">正在分析...</p>
-          <div v-else-if="agentResult" class="stack-list">
+          <p v-if="agentStore.loading" class="empty-state">正在分析...</p>
+          <div v-else-if="agentStore.latest" class="stack-list">
             <div class="info-card compact emphasis-card">
-              <strong>{{ agentResult.title }}</strong>
-              <p class="muted">{{ agentResult.summary }}</p>
+              <strong>{{ agentStore.latest.title }}</strong>
+              <p class="muted">{{ agentStore.latest.summary }}</p>
             </div>
-            <div v-for="item in agentResult.highlights" :key="item" class="info-card compact">
+            <div v-for="item in agentStore.latest.highlights" :key="item" class="info-card compact">
               <p class="muted">{{ item }}</p>
             </div>
           </div>
         </div>
         <div class="sub-panel">
-          <h3>本次调用</h3>
-          <TracePanel :trace="agentResult?.trace" />
+          <h3>本次计划</h3>
+          <TracePanel :trace="agentStore.latest?.plan" />
         </div>
       </div>
+    </PagePanel>
+
+    <PagePanel title="分析线程" eyebrow="Thread" description="同一家公司下的追问会进入同一条上下文线程。">
+      <div class="thread-header" v-if="agentStore.threadTitle">
+        <div>
+          <strong>{{ agentStore.threadTitle }}</strong>
+          <p class="muted">当前关注对象：{{ agentStore.focusCompanyName || report?.company_name || '未固定' }}</p>
+        </div>
+        <button class="button-ghost" @click="resetThread">新建线程</button>
+      </div>
+      <AgentThreadPanel :messages="agentStore.messages" />
     </PagePanel>
   </div>
 </template>
@@ -148,24 +159,25 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 
 import { api } from '../api/client';
-import type { AgentResponse, CompanyReportResponse, DecisionBriefResponse, RiskForecastResponse } from '../api/types';
+import type { CompanyReportResponse, DecisionBriefResponse, RiskForecastResponse } from '../api/types';
+import AgentThreadPanel from '../components/AgentThreadPanel.vue';
 import EvidenceList from '../components/EvidenceList.vue';
 import PagePanel from '../components/PagePanel.vue';
 import TracePanel from '../components/TracePanel.vue';
+import { useAgentThreadStore } from '../stores/agentThread';
 import { useDashboardStore } from '../stores/dashboard';
 
 const props = defineProps<{ companyCode?: string }>();
 const route = useRoute();
 const store = useDashboardStore();
+const agentStore = useAgentThreadStore();
 const selectedCode = ref(props.companyCode || '');
 const report = ref<CompanyReportResponse | null>(null);
 const brief = ref<DecisionBriefResponse | null>(null);
 const risk = ref<RiskForecastResponse | null>(null);
-const agentResult = ref<AgentResponse | null>(null);
 const reportLoading = ref(false);
 const briefLoading = ref(false);
 const riskLoading = ref(false);
-const agentLoading = ref(false);
 const question = ref('把这家企业的风险拆成财务、经营、行业三层并给出动作建议');
 
 const targets = computed(() => store.targets);
@@ -186,6 +198,7 @@ async function loadAll() {
   riskLoading.value = true;
   try {
     const companyName = currentCompanyName();
+    agentStore.setFocus(selectedCode.value, companyName);
     const [reportResult, briefResult, riskResult] = await Promise.all([
       api.getCompanyReport(selectedCode.value),
       api.getDecisionBrief(selectedCode.value, `结合财报、研报和风险模型，给出${companyName}的经营判断和动作建议`),
@@ -195,7 +208,10 @@ async function loadAll() {
     brief.value = briefResult;
     risk.value = riskResult;
     question.value = `把${companyName}的风险拆成财务、经营、行业三层并给出动作建议`;
-    await runAgent();
+    if (!agentStore.latest || agentStore.focusCompanyCode !== selectedCode.value) {
+      agentStore.resetThread(selectedCode.value, companyName);
+      await runAgent();
+    }
   } finally {
     reportLoading.value = false;
     briefLoading.value = false;
@@ -220,14 +236,16 @@ function applySuggestedQuestion(text: string) {
   void runAgent();
 }
 
+function resetThread() {
+  agentStore.resetThread(selectedCode.value, currentCompanyName());
+}
+
 async function runAgent() {
   if (!question.value.trim()) return;
-  agentLoading.value = true;
-  try {
-    agentResult.value = await api.queryAgent(question.value.trim());
-  } finally {
-    agentLoading.value = false;
-  }
+  await agentStore.ask(question.value.trim(), {
+    companyCode: selectedCode.value,
+    companyName: currentCompanyName(),
+  });
 }
 
 watch(() => props.companyCode, (value) => {

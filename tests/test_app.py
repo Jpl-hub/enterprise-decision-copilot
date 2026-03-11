@@ -57,6 +57,8 @@ def test_agent_can_generate_company_report() -> None:
     result = container.agent_service.answer("生成迈瑞医疗综合报告")
     assert "综合报告" in result["title"]
     assert len(result["trace"]) >= 3
+    assert result["plan"]
+    assert result["thread_id"]
 
 
 
@@ -66,6 +68,7 @@ def test_agent_api_returns_execution_trace() -> None:
     assert payload["trace"]
     assert payload["evidence"]["companies"]
     assert any(step["step"] == "tool_execution" for step in payload["trace"])
+    assert any(step["step"] == "tool_selection" for step in payload["plan"])
 
 
 
@@ -118,6 +121,7 @@ def test_risk_model_summary_api_returns_payload() -> None:
     assert "sample_count" in payload
 
 
+
 def test_compare_api_returns_structured_payload() -> None:
     payload = asyncio.run(
         compare_companies(
@@ -131,7 +135,6 @@ def test_compare_api_returns_structured_payload() -> None:
 
 
 
-
 def test_agent_can_answer_quality_governance_questions() -> None:
     container = build_service_container()
     payload = container.agent_service.answer('系统数据质量覆盖率和复核情况怎么样')
@@ -139,3 +142,12 @@ def test_agent_can_answer_quality_governance_questions() -> None:
     assert payload['evidence']
     assert payload['trace']
 
+
+
+def test_agent_thread_keeps_focus_for_follow_up_questions() -> None:
+    container = build_service_container()
+    first = container.agent_service.answer('分析迈瑞医疗')
+    second = container.agent_service.answer('把这家公司风险拆成三层', thread_id=first['thread_id'])
+    assert second['thread_id'] == first['thread_id']
+    assert second['focus']['company_name'] == '迈瑞医疗'
+    assert len(second['thread_messages']) >= 4

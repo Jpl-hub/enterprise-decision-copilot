@@ -264,6 +264,23 @@ export interface AgentTraceStep {
   detail: string;
 }
 
+export interface AgentPlanStep {
+  step: string;
+  status: string;
+  detail: string;
+}
+
+export interface AgentThreadMessage {
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+export interface AgentFocus {
+  company_code?: string | null;
+  company_name?: string | null;
+}
+
 export interface AgentResponse {
   title: string;
   summary: string;
@@ -271,6 +288,11 @@ export interface AgentResponse {
   suggested_questions: string[];
   evidence?: Record<string, unknown> | null;
   trace: AgentTraceStep[];
+  plan: AgentPlanStep[];
+  thread_id: string;
+  thread_title: string;
+  focus?: AgentFocus | null;
+  thread_messages: AgentThreadMessage[];
 }
 
 export interface QualityAnomalyItem {

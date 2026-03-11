@@ -15,4 +15,9 @@ async def query_agent(
     payload: QueryRequest,
     agent_service: AgentService = Depends(get_agent_service),
 ) -> dict:
-    return agent_service.answer(payload.question)
+    return agent_service.answer(
+        payload.question,
+        thread_id=payload.thread_id,
+        company_code=payload.company_code,
+        company_name=payload.company_name,
+    )

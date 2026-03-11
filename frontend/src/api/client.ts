@@ -61,10 +61,15 @@ export const api = {
   getUniversePromotionPlan(limit = 12, perIndustry = 2) {
     return request<UniversePromotionPlanResponse>(`/api/universe/promotion-plan?limit=${limit}&per_industry=${perIndustry}`);
   },
-  queryAgent(question: string) {
+  queryAgent(question: string, options?: { threadId?: string | null; companyCode?: string | null; companyName?: string | null }) {
     return request<AgentResponse>('/api/agent/query', {
       method: 'POST',
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({
+        question,
+        thread_id: options?.threadId || undefined,
+        company_code: options?.companyCode || undefined,
+        company_name: options?.companyName || undefined,
+      }),
     });
   },
   getQualitySummary() {

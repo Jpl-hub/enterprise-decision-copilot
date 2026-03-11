@@ -17,7 +17,7 @@
             placeholder="例如：这家公司未来两年的主要风险和机会是什么？"
             @keydown.enter="runAgent"
           />
-          <button class="button-primary hero-button" @click="runAgent" :disabled="agentLoading">开始分析</button>
+          <button class="button-primary hero-button" @click="runAgent" :disabled="agentStore.loading">开始分析</button>
         </div>
         <div class="quick-prompt-row">
           <button v-for="prompt in quickPrompts" :key="prompt" class="button-ghost chip-button" @click="applyPrompt(prompt)">
@@ -70,23 +70,23 @@
     </section>
 
     <PagePanel title="当前分析结果" eyebrow="Answer" description="先给判断，再给来源，再告诉你下一步还能怎么问。">
-      <div v-if="agentLoading" class="empty-state">正在整合资料并生成结论...</div>
-      <div v-else-if="agentResult" class="panel-split two-cols agent-answer-grid">
+      <div v-if="agentStore.loading" class="empty-state">正在整合资料并生成结论...</div>
+      <div v-else-if="agentStore.latest" class="panel-split two-cols agent-answer-grid">
         <div class="sub-panel emphasis-panel">
           <p class="section-tag">结论</p>
-          <h3>{{ agentResult.title }}</h3>
-          <p class="panel-description strong-copy">{{ agentResult.summary }}</p>
-          <div class="stack-list" v-if="agentResult.highlights.length">
-            <div v-for="item in agentResult.highlights.slice(0, 5)" :key="item" class="info-card compact answer-card">
+          <h3>{{ agentStore.latest.title }}</h3>
+          <p class="panel-description strong-copy">{{ agentStore.latest.summary }}</p>
+          <div class="stack-list" v-if="agentStore.latest.highlights.length">
+            <div v-for="item in agentStore.latest.highlights.slice(0, 5)" :key="item" class="info-card compact answer-card">
               <p>{{ item }}</p>
             </div>
           </div>
-          <div class="stack-list" v-if="agentResult.suggested_questions?.length">
+          <div class="stack-list" v-if="agentStore.latest.suggested_questions?.length">
             <div class="info-card compact suggestion-block">
               <strong>下一步可以继续问</strong>
               <div class="quick-prompt-row left-align top-gap">
                 <button
-                  v-for="item in agentResult.suggested_questions.slice(0, 3)"
+                  v-for="item in agentStore.latest.suggested_questions.slice(0, 3)"
                   :key="item"
                   class="button-ghost chip-button"
                   @click="applyPrompt(item)"
@@ -98,11 +98,22 @@
           </div>
         </div>
         <div class="sub-panel">
-          <p class="section-tag">本次调用</p>
-          <TracePanel :trace="agentResult.trace" />
+          <p class="section-tag">本次计划</p>
+          <TracePanel :trace="agentStore.latest.plan" />
         </div>
       </div>
       <div v-else class="empty-state">输入一个问题，系统会自动组织企业分析、研报检索、风险评估和可信度检查。</div>
+    </PagePanel>
+
+    <PagePanel title="分析线程" eyebrow="Thread" description="你的问题、系统回答和上下文对象会保留在同一条线程里。">
+      <div class="thread-header" v-if="agentStore.threadTitle">
+        <div>
+          <strong>{{ agentStore.threadTitle }}</strong>
+          <p class="muted">当前关注对象：{{ agentStore.focusCompanyName || '未固定' }}</p>
+        </div>
+        <button class="button-ghost" @click="resetThread">新建线程</button>
+      </div>
+      <AgentThreadPanel :messages="agentStore.messages" />
     </PagePanel>
 
     <PagePanel title="这些结论来自哪里" eyebrow="Sources" description="系统先理解资料，再生成答案。技术细节藏在后面，证据链留给你核对。">
@@ -139,7 +150,7 @@
           </div>
           <p class="muted">{{ item.segment }} · {{ item.industry }}</p>
           <div class="button-row left-align">
-            <button class="button-ghost" @click="openTarget(item.company_code, `${item.company_name}当前最值得关注的经营问题是什么？`)">直接提问</button>
+            <button class="button-ghost" @click="openTarget(item.company_code, item.company_name)">直接提问</button>
             <RouterLink class="button-ghost" :to="`/workbench/${item.company_code}`">查看企业分析</RouterLink>
           </div>
         </div>
@@ -149,19 +160,19 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { RouterLink, useRouter } from 'vue-router';
+import { onMounted, ref, watch } from 'vue';
+import { RouterLink } from 'vue-router';
 
 import { api } from '../api/client';
-import type { AgentResponse, QualitySummaryResponse } from '../api/types';
+import type { QualitySummaryResponse } from '../api/types';
+import AgentThreadPanel from '../components/AgentThreadPanel.vue';
 import PagePanel from '../components/PagePanel.vue';
 import TracePanel from '../components/TracePanel.vue';
+import { useAgentThreadStore } from '../stores/agentThread';
 import { useDashboardStore } from '../stores/dashboard';
 
-const router = useRouter();
 const store = useDashboardStore();
-const agentLoading = ref(false);
-const agentResult = ref<AgentResponse | null>(null);
+const agentStore = useAgentThreadStore();
 const qualitySummary = ref<QualitySummaryResponse | null>(null);
 const selectedCode = ref('');
 const question = ref('迈瑞医疗当前最值得关注的经营问题是什么？');
@@ -172,12 +183,13 @@ const quickPrompts = [
   '如果我要继续跟踪它，接下来最该盯哪些指标？',
 ];
 
-function currentCompanyName() {
-  return store.targets.find((item) => item.company_code === selectedCode.value)?.company_name || '这家公司';
+function currentCompany() {
+  return store.targets.find((item) => item.company_code === selectedCode.value) || null;
 }
 
 function normalizeQuestion(prompt: string) {
-  return prompt.replace(/这家公司/g, currentCompanyName());
+  const companyName = currentCompany()?.company_name || '这家公司';
+  return prompt.replace(/这家公司/g, companyName);
 }
 
 function applyPrompt(prompt: string) {
@@ -185,22 +197,33 @@ function applyPrompt(prompt: string) {
   void runAgent();
 }
 
-function openTarget(companyCode: string, prompt: string) {
+function openTarget(companyCode: string, companyName: string) {
   selectedCode.value = companyCode;
-  question.value = prompt;
+  agentStore.resetThread(companyCode, companyName);
+  question.value = `${companyName}当前最值得关注的经营问题是什么？`;
   void runAgent();
-  void router.push('/');
+}
+
+function resetThread() {
+  const company = currentCompany();
+  agentStore.resetThread(company?.company_code, company?.company_name);
 }
 
 async function runAgent() {
+  const company = currentCompany();
   if (!question.value.trim()) return;
-  agentLoading.value = true;
-  try {
-    agentResult.value = await api.queryAgent(question.value.trim());
-  } finally {
-    agentLoading.value = false;
-  }
+  await agentStore.ask(question.value.trim(), {
+    companyCode: company?.company_code,
+    companyName: company?.company_name,
+  });
 }
+
+watch(selectedCode, (value) => {
+  const company = store.targets.find((item) => item.company_code === value);
+  if (company) {
+    agentStore.setFocus(company.company_code, company.company_name);
+  }
+});
 
 onMounted(async () => {
   if (!store.payload && !store.loading) {
@@ -208,9 +231,15 @@ onMounted(async () => {
   }
   if (!selectedCode.value && store.targets.length) {
     selectedCode.value = store.targets[0].company_code;
-    question.value = `${currentCompanyName()}当前最值得关注的经营问题是什么？`;
+    const company = currentCompany();
+    if (company) {
+      agentStore.resetThread(company.company_code, company.company_name);
+      question.value = `${company.company_name}当前最值得关注的经营问题是什么？`;
+    }
   }
   qualitySummary.value = await api.getQualitySummary();
-  await runAgent();
+  if (!agentStore.latest) {
+    await runAgent();
+  }
 });
 </script>
