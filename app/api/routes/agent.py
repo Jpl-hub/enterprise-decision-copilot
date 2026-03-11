@@ -7,10 +7,10 @@ from app.schemas.agent import AgentResponse, AgentThreadDetailResponse, AgentThr
 from app.services.agent import AgentService
 
 
-router = APIRouter(prefix="/api/agent", tags=["agent"])
+router = APIRouter(prefix='/api/agent', tags=['agent'])
 
 
-@router.post("/query", response_model=AgentResponse)
+@router.post('/query', response_model=AgentResponse)
 async def query_agent(
     payload: QueryRequest,
     current_user: dict = Depends(get_current_user),
@@ -22,6 +22,7 @@ async def query_agent(
         company_code=payload.company_code,
         company_name=payload.company_name,
         user_id=current_user['user_id'],
+        task_mode=payload.task_mode,
     )
 
 

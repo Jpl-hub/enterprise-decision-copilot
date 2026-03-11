@@ -49,6 +49,17 @@ class AgentWorkflow:
             'company_compare_tool': '企业对比分析',
             'industry_trend_tool': '行业趋势分析',
         }
+        self.task_mode_aliases = {
+            'fallback': AgentIntent.FALLBACK,
+            'overview': AgentIntent.OVERVIEW,
+            'data_quality': AgentIntent.DATA_QUALITY,
+            'company_diagnosis': AgentIntent.COMPANY_DIAGNOSIS,
+            'company_report': AgentIntent.COMPANY_REPORT,
+            'company_decision_brief': AgentIntent.COMPANY_DECISION_BRIEF,
+            'company_risk_forecast': AgentIntent.COMPANY_RISK_FORECAST,
+            'company_compare': AgentIntent.COMPANY_COMPARE,
+            'industry_trend': AgentIntent.INDUSTRY_TREND,
+        }
 
     def _select_tool_name(self, intent: AgentIntent) -> str:
         return self.intent_to_tool.get(intent, 'fallback_tool')
@@ -58,6 +69,11 @@ class AgentWorkflow:
 
     def _tool_label(self, tool_name: str) -> str:
         return self.tool_labels.get(tool_name, '分析工具')
+
+    def _resolve_preferred_task_mode(self, preferred_task_mode: str | None) -> AgentIntent | None:
+        if not preferred_task_mode:
+            return None
+        return self.task_mode_aliases.get(preferred_task_mode.strip().lower())
 
     def _task_meta(self, intent: AgentIntent) -> tuple[str, list[str]]:
         mapping = {
@@ -93,10 +109,11 @@ class AgentWorkflow:
         else:
             context.add_plan('问题引导', '回退到默认引导，帮助用户锁定企业与任务。')
 
-    def execute(self, question: str) -> dict:
+    def execute(self, question: str, preferred_task_mode: str | None = None) -> dict:
         cleaned_question = question.strip()
         matches = self.analytics_service.find_company_matches(cleaned_question) if cleaned_question else []
         context = WorkflowContext(question=cleaned_question, matches=matches)
+        preferred_intent = self._resolve_preferred_task_mode(preferred_task_mode)
         context.add_plan('接收问题', '接收用户问题并准备识别企业对象。')
         if matches:
             matched_names = '、'.join(match['company_name'] for match in matches)
@@ -141,11 +158,16 @@ class AgentWorkflow:
             payload['trace'] = [step.as_dict() for step in context.trace]
             return payload
         else:
-            context.intent = self.intent_router.detect_intent(cleaned_question, matches)
-            context.add_plan('判断任务类型', f"当前问题属于：{self._intent_label(context.intent)}。")
+            if preferred_intent is not None:
+                context.intent = preferred_intent
+                context.add_plan('判断任务类型', f"已按任务模式进入：{self._intent_label(context.intent)}。")
+                context.add_trace('任务识别', f"当前由任务模式指定为：{self._intent_label(context.intent)}。")
+            else:
+                context.intent = self.intent_router.detect_intent(cleaned_question, matches)
+                context.add_plan('判断任务类型', f"当前问题属于：{self._intent_label(context.intent)}。")
+                context.add_trace('任务识别', f"已识别为：{self._intent_label(context.intent)}。")
             self._plan_for_intent(context)
 
-        context.add_trace('任务识别', f"已识别为：{self._intent_label(context.intent)}。")
         context.selected_tool = self._select_tool_name(context.intent)
         context.add_trace('选择分析路径', f"将进入：{self._tool_label(context.selected_tool)}。")
         context.add_plan('选择分析路径', f"选择执行路径：{self._tool_label(context.selected_tool)}。")

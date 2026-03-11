@@ -97,7 +97,7 @@ export const api = {
   getUniversePromotionPlan(limit = 12, perIndustry = 2) {
     return request<UniversePromotionPlanResponse>(`/api/universe/promotion-plan?limit=${limit}&per_industry=${perIndustry}`);
   },
-  queryAgent(question: string, options?: { threadId?: string | null; companyCode?: string | null; companyName?: string | null }) {
+  queryAgent(question: string, options?: { threadId?: string | null; companyCode?: string | null; companyName?: string | null; taskMode?: string | null }) {
     return request<AgentResponse>('/api/agent/query', {
       method: 'POST',
       body: JSON.stringify({
@@ -105,6 +105,7 @@ export const api = {
         thread_id: options?.threadId || undefined,
         company_code: options?.companyCode || undefined,
         company_name: options?.companyName || undefined,
+        task_mode: options?.taskMode || undefined,
       }),
     });
   },

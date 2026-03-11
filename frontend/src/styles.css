@@ -1946,3 +1946,24 @@ select {
 .agent-mode-pill.subtle {
   background: rgba(9, 26, 43, 0.2);
 }
+
+.task-mode-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.task-mode-toggle {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 700;
+}
+
+.task-mode-toggle.active {
+  background: rgba(240, 138, 75, 0.2);
+  border-color: rgba(240, 138, 75, 0.3);
+  color: #fff;
+}

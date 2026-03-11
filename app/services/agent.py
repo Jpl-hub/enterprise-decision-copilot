@@ -221,12 +221,13 @@ class AgentService:
         company_code: str | None = None,
         company_name: str | None = None,
         user_id: str | None = None,
+        task_mode: str | None = None,
     ) -> dict:
         thread = self._get_or_create_thread(thread_id, user_id, company_code, company_name, question)
         normalized_question = self._normalize_question(question, thread)
         user_message = ThreadMessage(role='user', content=normalized_question)
         self._append_message(thread['thread_id'], user_message)
-        payload = self.workflow.execute(normalized_question)
+        payload = self.workflow.execute(normalized_question, preferred_task_mode=task_mode)
         thread = self._update_focus(thread, payload)
         assistant_summary = payload.get('summary') or payload.get('title') or '已完成本轮分析。'
         assistant_message = ThreadMessage(role='assistant', content=str(assistant_summary))
@@ -241,6 +242,7 @@ class AgentService:
                     'question': normalized_question,
                     'title': payload.get('title'),
                     'focus_company_code': thread.get('focus_company_code'),
+                    'task_mode': payload.get('task_mode'),
                 },
             )
         payload.pop('matched_companies', None)

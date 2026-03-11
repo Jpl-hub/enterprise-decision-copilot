@@ -6,10 +6,11 @@ from pydantic import BaseModel, Field
 
 
 class QueryRequest(BaseModel):
-    question: str = Field(..., min_length=1, description="User natural-language question.")
-    thread_id: str | None = Field(default=None, description="Existing analysis thread ID.")
-    company_code: str | None = Field(default=None, description="Focused company code for the current analysis thread.")
-    company_name: str | None = Field(default=None, description="Focused company name for the current analysis thread.")
+    question: str = Field(..., min_length=1, description='User natural-language question.')
+    thread_id: str | None = Field(default=None, description='Existing analysis thread ID.')
+    company_code: str | None = Field(default=None, description='Focused company code for the current analysis thread.')
+    company_name: str | None = Field(default=None, description='Focused company name for the current analysis thread.')
+    task_mode: str | None = Field(default=None, description='Preferred task mode for the current analysis task.')
 
 
 class AgentTraceStep(BaseModel):
