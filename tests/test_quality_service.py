@@ -8,7 +8,9 @@ import pandas as pd
 
 from app.api.routes.quality import get_quality_summary, submit_manual_review, sync_auto_reviews
 from app.schemas.quality import ManualReviewRequest
+from app.services.audit import AuditService
 from app.services.quality import DataQualityService
+
 
 
 def build_quality_service(base_dir: Path) -> DataQualityService:
@@ -102,10 +104,12 @@ def build_quality_service(base_dir: Path) -> DataQualityService:
     )
 
 
+
 def create_test_dir() -> Path:
     base_dir = Path("data") / "test_quality" / uuid.uuid4().hex
     base_dir.mkdir(parents=True, exist_ok=True)
     return base_dir
+
 
 
 def test_quality_service_builds_summary() -> None:
@@ -124,6 +128,7 @@ def test_quality_service_builds_summary() -> None:
     assert summary["multimodal_backends"] == ["modelscope"]
     assert summary["top_anomalies"][0]["company_code"] == "300760"
     assert summary["top_anomalies"][0]["financial_source_url"] == "https://example.com/report.pdf"
+
 
 
 def test_quality_service_persists_manual_review() -> None:
@@ -146,6 +151,7 @@ def test_quality_service_persists_manual_review() -> None:
     assert queue[0]["finding_type"] == "净利率异常"
 
 
+
 def test_quality_service_returns_company_multimodal_snapshot() -> None:
     base_dir = create_test_dir()
     try:
@@ -157,6 +163,7 @@ def test_quality_service_returns_company_multimodal_snapshot() -> None:
     assert snapshot["multimodal_extract_count"] == 1
     assert snapshot["multimodal_extracts"][0]["backend"] == "modelscope"
     assert snapshot["multimodal_extracts"][0]["filled_field_count"] >= 6
+
 
 
 def test_quality_service_can_sync_auto_reviews() -> None:
@@ -175,8 +182,11 @@ def test_quality_service_can_sync_auto_reviews() -> None:
     assert len(queue) == first["created_count"]
 
 
+
 def test_quality_routes_return_summary_and_accept_review() -> None:
     base_dir = create_test_dir()
+    audit_db = Path("data") / "test_quality_audit" / uuid.uuid4().hex / "app.db"
+    audit_service = AuditService(audit_db)
     try:
         service = build_quality_service(base_dir)
         summary = asyncio.run(get_quality_summary(quality_service=service))
@@ -189,12 +199,17 @@ def test_quality_routes_return_summary_and_accept_review() -> None:
                     finding_type="现金短债比待核验",
                     note="货币资金和短期债务来源表格需要人工校对。",
                 ),
+                current_user={'user_id': 'tester'},
                 quality_service=service,
+                audit_service=audit_service,
             )
         )
-        auto_payload = asyncio.run(sync_auto_reviews(limit=3, quality_service=service))
+        auto_payload = asyncio.run(sync_auto_reviews(limit=3, current_user={'user_id': 'tester'}, quality_service=service, audit_service=audit_service))
+        logs = audit_service.list_recent(limit=10)
     finally:
         shutil.rmtree(base_dir, ignore_errors=True)
+        if audit_db.parent.exists():
+            shutil.rmtree(audit_db.parent, ignore_errors=True)
 
     assert summary["official_report_expected_slots"] == 18
     assert summary["multimodal_extract_report_count"] == 1
@@ -202,3 +217,5 @@ def test_quality_routes_return_summary_and_accept_review() -> None:
     assert response["summary"]["pending_review_count"] == 1
     assert auto_payload["created_count"] >= 1
     assert auto_payload["summary"]["pending_review_count"] >= 2
+    assert any(item['event_type'] == 'quality.review.submit' for item in logs)
+    assert any(item['event_type'] == 'quality.review.auto_sync' for item in logs)

@@ -94,6 +94,37 @@ SCHEMA = {
             revoked_at TEXT
         )
     ''',
+    'agent_threads': '''
+        CREATE TABLE IF NOT EXISTS agent_threads (
+            thread_id TEXT PRIMARY KEY,
+            user_id TEXT,
+            title TEXT NOT NULL,
+            focus_company_code TEXT,
+            focus_company_name TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    ''',
+    'agent_messages': '''
+        CREATE TABLE IF NOT EXISTS agent_messages (
+            message_id TEXT PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    ''',
+    'audit_logs': '''
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            log_id TEXT PRIMARY KEY,
+            user_id TEXT,
+            event_type TEXT NOT NULL,
+            target_type TEXT,
+            target_id TEXT,
+            detail_json TEXT,
+            created_at TEXT NOT NULL
+        )
+    ''',
 }
 
 
@@ -102,6 +133,10 @@ INDEXES = [
     'CREATE INDEX IF NOT EXISTS idx_research_reports_company_date ON research_reports(company_code, report_date)',
     'CREATE INDEX IF NOT EXISTS idx_industry_reports_name_date ON industry_reports(industry_name, report_date)',
     'CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_agent_threads_user_id ON agent_threads(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_agent_messages_thread_id_created ON agent_messages(thread_id, created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id_created ON audit_logs(user_id, created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_audit_logs_event_type_created ON audit_logs(event_type, created_at)',
 ]
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.api.routes.competition import get_company_competition_package
 from app.core.container import build_service_container
+from app.services.audit import AuditService
 from app.services.competition_report import CompetitionReportService
 
 
@@ -48,6 +49,7 @@ def test_competition_package_route_returns_export_payload() -> None:
         quality_service=container.quality_service,
         export_root=export_root,
     )
+    audit_service = AuditService(Path("data/test_exports") / uuid.uuid4().hex / "app.db")
 
     try:
         payload = asyncio.run(
@@ -55,7 +57,9 @@ def test_competition_package_route_returns_export_payload() -> None:
                 company_code="300760",
                 question="结合真实数据生成企业运营分析答辩稿",
                 persist=True,
+                current_user={'user_id': 'tester'},
                 competition_report_service=service,
+                audit_service=audit_service,
             )
         )
         assert payload["company_code"] == "300760"
@@ -63,6 +67,10 @@ def test_competition_package_route_returns_export_payload() -> None:
         assert payload["citations"]
         assert payload["markdown_path"]
         assert any("多模态" in section["content"] for section in payload["sections"])
+        logs = audit_service.list_recent(limit=5)
+        assert any(item['event_type'] == 'competition.package.export' for item in logs)
     finally:
         if export_root.exists():
             shutil.rmtree(export_root, ignore_errors=True)
+        if audit_service.db_path and audit_service.db_path.parent.exists():
+            shutil.rmtree(audit_service.db_path.parent, ignore_errors=True)

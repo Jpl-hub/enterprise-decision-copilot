@@ -7,21 +7,23 @@ from app.agents.tools import build_agent_tools
 from app.agents.workflow import AgentWorkflow
 from app.services.agent import AgentService
 from app.services.analytics import AnalyticsService
+from app.services.audit import AuditService
 from app.services.auth import AuthService
 from app.services.competition_report import CompetitionReportService
 from app.services.decision import DecisionService
 from app.services.quality import DataQualityService
 from app.services.retrieval import RetrievalService
+from app.services.risk import RiskService
 from app.services.risk_model import RiskModelService
 from app.services.universe import IndustryUniverseService
 from app.services.warehouse import WarehouseService
-from app.services.risk import RiskService
 
 
 @dataclass(slots=True)
 class ServiceContainer:
     analytics_service: AnalyticsService
     auth_service: AuthService
+    audit_service: AuditService
     decision_service: DecisionService
     risk_model_service: RiskModelService
     risk_service: RiskService
@@ -35,7 +37,8 @@ class ServiceContainer:
 
 def build_service_container() -> ServiceContainer:
     analytics_service = AnalyticsService()
-    auth_service = AuthService()
+    audit_service = AuditService()
+    auth_service = AuthService(audit_service=audit_service)
     retrieval_service = RetrievalService(analytics_service)
     decision_service = DecisionService(analytics_service, retrieval_service)
     risk_model_service = RiskModelService()
@@ -49,10 +52,11 @@ def build_service_container() -> ServiceContainer:
         intent_router=IntentRouter(),
         tools=build_agent_tools(decision_service, risk_service, quality_service),
     )
-    agent_service = AgentService(workflow)
+    agent_service = AgentService(workflow, audit_service=audit_service)
     return ServiceContainer(
         analytics_service=analytics_service,
         auth_service=auth_service,
+        audit_service=audit_service,
         decision_service=decision_service,
         risk_model_service=risk_model_service,
         risk_service=risk_service,

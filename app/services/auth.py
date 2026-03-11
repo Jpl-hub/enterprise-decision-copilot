@@ -11,11 +11,13 @@ from fastapi import HTTPException, status
 
 from app.config import settings
 from app.db import get_connection, init_db
+from app.services.audit import AuditService
 
 
 class AuthService:
-    def __init__(self, db_path: Path | None = None) -> None:
+    def __init__(self, db_path: Path | None = None, audit_service: AuditService | None = None) -> None:
         self.db_path = db_path
+        self.audit_service = audit_service
         init_db(db_path)
 
     def _now(self) -> datetime:
@@ -70,7 +72,10 @@ class AuthService:
                 user,
             )
             conn.commit()
-            return self._serialize_user(user)
+        response = self._serialize_user(user)
+        if self.audit_service is not None:
+            self.audit_service.log_event('auth.register', user_id=response['user_id'], target_type='user', target_id=response['user_id'], detail={'username': response['username'], 'role': response['role']})
+        return response
 
     def login(self, username: str, password: str) -> dict:
         normalized_username = username.strip().lower()
@@ -84,25 +89,29 @@ class AuthService:
             token = secrets.token_urlsafe(32)
             now = self._now()
             expires_at = now + timedelta(hours=settings.auth_token_ttl_hours)
+            now_text = now.isoformat(timespec='seconds').replace('+00:00', 'Z')
             conn.execute(
                 'INSERT INTO user_sessions (token, user_id, created_at, expires_at, revoked_at) VALUES (?, ?, ?, ?, NULL)',
                 (
                     token,
                     row['user_id'],
-                    now.isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                    now_text,
                     expires_at.isoformat(timespec='seconds').replace('+00:00', 'Z'),
                 ),
             )
             conn.execute(
                 'UPDATE users SET last_login_at = ? WHERE user_id = ?',
-                (now.isoformat(timespec='seconds').replace('+00:00', 'Z'), row['user_id']),
+                (now_text, row['user_id']),
             )
             conn.commit()
-            return {
-                'token': token,
-                'expires_at': expires_at.isoformat(timespec='seconds').replace('+00:00', 'Z'),
-                'user': self._serialize_user({**dict(row), 'last_login_at': now.isoformat(timespec='seconds').replace('+00:00', 'Z')}),
-            }
+        user = self._serialize_user({**dict(row), 'last_login_at': now_text})
+        if self.audit_service is not None:
+            self.audit_service.log_event('auth.login', user_id=user['user_id'], target_type='user', target_id=user['user_id'], detail={'username': user['username']})
+        return {
+            'token': token,
+            'expires_at': expires_at.isoformat(timespec='seconds').replace('+00:00', 'Z'),
+            'user': user,
+        }
 
     def get_user_by_token(self, token: str) -> dict:
         with get_connection(self.db_path) as conn:
@@ -125,9 +134,15 @@ class AuthService:
             return self._serialize_user(row)
 
     def logout(self, token: str) -> None:
+        user_id = None
         with get_connection(self.db_path) as conn:
+            session = conn.execute('SELECT user_id FROM user_sessions WHERE token = ?', (token,)).fetchone()
+            if session is not None:
+                user_id = session['user_id']
             conn.execute(
                 'UPDATE user_sessions SET revoked_at = ? WHERE token = ? AND revoked_at IS NULL',
                 (self._now().isoformat(timespec='seconds').replace('+00:00', 'Z'), token),
             )
             conn.commit()
+        if self.audit_service is not None:
+            self.audit_service.log_event('auth.logout', user_id=user_id, target_type='session', target_id=token[:12], detail={})

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.dependencies import get_quality_service
+from app.api.dependencies import get_audit_service, get_current_user, get_quality_service
 from app.schemas.quality import (
     AutoReviewSyncResponse,
     DataQualitySummaryResponse,
     ManualReviewRequest,
     ManualReviewSubmitResponse,
 )
+from app.services.audit import AuditService
 from app.services.quality import DataQualityService
 
 
@@ -25,7 +26,9 @@ async def get_quality_summary(
 @router.post("/reviews", response_model=ManualReviewSubmitResponse)
 async def submit_manual_review(
     payload: ManualReviewRequest,
+    current_user: dict = Depends(get_current_user),
     quality_service: DataQualityService = Depends(get_quality_service),
+    audit_service: AuditService = Depends(get_audit_service),
 ) -> dict:
     review = quality_service.submit_manual_review(
         company_code=payload.company_code,
@@ -33,6 +36,13 @@ async def submit_manual_review(
         finding_level=payload.finding_level,
         finding_type=payload.finding_type,
         note=payload.note,
+    )
+    audit_service.log_event(
+        event_type='quality.review.submit',
+        user_id=current_user['user_id'],
+        target_type='manual_review',
+        target_id=f"{payload.company_code}-{payload.report_year}",
+        detail={'finding_type': payload.finding_type, 'finding_level': payload.finding_level},
     )
     return {
         "review": review,
@@ -43,8 +53,17 @@ async def submit_manual_review(
 @router.post("/reviews/auto", response_model=AutoReviewSyncResponse)
 async def sync_auto_reviews(
     limit: int = Query(12, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
     quality_service: DataQualityService = Depends(get_quality_service),
+    audit_service: AuditService = Depends(get_audit_service),
 ) -> dict:
     payload = quality_service.sync_auto_review_queue(limit=limit)
     payload["summary"] = quality_service.get_quality_summary()
+    audit_service.log_event(
+        event_type='quality.review.auto_sync',
+        user_id=current_user['user_id'],
+        target_type='quality_queue',
+        target_id='auto',
+        detail={'limit': limit, 'created_count': payload['created_count'], 'skipped_count': payload['skipped_count']},
+    )
     return payload
