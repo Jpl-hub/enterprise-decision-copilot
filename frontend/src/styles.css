@@ -1594,6 +1594,133 @@ select {
   gap: 24px;
 }
 
+.polished-command-stage-main {
+  gap: 18px;
+}
+
+.polished-command-stage-main h2 {
+  max-width: none;
+  font-size: 42px;
+  white-space: nowrap;
+}
+
+.command-stage-intro {
+  display: grid;
+  gap: 8px;
+}
+
+.hero-copy {
+  margin: 0;
+  color: rgba(243, 247, 251, 0.78);
+  font-size: 1rem;
+}
+
+.single-line-command-bar {
+  grid-template-columns: minmax(260px, 360px) auto;
+  align-items: center;
+}
+
+.selected-task-pill {
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 700;
+}
+
+.refined-command-side {
+  gap: 18px;
+}
+
+.focus-summary-card,
+.focus-status-card {
+  padding: 22px;
+  border-radius: 24px;
+  background: linear-gradient(160deg, rgba(8, 24, 44, 0.28), rgba(21, 62, 117, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  gap: 16px;
+  color: #fff;
+}
+
+.market-chip {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.focus-summary-line {
+  margin: 0;
+  color: rgba(243, 247, 251, 0.78);
+}
+
+.focus-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.focus-metric-card {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: grid;
+  gap: 6px;
+}
+
+.focus-metric-card span,
+.focus-status-item span {
+  color: rgba(243, 247, 251, 0.7);
+  font-size: 0.84rem;
+}
+
+.focus-metric-card strong,
+.focus-status-item strong {
+  color: #fff;
+  font-size: 1.06rem;
+}
+
+.focus-note-card {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.focus-note-card p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.focus-detail-button {
+  width: 100%;
+}
+
+.focus-status-list {
+  display: grid;
+  gap: 10px;
+}
+
+.focus-status-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.focus-status-item:last-child {
+  border-bottom: 0;
+}
+
+.compact-note-card {
+  background: rgba(240, 138, 75, 0.14);
+}
+
 .unified-command-stage .command-bar {
   grid-template-columns: minmax(240px, 360px) 180px;
   justify-content: flex-start;
@@ -1791,8 +1918,14 @@ select {
 
 @media (max-width: 1200px) {
   .agent-workspace-body,
-  .agent-input-shell {
+  .agent-input-shell,
+  .focus-metric-grid,
+  .single-line-command-bar {
     grid-template-columns: 1fr;
+  }
+
+  .polished-command-stage-main h2 {
+    white-space: normal;
   }
 }
 

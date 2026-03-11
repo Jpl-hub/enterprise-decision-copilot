@@ -100,7 +100,7 @@ class DataQualityTool:
             if anomalies:
                 first = anomalies[0]
                 highlights.append(
-                    f"最高优先异常：{first['report_year']} 年异常分 {first['anomaly_score']}，"
+                    f"最高优先异常：{first['report_year']} 年影响程度 {first['anomaly_score']}，"
                     f"缺失字段 {len(first.get('critical_fields_missing', []))} 项。"
                 )
             if queue:
@@ -113,7 +113,7 @@ class DataQualityTool:
                     "suggested_questions": [
                         f"继续分析{company_name}的经营风险",
                         "查看最新异常处理建议",
-                        "查看全局数据覆盖和异常分布",
+                        "查看全局数据覆盖和缺口分布",
                     ],
                     "evidence": {
                         "company_snapshot": snapshot,
@@ -133,7 +133,7 @@ class DataQualityTool:
         if top_anomalies:
             first = top_anomalies[0]
             highlights.append(
-                f"当前最高风险异常：{first['company_name']} {first['report_year']} 年，异常分 {first['anomaly_score']}。"
+                f"当前最高风险异常：{first['company_name']} {first['report_year']} 年，影响程度 {first['anomaly_score']}。"
             )
         return ToolResult(
             payload={

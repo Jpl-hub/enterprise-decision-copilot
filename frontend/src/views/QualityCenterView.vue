@@ -19,7 +19,7 @@
             <div class="tower-pill-row">
               <span class="tower-pill">财报 {{ percent(summary.official_report_coverage_ratio) }}</span>
               <span class="tower-pill">图表 {{ percent(summary.multimodal_extract_coverage_ratio) }}</span>
-              <span class="tower-pill">异常 {{ summary.pending_review_count }} 条</span>
+              <span class="tower-pill">提醒 {{ summary.pending_review_count }} 项</span>
             </div>
           </div>
 
@@ -35,7 +35,7 @@
               <div class="signal-meter"><div class="signal-meter-fill accent" :style="{ width: `${summary.multimodal_extract_coverage_ratio * 100}%` }"></div></div>
             </div>
             <div class="tower-stat-card warning">
-              <span>待处理问题</span>
+              <span>数据提醒</span>
               <strong>{{ summary.pending_review_count }}</strong>
               <div class="signal-meter"><div class="signal-meter-fill warning" :style="{ width: pendingWidth }"></div></div>
             </div>
@@ -56,9 +56,9 @@
           </div>
           <div class="flow-arrow">→</div>
           <div class="flow-card">
-            <span>异常检测</span>
+            <span>数据提醒</span>
             <strong>{{ summary.top_anomalies.length }}</strong>
-            <p>自动识别覆盖缺口和字段异常，形成待处理清单。</p>
+            <p>自动识别覆盖缺口和字段异常，形成当前需要补齐的事项。</p>
           </div>
           <div class="flow-arrow">→</div>
           <div class="flow-card accent-card">
@@ -77,7 +77,7 @@
             <div class="stack-list">
               <div v-for="item in summary.exchange_status" :key="item.exchange" class="exchange-board-card">
                 <div class="trace-title-row">
-                  <strong>{{ item.exchange }}</strong>
+                  <strong>{{ formatExchange(item.exchange) }}</strong>
                   <span>{{ item.downloaded_rows }}/{{ item.rows }}</span>
                 </div>
                 <div class="signal-meter top-gap"><div class="signal-meter-fill dark" :style="{ width: exchangeWidth(item) }"></div></div>
@@ -91,14 +91,14 @@
 
           <div class="sub-panel compact-data-panel">
             <div class="sub-panel-header">
-              <h3>异常热区</h3>
-              <span class="badge-subtle">优先处理</span>
+              <h3>重点补齐企业</h3>
+              <span class="badge-subtle">先看这些</span>
             </div>
             <div class="stack-list">
               <div v-for="item in summary.top_anomalies.slice(0, 5)" :key="`${item.company_code}-${item.report_year}`" class="anomaly-heat-card">
                 <div class="trace-title-row">
                   <strong>{{ item.company_name }}</strong>
-                  <span>异常分 {{ item.anomaly_score }}</span>
+                  <span>{{ impactLevel(item.anomaly_score) }}</span>
                 </div>
                 <div class="signal-meter top-gap"><div class="signal-meter-fill warning" :style="{ width: `${Math.min(100, item.anomaly_score)}%` }"></div></div>
                 <p>覆盖率 {{ percent(item.field_coverage_ratio) }} · {{ item.critical_fields_missing.join('、') || '字段齐备' }}</p>
@@ -158,14 +158,14 @@ const summary = ref<QualitySummaryResponse | null>(null);
 
 const readinessHeadline = computed(() => {
   if (!summary.value) return '加载中';
-  if (summary.value.pending_review_count >= 5) return '当前底座仍有较多待处理问题';
+  if (summary.value.pending_review_count >= 5) return '当前底座仍有较多资料提醒';
   if (summary.value.official_report_coverage_ratio >= 0.8) return '数据底座已进入稳定运行';
   return '数据底座正在持续扩充';
 });
 
 const readinessText = computed(() => {
   if (!summary.value) return '正在汇总';
-  return `当前财报覆盖 ${percent(summary.value.official_report_coverage_ratio)}，图表抽取覆盖 ${percent(summary.value.multimodal_extract_coverage_ratio)}，待处理问题 ${summary.value.pending_review_count} 条。`;
+  return `当前财报覆盖 ${percent(summary.value.official_report_coverage_ratio)}，图表抽取覆盖 ${percent(summary.value.multimodal_extract_coverage_ratio)}，数据提醒 ${summary.value.pending_review_count} 项。`;
 });
 
 const confidenceNotes = computed(() => {
@@ -175,9 +175,9 @@ const confidenceNotes = computed(() => {
     `图表抽取覆盖 ${percent(summary.value.multimodal_extract_coverage_ratio)}，复杂版式报告会继续补齐。`,
   ];
   if (summary.value.pending_review_count >= 5) {
-    notes.push('高优先级异常仍然较多，正式结论前需要先处理最突出的缺口。');
+    notes.push('当前资料提醒仍然较多，正式结论前建议先看最突出的缺口。');
   } else {
-    notes.push('当前待处理问题较少，系统结论可以直接作为管理层讨论的起点。');
+    notes.push('当前资料提醒较少，系统结论可以直接作为管理层讨论的起点。');
   }
   return notes;
 });
@@ -186,6 +186,17 @@ const pendingWidth = computed(() => `${Math.min(100, Math.max(12, (summary.value
 
 function percent(value: number) {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatExchange(value: string) {
+  const labels: Record<string, string> = { SSE: '上交所', SZSE: '深交所', BSE: '北交所' };
+  return labels[String(value || '').toUpperCase()] || value;
+}
+
+function impactLevel(score: number) {
+  if (score >= 80) return '影响较高';
+  if (score >= 50) return '需要关注';
+  return '影响较低';
 }
 
 function exchangeWidth(item: ExchangeQualityStatus) {

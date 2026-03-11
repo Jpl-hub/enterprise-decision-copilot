@@ -33,7 +33,7 @@ export const useAgentThreadStore = defineStore('agent-thread', {
   }),
   actions: {
     setFocus(companyCode?: string | null, companyName?: string | null) {
-      this.focusCompanyCode = companyCode || null;
+      this.focusCompanyCode = companyCode != null ? String(companyCode) : null;
       this.focusCompanyName = companyName || null;
       if (companyName && (!this.threadTitle || this.threadTitle === '企业分析线程')) {
         this.threadTitle = companyName;
@@ -45,7 +45,7 @@ export const useAgentThreadStore = defineStore('agent-thread', {
     resetThread(companyCode?: string | null, companyName?: string | null) {
       this.threadId = null;
       this.threadTitle = companyName || '企业分析线程';
-      this.focusCompanyCode = companyCode || null;
+      this.focusCompanyCode = companyCode != null ? String(companyCode) : null;
       this.focusCompanyName = companyName || null;
       this.latest = null;
       this.messages = [];

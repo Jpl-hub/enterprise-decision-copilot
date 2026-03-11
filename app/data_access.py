@@ -86,9 +86,12 @@ def _read_table_if_available(table_name: str, columns: list[str]) -> pd.DataFram
 
 def load_targets() -> pd.DataFrame:
     frame = _read_table_if_available('companies', TARGET_COLUMNS)
+    if frame.empty:
+        frame = _read_csv(settings.data_dir / 'targets.csv', TARGET_COLUMNS)
     if not frame.empty:
-        return frame[TARGET_COLUMNS]
-    return _read_csv(settings.data_dir / 'targets.csv', TARGET_COLUMNS)
+        frame = frame[TARGET_COLUMNS].copy()
+        frame['company_code'] = frame['company_code'].astype(str)
+    return frame
 
 
 def load_financial_features() -> pd.DataFrame:

@@ -45,11 +45,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       try {
-        const payload = (await response.json()) as { detail?: string | { message?: string } };
-        if (typeof payload.detail === 'string' && payload.detail.trim()) {
-          message = payload.detail;
-        } else if (payload.detail && typeof payload.detail === 'object' && typeof payload.detail.message === 'string') {
-          message = payload.detail.message;
+        const payload = (await response.json()) as { detail?: string | Array<{ msg?: string; loc?: Array<string | number> }> | { message?: string } };
+        const detail = payload.detail;
+        if (typeof detail === 'string' && detail.trim()) {
+          message = detail;
+        } else if (Array.isArray(detail) && detail.length) {
+          message = detail
+            .map((item) => item.msg || '请求参数不正确')
+            .join('；');
+        } else if (detail && !Array.isArray(detail) && typeof detail === 'object' && typeof detail.message === 'string') {
+          message = detail.message;
         }
       } catch {
         message = `请求失败（${response.status}）`;
