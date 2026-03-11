@@ -1,177 +1,162 @@
 <template>
-  <div class="page-stack compare-page">
-    <PagePanel title="企业对比" eyebrow="Compare" description="先回答谁更值得重点跟踪，再展开原因和证据。">
-      <div class="panel-split two-cols compare-top-layout">
-        <div class="sub-panel">
-          <div class="sub-panel-header">
-            <h3>选择企业</h3>
-            <span class="badge-subtle">至少 2 家，最多 4 家</span>
-          </div>
-          <div class="compare-target-grid">
-            <label
-              v-for="item in targets"
-              :key="item.company_code"
-              class="compare-target-card"
-              :class="{ active: selectedCodes.includes(item.company_code) }"
-            >
-              <input
-                type="checkbox"
-                :checked="selectedCodes.includes(item.company_code)"
-                @change="toggleCompany(item.company_code)"
-              />
-              <div>
+  <div class="page-stack compare-page refined-compare-page">
+    <PagePanel title="企业对比台" eyebrow="Compare Studio">
+      <div class="compare-command-shell">
+        <div class="compare-command-main">
+          <div class="sub-panel compare-selection-panel">
+            <div class="sub-panel-header">
+              <h3>选择对比对象</h3>
+              <span class="badge-subtle">{{ selectedCodes.length }}/4</span>
+            </div>
+            <div class="compare-target-grid refined-target-grid">
+              <button
+                v-for="item in targets"
+                :key="item.company_code"
+                type="button"
+                class="compare-target-card refined-target-card"
+                :class="{ active: selectedCodes.includes(item.company_code) }"
+                @click="toggleCompany(item.company_code)"
+              >
                 <strong>{{ item.company_name }}</strong>
-                <p class="muted">{{ item.exchange }} · {{ item.segment }}</p>
-              </div>
-            </label>
+                <span>{{ item.exchange }}</span>
+              </button>
+            </div>
+            <div class="button-row left-align top-gap">
+              <button class="button-primary" @click="loadComparison" :disabled="selectedCodes.length < 2 || loading">开始对比</button>
+              <button class="button-ghost" @click="resetSelection">默认组合</button>
+            </div>
           </div>
-          <div class="button-row left-align">
-            <button class="button-primary" @click="loadComparison" :disabled="selectedCodes.length < 2 || loading">开始对比</button>
-            <button class="button-ghost" @click="resetSelection">重置为默认组合</button>
+
+          <div v-if="selectedCodes.length < 2" class="empty-state">至少选择两家企业。</div>
+          <div v-else-if="loading" class="empty-state">正在生成对比结论...</div>
+          <div v-else-if="error" class="error-box">{{ error }}</div>
+          <div v-else-if="result" class="compare-decision-shell">
+            <div class="compare-verdict-card">
+              <div>
+                <p class="section-tag">当前结论</p>
+                <h3>{{ result.winner_company_name }}</h3>
+                <p>{{ result.summary }}</p>
+              </div>
+              <div class="compare-verdict-stats">
+                <div class="verdict-mini-stat">
+                  <span>领先维度</span>
+                  <strong>{{ winnerDimensionCount }}</strong>
+                </div>
+                <div class="verdict-mini-stat">
+                  <span>对比年份</span>
+                  <strong>{{ result.report_year }}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="compare-chart-panel">
+              <div class="sub-panel-header">
+                <h3>综合分对比</h3>
+                <span class="badge-subtle">越长越强</span>
+              </div>
+              <div class="bar-compare-list">
+                <div v-for="item in result.comparison_rows" :key="item.company_code" class="bar-compare-item">
+                  <div class="bar-compare-label-row">
+                    <strong>{{ item.company_name }}</strong>
+                    <span>{{ item.total_score.toFixed(1) }}</span>
+                  </div>
+                  <div class="bar-track"><div class="bar-fill" :style="{ width: scoreWidth(item.total_score) }"></div></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="sub-panel">
-          <h3>你会直接得到</h3>
-          <div class="stack-list">
-            <div class="info-card compact">
-              <strong>优先跟踪对象</strong>
-              <p class="muted">先给出当前更值得重点跟踪的企业，再展开原因。</p>
+
+        <div v-if="result" class="compare-command-side">
+          <div class="compare-action-card">
+            <div class="trace-title-row">
+              <strong>下一步建议</strong>
+              <RouterLink :to="`/workbench/${result.winner_company_code}`">查看赢家</RouterLink>
             </div>
-            <div class="info-card compact">
-              <strong>差异原因</strong>
-              <p class="muted">会拆成盈利、成长、研发和风险几个层面，让你知道赢在什么地方。</p>
+            <div class="stack-list">
+              <div v-for="item in result.highlights.slice(0, 4)" :key="item" class="action-line-card">
+                <p>{{ item }}</p>
+              </div>
             </div>
-            <div class="info-card compact">
-              <strong>可核对来源</strong>
-              <p class="muted">对比结论可回到交易所财报和研报摘要，不用担心结论无出处。</p>
+          </div>
+          <div class="compare-action-card">
+            <div class="trace-title-row">
+              <strong>当前组合</strong>
+              <span class="badge-subtle">{{ selectedCompanyNames.length }} 家</span>
             </div>
-            <div class="info-card compact">
-              <strong>当前选择</strong>
-              <p class="muted">{{ selectedCompanyNames.join('、') || '未选择企业' }}</p>
+            <div class="selected-pill-group">
+              <span v-for="name in selectedCompanyNames" :key="name" class="selected-pill">{{ name }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-if="selectedCodes.length < 2" class="empty-state">先选择至少两家企业，再生成横向对比。</div>
-      <div v-else-if="loading" class="empty-state">正在生成多企业对比结论...</div>
-      <div v-else-if="error" class="error-box">{{ error }}</div>
-      <div v-else-if="result" class="page-stack">
-        <div class="metrics-grid">
-          <MetricCard label="对比企业数" :value="result.comparison_rows.length" />
-          <MetricCard label="优先跟踪" :value="result.winner_company_name" :hint="`${result.report_year} 年`" />
-          <MetricCard label="领先维度" :value="winnerDimensionCount" />
-          <MetricCard label="重点结论" :value="result.highlights.length" />
+      <template v-if="result">
+        <div class="compare-dimension-board">
+          <div v-for="dimension in result.dimensions" :key="dimension.dimension" class="dimension-board-card">
+            <div class="trace-title-row">
+              <strong>{{ dimension.dimension }}</strong>
+              <span class="badge-subtle">{{ dimension.winner_company_name }}</span>
+            </div>
+            <div class="mini-bar-list top-gap">
+              <div v-for="value in dimension.values" :key="`${dimension.dimension}-${value.company_code}`" class="mini-bar-item">
+                <div class="mini-bar-head">
+                  <span>{{ value.company_name }}</span>
+                  <strong>{{ formatMetric(value.value) }}</strong>
+                </div>
+                <div class="mini-bar-track"><div class="mini-bar-fill" :style="{ width: dimensionWidth(dimension.values, value.value) }"></div></div>
+              </div>
+            </div>
+            <p class="dimension-conclusion">{{ dimension.conclusion }}</p>
+          </div>
         </div>
 
         <div class="panel-split two-cols">
-          <div class="sub-panel">
-            <h3>谁更值得优先跟踪</h3>
-            <div class="info-card compact compare-hero-card">
-              <p class="section-tag">当前结论</p>
-              <h3>{{ result.winner_company_name }}</h3>
-              <p class="muted">{{ result.summary }}</p>
-            </div>
-            <div class="stack-list top-gap">
-              <div v-for="item in result.highlights" :key="item" class="info-card compact">
-                <p class="muted">{{ item }}</p>
+          <div class="sub-panel compact-data-panel">
+            <h3>关键指标</h3>
+            <div class="compare-table compact-compare-table">
+              <div class="compare-table-row compare-table-head">
+                <span>企业</span>
+                <span>净利率</span>
+                <span>ROE</span>
+                <span>研发强度</span>
+                <span>风险</span>
+              </div>
+              <div v-for="item in result.comparison_rows" :key="`row-${item.company_code}`" class="compare-table-row">
+                <strong>{{ item.company_name }}</strong>
+                <span>{{ formatMetric(item.net_margin_pct, '%') }}</span>
+                <span>{{ formatMetric(item.roe_pct, '%') }}</span>
+                <span>{{ formatMetric(item.rd_ratio_pct, '%') }}</span>
+                <span>{{ item.risk_level }}</span>
               </div>
             </div>
           </div>
-          <div class="sub-panel">
-            <h3>对比快照</h3>
+
+          <div class="sub-panel compact-data-panel">
+            <h3>证据入口</h3>
             <div class="stack-list">
-              <div v-for="item in result.comparison_rows" :key="item.company_code" class="info-card compact">
+              <div v-for="company in result.evidence.companies || []" :key="company.company_code" class="info-card compact">
                 <div class="trace-title-row">
-                  <strong>{{ item.company_name }}</strong>
-                  <span class="badge-subtle">{{ item.total_score.toFixed(1) }} 分</span>
+                  <strong>{{ company.company_name }}</strong>
+                  <span class="badge-subtle">{{ company.company_code }}</span>
                 </div>
-                <p class="muted">
-                  风险 {{ item.risk_level }} · 营收 {{ formatNumber(item.revenue_million) }} 百万元 ·
-                  净利润 {{ formatNumber(item.net_profit_million) }} 百万元
-                </p>
-                <p class="muted">
-                  营收 CAGR {{ formatMetric(item.revenue_cagr_pct, '%') }} · 利润 CAGR {{ formatMetric(item.profit_cagr_pct, '%') }} ·
-                  研报 {{ item.research_report_count }} 篇
-                </p>
+                <p>趋势区间 {{ getTrendYears(company) }} · 个股研报 {{ getDigestCount(company.research_digest) }} · 行业研报 {{ getDigestCount(company.industry_digest) }}</p>
+                <a v-if="company.financial_source_url" :href="company.financial_source_url" target="_blank" rel="noreferrer">查看财报来源</a>
               </div>
             </div>
           </div>
         </div>
-
-        <div class="sub-panel">
-          <h3>差异主要出在哪里</h3>
-          <div class="dimension-grid">
-            <div v-for="dimension in result.dimensions" :key="dimension.dimension" class="info-card compact">
-              <div class="trace-title-row">
-                <strong>{{ dimension.dimension }}</strong>
-                <span class="badge-subtle">{{ dimension.winner_company_name }}</span>
-              </div>
-              <p class="muted">{{ dimension.conclusion }}</p>
-              <div class="dimension-rank-list">
-                <div v-for="(value, index) in dimension.values" :key="`${dimension.dimension}-${value.company_code}`" class="dimension-rank-item">
-                  <span>{{ index + 1 }}. {{ value.company_name }}</span>
-                  <strong>{{ formatMetric(value.value) }}</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="sub-panel">
-          <h3>关键指标对照</h3>
-          <div class="compare-table">
-            <div class="compare-table-row compare-table-head">
-              <span>企业</span>
-              <span>总分</span>
-              <span>净利率</span>
-              <span>ROE</span>
-              <span>研发强度</span>
-              <span>个股研报</span>
-            </div>
-            <div v-for="item in result.comparison_rows" :key="`row-${item.company_code}`" class="compare-table-row">
-              <strong>{{ item.company_name }}</strong>
-              <span>{{ item.total_score.toFixed(1) }}</span>
-              <span>{{ formatMetric(item.net_margin_pct, '%') }}</span>
-              <span>{{ formatMetric(item.roe_pct, '%') }}</span>
-              <span>{{ formatMetric(item.rd_ratio_pct, '%') }}</span>
-              <span>{{ item.research_report_count }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="sub-panel">
-          <h3>资料来源</h3>
-          <div class="panel-split two-cols">
-            <div
-              v-for="company in result.evidence.companies || []"
-              :key="`evidence-${company.company_code}`"
-              class="info-card compact"
-            >
-              <div class="trace-title-row">
-                <strong>{{ company.company_name }}</strong>
-                <span class="badge-subtle">{{ company.company_code }}</span>
-              </div>
-              <p class="muted">
-                趋势区间 {{ getTrendYears(company) }} · 个股研报 {{ getDigestCount(company.research_digest) }} · 行业研报 {{ getDigestCount(company.industry_digest) }}
-              </p>
-              <p class="muted">风险标记：{{ (company.risk_flags || []).join('；') || '暂无显著风险标记' }}</p>
-              <a v-if="company.financial_source_url" :href="company.financial_source_url" target="_blank" rel="noreferrer">查看官方财报来源</a>
-            </div>
-          </div>
-        </div>
-      </div>
+      </template>
     </PagePanel>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter, RouterLink } from 'vue-router';
 
 import { api } from '../api/client';
 import type { CompanyCompareResponse } from '../api/types';
-import MetricCard from '../components/MetricCard.vue';
 import PagePanel from '../components/PagePanel.vue';
 import { useDashboardStore } from '../stores/dashboard';
 
@@ -199,10 +184,6 @@ function formatMetric(value: number | null | undefined, suffix = '') {
   return value == null ? '暂无' : `${value.toFixed(1)}${suffix}`;
 }
 
-function formatNumber(value: number | null | undefined) {
-  return value == null ? '暂无' : value.toFixed(1);
-}
-
 function getDigestCount(digest: Record<string, unknown> | undefined) {
   const count = digest?.count;
   return typeof count === 'number' ? count : 0;
@@ -216,6 +197,16 @@ function getTrendYears(company: NonNullable<CompanyCompareResponse['evidence']['
     return `${start}-${end}`;
   }
   return '暂无';
+}
+
+function scoreWidth(score: number) {
+  const max = Math.max(...(result.value?.comparison_rows.map((item) => item.total_score) || [1]));
+  return `${Math.max(16, (score / max) * 100)}%`;
+}
+
+function dimensionWidth(values: Array<{ value: number }>, value: number) {
+  const max = Math.max(...values.map((item) => item.value), 1);
+  return `${Math.max(14, (value / max) * 100)}%`;
 }
 
 function syncQuery() {
