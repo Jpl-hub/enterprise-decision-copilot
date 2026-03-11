@@ -31,6 +31,7 @@ def test_competition_report_service_exports_files() -> None:
         assert Path(package["evidence_path"]).exists()
         assert "## 关键判断" in package["markdown_content"]
         assert package["quality_snapshot"]["official_report_coverage_ratio"] >= 0
+        assert "multimodal_extract_count" in package["quality_snapshot"]
     finally:
         if export_root.exists():
             shutil.rmtree(export_root, ignore_errors=True)
@@ -61,6 +62,7 @@ def test_competition_package_route_returns_export_payload() -> None:
         assert payload["sections"]
         assert payload["citations"]
         assert payload["markdown_path"]
+        assert any("多模态" in section["content"] for section in payload["sections"])
     finally:
         if export_root.exists():
             shutil.rmtree(export_root, ignore_errors=True)

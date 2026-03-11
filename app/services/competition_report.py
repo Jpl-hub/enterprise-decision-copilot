@@ -78,23 +78,7 @@ class CompetitionReportService:
         return citations
 
     def _company_quality_snapshot(self, company_code: str) -> dict:
-        summary = self.quality_service.get_quality_summary()
-        anomalies = [
-            item
-            for item in self.quality_service.get_financial_anomalies(limit=50)
-            if str(item.get("company_code") or "") == str(company_code)
-        ]
-        queue = [
-            item
-            for item in self.quality_service.get_review_queue()
-            if str(item.get("company_code") or "") == str(company_code)
-        ]
-        return {
-            "official_report_coverage_ratio": summary.get("official_report_coverage_ratio", 0.0),
-            "pending_review_count": summary.get("pending_review_count", 0),
-            "company_anomalies": anomalies[:5],
-            "company_review_queue": queue[:5],
-        }
+        return self.quality_service.get_company_quality_snapshot(company_code)
 
     def _refs(self, citations: list[dict], start: int = 0, limit: int = 2) -> str:
         selected = citations[start : start + limit]
@@ -103,6 +87,14 @@ class CompetitionReportService:
         return " " + "".join(f"[{item['citation_id']}]" for item in selected)
 
     def _build_sections(self, report: dict, brief: dict, risk: dict, quality_snapshot: dict, citations: list[dict]) -> list[dict]:
+        multimodal_extracts = quality_snapshot.get("multimodal_extracts", [])
+        multimodal_line = (
+            f"多模态抽取已覆盖 {len(multimodal_extracts)} 份企业报告，"
+            f"最近一次后端为 {multimodal_extracts[0].get('backend', 'unknown')}，"
+            f"识别字段 {int(multimodal_extracts[0].get('filled_field_count') or 0)} 项。"
+            if multimodal_extracts
+            else "该企业尚未完成多模态财报抽取，已纳入后续治理任务。"
+        )
         sections = [
             {
                 "title": "项目对象",
@@ -152,6 +144,7 @@ class CompetitionReportService:
                         if quality_snapshot.get("company_anomalies") or quality_snapshot.get("company_review_queue")
                         else "该企业当前未命中高优先级质量异常。"
                     )
+                    + multimodal_line
                 ),
             },
         ]

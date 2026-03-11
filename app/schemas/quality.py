@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QualityAnomalyItem(BaseModel):
@@ -44,6 +44,21 @@ class ManualReviewRecord(BaseModel):
     created_at: str
 
 
+class MultimodalExtractItem(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    company_code: str
+    report_year: int
+    company_name: str | None = None
+    backend: str
+    model_id: str | None = None
+    source_url: str | None = None
+    page_images: list[str] = Field(default_factory=list)
+    field_source_count: int
+    filled_field_count: int
+    notes: list[str] = Field(default_factory=list)
+
+
 class DataQualitySummaryResponse(BaseModel):
     official_report_coverage_ratio: float
     official_report_downloaded_slots: int
@@ -51,6 +66,12 @@ class DataQualitySummaryResponse(BaseModel):
     missing_report_slots: int
     pending_review_count: int
     anomaly_company_count: int
+    multimodal_extract_report_count: int = 0
+    multimodal_expected_report_count: int = 0
+    multimodal_extract_coverage_ratio: float = 0.0
+    multimodal_avg_filled_field_count: float = 0.0
+    multimodal_backends: list[str] = Field(default_factory=list)
+    multimodal_recent_extracts: list[MultimodalExtractItem] = Field(default_factory=list)
     exchange_status: list[ExchangeQualityStatus] = Field(default_factory=list)
     top_anomalies: list[QualityAnomalyItem] = Field(default_factory=list)
     recent_reviews: list[ManualReviewRecord] = Field(default_factory=list)

@@ -17,6 +17,8 @@ def build_quality_service(base_dir: Path) -> DataQualityService:
     inventory_quality = base_dir / "official_reports_quality.json"
     inventory = base_dir / "report_inventory.csv"
     review_queue = base_dir / "manual_review_queue.csv"
+    multimodal_dir = base_dir / "official_extract_multimodal"
+    multimodal_dir.mkdir(parents=True, exist_ok=True)
 
     pd.DataFrame(
         [
@@ -66,11 +68,37 @@ def build_quality_service(base_dir: Path) -> DataQualityService:
         encoding="utf-8",
     )
 
+    (multimodal_dir / "300760_2024.json").write_text(
+        json.dumps(
+            {
+                "company_code": "300760",
+                "company_name": "迈瑞医疗",
+                "report_year": 2024,
+                "backend": "modelscope",
+                "model_id": "Qwen/Qwen2.5-VL-7B-Instruct",
+                "source_url": "https://example.com/report.pdf",
+                "page_images": ["data/cache/official_page_images/300760_2024/page_01.png"],
+                "field_sources": {"revenue_million": "page 1"},
+                "notes": ["由多模态模型抽取"],
+                "revenue_million": 1000.0,
+                "net_profit_million": 200.0,
+                "roe_pct": 20.5,
+                "debt_ratio_pct": 31.2,
+                "current_ratio": 1.8,
+                "cash_to_short_debt": 2.4,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
     return DataQualityService(
         official_quality_path=official_quality,
         inventory_quality_path=inventory_quality,
         inventory_path=inventory,
         review_queue_path=review_queue,
+        multimodal_extract_dir=multimodal_dir,
     )
 
 
@@ -91,6 +119,9 @@ def test_quality_service_builds_summary() -> None:
     assert summary["official_report_coverage_ratio"] == 0.8889
     assert summary["missing_report_slots"] == 1
     assert summary["anomaly_company_count"] == 1
+    assert summary["multimodal_extract_report_count"] == 1
+    assert summary["multimodal_extract_coverage_ratio"] == 1.0
+    assert summary["multimodal_backends"] == ["modelscope"]
     assert summary["top_anomalies"][0]["company_code"] == "300760"
     assert summary["top_anomalies"][0]["financial_source_url"] == "https://example.com/report.pdf"
 
@@ -113,6 +144,19 @@ def test_quality_service_persists_manual_review() -> None:
     assert record["status"] == "pending"
     assert len(queue) == 1
     assert queue[0]["finding_type"] == "净利率异常"
+
+
+def test_quality_service_returns_company_multimodal_snapshot() -> None:
+    base_dir = create_test_dir()
+    try:
+        service = build_quality_service(base_dir)
+        snapshot = service.get_company_quality_snapshot("300760")
+    finally:
+        shutil.rmtree(base_dir, ignore_errors=True)
+
+    assert snapshot["multimodal_extract_count"] == 1
+    assert snapshot["multimodal_extracts"][0]["backend"] == "modelscope"
+    assert snapshot["multimodal_extracts"][0]["filled_field_count"] >= 6
 
 
 def test_quality_service_can_sync_auto_reviews() -> None:
@@ -153,6 +197,7 @@ def test_quality_routes_return_summary_and_accept_review() -> None:
         shutil.rmtree(base_dir, ignore_errors=True)
 
     assert summary["official_report_expected_slots"] == 18
+    assert summary["multimodal_extract_report_count"] == 1
     assert response["review"]["company_code"] == "300760"
     assert response["summary"]["pending_review_count"] == 1
     assert auto_payload["created_count"] >= 1

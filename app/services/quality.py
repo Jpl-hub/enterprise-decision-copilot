@@ -40,6 +40,7 @@ class DataQualityService:
         inventory_quality_path: Path | None = None,
         inventory_path: Path | None = None,
         review_queue_path: Path | None = None,
+        multimodal_extract_dir: Path | None = None,
     ) -> None:
         quality_dir = settings.data_dir / "quality"
         raw_official_dir = settings.raw_dir / "official"
@@ -48,6 +49,7 @@ class DataQualityService:
         self.inventory_quality_path = inventory_quality_path or (quality_dir / "official_reports_quality.json")
         self.inventory_path = inventory_path or (raw_official_dir / "report_inventory.csv")
         self.review_queue_path = review_queue_path or (review_dir / "manual_review_queue.csv")
+        self.multimodal_extract_dir = multimodal_extract_dir or (settings.cache_dir / "official_extract_multimodal")
         self.review_queue_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _read_csv(self, path: Path, dtype: dict[str, str] | None = None) -> pd.DataFrame:
@@ -82,6 +84,99 @@ class DataQualityService:
                 writer.writeheader()
             for record in records:
                 writer.writerow(record.as_dict())
+
+    def _safe_int(self, value: object, default: int = 0) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _filled_multimodal_fields(self, payload: dict) -> int:
+        ignored = {
+            "company_code",
+            "company_name",
+            "report_year",
+            "source_url",
+            "published_at",
+            "page_images",
+            "backend",
+            "model_id",
+            "field_sources",
+            "notes",
+        }
+        filled = 0
+        for key, value in payload.items():
+            if key in ignored:
+                continue
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            if isinstance(value, list) and not value:
+                continue
+            if isinstance(value, dict) and not value:
+                continue
+            if pd.isna(value):
+                continue
+            filled += 1
+        return filled
+
+    def _load_multimodal_extracts(self) -> list[dict]:
+        if not self.multimodal_extract_dir.exists():
+            return []
+        records: list[dict] = []
+        for path in sorted(self.multimodal_extract_dir.glob("*.json")):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            company_code = str(payload.get("company_code") or "").strip()
+            report_year = self._safe_int(payload.get("report_year"), 0)
+            if not company_code or report_year <= 0:
+                continue
+            records.append(
+                {
+                    "company_code": company_code,
+                    "report_year": report_year,
+                    "company_name": str(payload.get("company_name") or "").strip() or None,
+                    "backend": str(payload.get("backend") or "").strip() or "unknown",
+                    "model_id": str(payload.get("model_id") or "").strip() or None,
+                    "source_url": str(payload.get("source_url") or "").strip() or None,
+                    "page_images": list(payload.get("page_images") or []),
+                    "field_source_count": len(payload.get("field_sources") or {}),
+                    "filled_field_count": self._filled_multimodal_fields(payload),
+                    "notes": list(payload.get("notes") or []),
+                }
+            )
+        return records
+
+    def get_multimodal_extract_summary(self) -> dict:
+        extracts = self._load_multimodal_extracts()
+        inventory = self._read_csv(self.inventory_path, dtype={"company_code": str, "disclosure_company_code": str})
+        downloaded = (
+            inventory[(inventory["status"] == "downloaded") & (inventory["file_exists"] == True)]
+            if not inventory.empty
+            else pd.DataFrame()
+        )
+        expected_reports = int(len(downloaded))
+        coverage_ratio = round(len(extracts) / expected_reports, 4) if expected_reports else 0.0
+        backends = sorted({str(item.get("backend") or "unknown") for item in extracts})
+        avg_filled = round(
+            sum(int(item.get("filled_field_count") or 0) for item in extracts) / len(extracts),
+            2,
+        ) if extracts else 0.0
+        return {
+            "report_count": len(extracts),
+            "expected_report_count": expected_reports,
+            "coverage_ratio": coverage_ratio,
+            "avg_filled_field_count": avg_filled,
+            "backends": backends,
+            "recent_extracts": sorted(
+                extracts,
+                key=lambda item: (item["report_year"], item["company_code"]),
+                reverse=True,
+            )[:8],
+        }
 
     def get_review_queue(self) -> list[dict]:
         queue = self._read_csv(self.review_queue_path, dtype={"company_code": str})
@@ -140,11 +235,18 @@ class DataQualityService:
             for item in self.get_review_queue()
             if str(item.get("company_code") or "") == code
         ]
+        multimodal_extracts = [
+            item
+            for item in self._load_multimodal_extracts()
+            if str(item.get("company_code") or "") == code
+        ]
         return {
             "official_report_coverage_ratio": summary.get("official_report_coverage_ratio", 0.0),
             "pending_review_count": summary.get("pending_review_count", 0),
             "company_anomalies": anomalies[:5],
             "company_review_queue": queue[:5],
+            "multimodal_extract_count": len(multimodal_extracts),
+            "multimodal_extracts": multimodal_extracts[:5],
         }
 
     def build_auto_review_candidates(self, limit: int = 20) -> list[dict]:
@@ -193,6 +295,44 @@ class DataQualityService:
                     "_priority": 3,
                 }
             )
+
+        multimodal_extracts = self._load_multimodal_extracts()
+        multimodal_keys = {(item["company_code"], item["report_year"]): item for item in multimodal_extracts}
+        inventory = self._read_csv(self.inventory_path, dtype={"company_code": str, "disclosure_company_code": str})
+        if not inventory.empty:
+            downloaded = inventory[(inventory["status"] == "downloaded") & (inventory["file_exists"] == True)].copy()
+            for row in downloaded.to_dict("records"):
+                key = (str(row.get("company_code") or ""), self._safe_int(row.get("year"), 0))
+                if not key[0] or key[1] <= 0:
+                    continue
+                extract = multimodal_keys.get(key)
+                if extract is None:
+                    candidates.append(
+                        {
+                            "company_code": key[0],
+                            "report_year": key[1],
+                            "finding_level": "medium",
+                            "finding_type": "多模态抽取缺失复核",
+                            "note": f"{row.get('company_name') or key[0]}{key[1]} 年已下载官方财报，但尚未生成多模态抽取结果。",
+                            "_priority": 2,
+                        }
+                    )
+                    continue
+                if int(extract.get("filled_field_count") or 0) < 6:
+                    candidates.append(
+                        {
+                            "company_code": key[0],
+                            "report_year": key[1],
+                            "finding_level": "medium",
+                            "finding_type": "多模态抽取低覆盖复核",
+                            "note": (
+                                f"{row.get('company_name') or key[0]}{key[1]} 年多模态抽取字段数偏低，"
+                                f"当前仅识别 {int(extract.get('filled_field_count') or 0)} 个字段，"
+                                f"后端 {extract.get('backend') or 'unknown'}。"
+                            ),
+                            "_priority": 1,
+                        }
+                    )
 
         candidates = sorted(candidates, key=lambda item: item["_priority"], reverse=True)
         deduped: list[dict] = []
@@ -248,6 +388,7 @@ class DataQualityService:
 
     def get_quality_summary(self) -> dict:
         inventory_quality = self._read_json(self.inventory_quality_path)
+        multimodal_summary = self.get_multimodal_extract_summary()
         queue = self.get_review_queue()
         anomalies = self.get_financial_anomalies(limit=8)
         pending_reviews = [item for item in queue if str(item.get("status") or "pending") == "pending"]
@@ -262,6 +403,12 @@ class DataQualityService:
             "exchange_status": inventory_quality.get("exchanges", []),
             "top_anomalies": anomalies,
             "recent_reviews": queue[:8],
+            "multimodal_extract_report_count": int(multimodal_summary.get("report_count", 0)),
+            "multimodal_expected_report_count": int(multimodal_summary.get("expected_report_count", 0)),
+            "multimodal_extract_coverage_ratio": float(multimodal_summary.get("coverage_ratio", 0.0)),
+            "multimodal_avg_filled_field_count": float(multimodal_summary.get("avg_filled_field_count", 0.0)),
+            "multimodal_backends": list(multimodal_summary.get("backends", [])),
+            "multimodal_recent_extracts": list(multimodal_summary.get("recent_extracts", [])),
         }
 
     def submit_manual_review(
