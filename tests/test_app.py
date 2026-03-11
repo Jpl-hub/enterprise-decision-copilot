@@ -137,7 +137,7 @@ def test_compare_api_returns_structured_payload() -> None:
 def test_agent_can_answer_quality_governance_questions() -> None:
     container = build_service_container()
     payload = container.agent_service.answer('系统数据质量覆盖率和复核情况怎么样')
-    assert '质量' in payload['title']
+    assert '数据' in payload['title']
     assert payload['evidence']
     assert payload['trace']
 

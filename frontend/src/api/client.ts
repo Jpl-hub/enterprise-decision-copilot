@@ -41,8 +41,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed: ${response.status}`);
+    let message = `请求失败（${response.status}）`;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      try {
+        const payload = (await response.json()) as { detail?: string | { message?: string } };
+        if (typeof payload.detail === 'string' && payload.detail.trim()) {
+          message = payload.detail;
+        } else if (payload.detail && typeof payload.detail === 'object' && typeof payload.detail.message === 'string') {
+          message = payload.detail.message;
+        }
+      } catch {
+        message = `请求失败（${response.status}）`;
+      }
+    } else {
+      const text = (await response.text()).trim();
+      if (text) {
+        message = text;
+      }
+    }
+    if (response.status === 401) {
+      message = '登录状态已失效，请重新登录。';
+    }
+    throw new Error(message);
   }
 
   return (await response.json()) as T;

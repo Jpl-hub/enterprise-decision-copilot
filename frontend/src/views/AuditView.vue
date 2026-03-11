@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack audit-page">
-    <PagePanel title="操作审计" eyebrow="Audit" description="记录关键操作，方便回看谁导出了材料、谁提交了复核、谁发起了分析。">
+    <PagePanel title="操作审计" eyebrow="Audit" description="记录关键操作，方便管理员回看谁导出了材料、谁处理了异常、谁发起了分析。">
       <template #actions>
         <div class="toolbar-cluster">
           <select v-model="limit" class="select-input toolbar-select">
@@ -48,8 +48,8 @@ function eventLabel(eventType: string) {
     'auth.register': '用户注册',
     'auth.logout': '退出登录',
     'agent.query': '发起分析',
-    'quality.review.submit': '提交复核',
-    'quality.review.auto_sync': '自动生成复核任务',
+    'quality.review.submit': '登记异常处理',
+    'quality.review.auto_sync': '自动整理待处理问题',
     'competition.package.export': '导出分析材料',
   };
   return labels[eventType] || eventType;

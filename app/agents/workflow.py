@@ -30,7 +30,7 @@ class AgentWorkflow:
         self.intent_labels = {
             AgentIntent.FALLBACK: '问题引导',
             AgentIntent.OVERVIEW: '全局概览',
-            AgentIntent.DATA_QUALITY: '数据治理',
+            AgentIntent.DATA_QUALITY: '数据底座',
             AgentIntent.COMPANY_DIAGNOSIS: '企业诊断',
             AgentIntent.COMPANY_REPORT: '综合分析',
             AgentIntent.COMPANY_DECISION_BRIEF: '决策建议',
@@ -79,7 +79,7 @@ class AgentWorkflow:
         mapping = {
             AgentIntent.FALLBACK: ('等待用户锁定任务', ['对象范围', '问题方向']),
             AgentIntent.OVERVIEW: ('已形成全局扫描', ['样本概览', '外部环境', '优先对象']),
-            AgentIntent.DATA_QUALITY: ('已形成治理结论', ['覆盖状态', '异常热区', '复核队列']),
+            AgentIntent.DATA_QUALITY: ('已形成底座判断', ['覆盖状态', '异常热区', '可信度']),
             AgentIntent.COMPANY_DIAGNOSIS: ('已形成企业诊断', ['经营判断', '风险信号', '建议动作']),
             AgentIntent.COMPANY_REPORT: ('已形成综合报告', ['经营概况', '趋势变化', '证据引用']),
             AgentIntent.COMPANY_DECISION_BRIEF: ('已形成决策建议', ['结论摘要', '行动建议', '证据引用']),
@@ -95,7 +95,7 @@ class AgentWorkflow:
             context.add_plan('抽取横向证据', '抽取多家企业的财报、研报与风险信号进行横向比对。')
         elif context.intent == AgentIntent.DATA_QUALITY:
             context.add_plan('检查数据覆盖', '检查官方财报覆盖、多模态抽取和异常分布。')
-            context.add_plan('整理复核队列', '汇总自动复核与人工复核队列，识别待处理问题。')
+            context.add_plan('整理待处理问题', '汇总自动检测出的异常和缺口，识别优先处理的问题。')
         elif context.intent == AgentIntent.COMPANY_RISK_FORECAST:
             context.add_plan('提取风险特征', '提取财务、经营和行业风险特征。')
             context.add_plan('生成风险判断', '综合规则引擎与风险模型生成风险判断。')
@@ -186,3 +186,4 @@ class AgentWorkflow:
         payload['stage_label'] = stage_label
         payload['deliverables'] = deliverables
         return payload
+

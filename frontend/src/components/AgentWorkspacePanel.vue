@@ -6,7 +6,6 @@
         <h3>{{ title }}</h3>
       </div>
       <div class="button-row left-align">
-        <RouterLink to="/threads" class="button-ghost compact-action">记录</RouterLink>
         <button class="button-ghost compact-action" @click="resetThread">新线程</button>
       </div>
     </div>
@@ -35,23 +34,40 @@
       </button>
     </div>
 
-    <div class="agent-mode-strip" v-if="agentStore.latest && !agentStore.loading">
-      <span class="agent-mode-pill">{{ agentStore.latest.task_label }}</span>
-      <span class="agent-mode-pill accent">{{ agentStore.latest.stage_label }}</span>
-      <span v-for="item in agentStore.latest.deliverables.slice(0, compact ? 2 : 3)" :key="item" class="agent-mode-pill subtle">{{ item }}</span>
+    <div v-if="agentStore.error" class="error-banner">
+      {{ agentStore.error }}
     </div>
 
-    <div class="agent-output-grid" v-if="outputCards.length && !agentStore.loading">
-      <div v-for="item in outputCards" :key="item.label" class="agent-output-card">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-      </div>
-    </div>
-
-    <div class="agent-workspace-body" v-if="agentStore.latest || agentStore.messages.length || agentStore.loading">
+    <div class="agent-workspace-body" v-if="agentStore.latest || agentStore.messages.length || agentStore.loading || agentStore.error">
       <div class="agent-response-column">
-        <div v-if="agentStore.loading" class="empty-state">正在分析...</div>
-        <template v-else-if="agentStore.latest">
+        <div class="agent-mini-panel transcript-panel">
+          <div class="trace-title-row">
+            <strong>分析对话</strong>
+            <span class="badge-subtle">{{ transcriptBadge }}</span>
+          </div>
+          <div v-if="agentStore.loading" class="answer-line-card pending-answer-card">
+            <p>正在分析，稍等片刻...</p>
+          </div>
+          <AgentThreadPanel :messages="messagePreview" />
+        </div>
+      </div>
+
+      <div class="agent-side-column">
+        <div class="agent-mini-panel" v-if="agentStore.latest">
+          <div class="trace-title-row">
+            <strong>本轮结论</strong>
+            <span class="badge-subtle">{{ agentStore.latest.task_label }}</span>
+          </div>
+          <div class="agent-mode-strip">
+            <span class="agent-mode-pill accent">{{ agentStore.latest.stage_label }}</span>
+            <span v-for="item in agentStore.latest.deliverables.slice(0, compact ? 2 : 3)" :key="item" class="agent-mode-pill subtle">{{ item }}</span>
+          </div>
+          <div class="agent-output-grid" v-if="outputCards.length">
+            <div v-for="item in outputCards" :key="item.label" class="agent-output-card">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
           <div class="answer-hero-card">
             <strong>{{ agentStore.latest.title }}</strong>
             <p>{{ agentStore.latest.summary }}</p>
@@ -59,23 +75,14 @@
           <div v-for="item in agentStore.latest.highlights.slice(0, compact ? 3 : 5)" :key="item" class="answer-line-card">
             <p>{{ item }}</p>
           </div>
-        </template>
-      </div>
+        </div>
 
-      <div class="agent-side-column">
-        <div class="agent-mini-panel">
+        <div class="agent-mini-panel" v-if="agentStore.latest?.plan?.length">
           <div class="trace-title-row">
             <strong>执行步骤</strong>
             <span class="badge-subtle" v-if="agentStore.focusCompanyName">{{ agentStore.focusCompanyName }}</span>
           </div>
-          <TracePanel :trace="agentStore.latest?.plan" />
-        </div>
-        <div class="agent-mini-panel" v-if="agentStore.messages.length">
-          <div class="trace-title-row">
-            <strong>最近对话</strong>
-            <span class="badge-subtle">{{ compact ? '最近 4 条' : '当前线程' }}</span>
-          </div>
-          <AgentThreadPanel :messages="messagePreview" />
+          <TracePanel :trace="agentStore.latest.plan" />
         </div>
       </div>
     </div>
@@ -84,7 +91,6 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
 
 import AgentThreadPanel from './AgentThreadPanel.vue';
 import TracePanel from './TracePanel.vue';
@@ -111,7 +117,7 @@ const taskModes = [
   { value: 'company_risk_forecast', label: '风险预警' },
   { value: 'company_decision_brief', label: '决策建议' },
   { value: 'industry_trend', label: '行业趋势' },
-  { value: 'data_quality', label: '数据治理' },
+  { value: 'data_quality', label: '数据底座' },
 ];
 
 const agentStore = useAgentThreadStore();
@@ -143,7 +149,7 @@ const basePrompts = computed(() => {
     ],
     data_quality: [
       `${companyName}当前的数据覆盖和异常情况怎么样？`,
-      `这家公司有没有需要优先复核的问题？`,
+      `这家公司有哪些待处理的数据问题？`,
       `当前数据底座会不会影响${companyName}的判断可信度？`,
     ],
   };
@@ -159,6 +165,12 @@ const visiblePrompts = computed(() => {
 
 const messagePreview = computed(() => {
   return props.compact ? agentStore.messages.slice(-4) : agentStore.messages;
+});
+
+const transcriptBadge = computed(() => {
+  if (agentStore.focusCompanyName) return agentStore.focusCompanyName;
+  if (agentStore.threadTitle) return agentStore.threadTitle;
+  return '当前线程';
 });
 
 const outputCards = computed(() => {
@@ -201,12 +213,14 @@ function applyPrompt(text: string) {
 }
 
 async function submit() {
-  if (!draft.value.trim()) return;
-  await agentStore.ask(draft.value.trim(), {
+  const question = draft.value.trim();
+  if (!question) return;
+  await agentStore.ask(question, {
     companyCode: props.companyCode,
     companyName: props.companyName,
     taskMode: activeTaskMode.value,
   });
+  draft.value = '';
 }
 
 watch(() => props.seedQuestion, (value) => {

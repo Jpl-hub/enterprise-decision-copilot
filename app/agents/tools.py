@@ -94,8 +94,8 @@ class DataQualityTool:
             anomalies = snapshot.get("company_anomalies", [])
             queue = snapshot.get("company_review_queue", [])
             highlights = [
-                f"该企业命中异常 {len(anomalies)} 条，复核队列 {len(queue)} 条。",
-                f"全局官方财报覆盖率 {float(snapshot.get('official_report_coverage_ratio') or 0) * 100:.1f}% ，待复核 {int(snapshot.get('pending_review_count') or 0)} 项。",
+                f"该企业命中异常 {len(anomalies)} 条，待处理问题 {len(queue)} 条。",
+                f"全局官方财报覆盖率 {float(snapshot.get('official_report_coverage_ratio') or 0) * 100:.1f}% ，待处理问题 {int(snapshot.get('pending_review_count') or 0)} 项。",
             ]
             if anomalies:
                 first = anomalies[0]
@@ -104,15 +104,15 @@ class DataQualityTool:
                     f"缺失字段 {len(first.get('critical_fields_missing', []))} 项。"
                 )
             if queue:
-                highlights.append(f"最近复核任务：{queue[0]['finding_type']}。")
+                highlights.append(f"最近待处理问题：{queue[0]['finding_type']}。")
             return ToolResult(
                 payload={
-                    "title": f"{company_name} 数据质量治理",
-                    "summary": f"已完成 {company_name} 财报字段质量扫描与复核队列聚合。",
+                    "title": f"{company_name} 数据底座状态",
+                    "summary": f"已完成 {company_name} 财报字段质量扫描，并整理出当前待处理异常。",
                     "highlights": highlights,
                     "suggested_questions": [
                         f"继续分析{company_name}的经营风险",
-                        "自动生成最新质量复核工单",
+                        "查看最新异常处理建议",
                         "查看全局数据覆盖和异常分布",
                     ],
                     "evidence": {
@@ -121,13 +121,13 @@ class DataQualityTool:
                         "recent_reviews": queue,
                     },
                 },
-                detail=f"已输出 {company_name} 企业级质量快照。",
+                detail=f"已输出 {company_name} 企业级数据状态摘要。",
             )
 
         highlights = [
             f"官方财报覆盖率 {float(summary.get('official_report_coverage_ratio') or 0) * 100:.1f}% ，"
             f"已下载 {summary.get('official_report_downloaded_slots', 0)} / {summary.get('official_report_expected_slots', 0)} 槽位。",
-            f"待复核任务 {summary.get('pending_review_count', 0)} 项，异常企业 {summary.get('anomaly_company_count', 0)} 家。",
+            f"待处理问题 {summary.get('pending_review_count', 0)} 项，异常企业 {summary.get('anomaly_company_count', 0)} 家。",
         ]
         top_anomalies = summary.get("top_anomalies", [])
         if top_anomalies:
@@ -137,11 +137,11 @@ class DataQualityTool:
             )
         return ToolResult(
             payload={
-                "title": "数据质量治理看板",
-                "summary": "已聚合财报覆盖、字段异常和人工复核队列，可直接用于治理闭环展示。",
+                "title": "数据底座状态看板",
+                "summary": "已聚合财报覆盖、字段异常和待处理问题，可直接判断当前数据底座是否稳定。",
                 "highlights": highlights,
                 "suggested_questions": [
-                    "自动生成质量复核工单",
+                    "查看待处理异常",
                     "分析迈瑞医疗数据质量",
                     "结合数据质量解释风险结论",
                 ],
@@ -151,7 +151,7 @@ class DataQualityTool:
                     "exchange_status": summary.get("exchange_status", []),
                 },
             },
-            detail="已输出全局数据质量治理摘要。",
+            detail="已输出全局数据底座摘要。",
         )
 
 

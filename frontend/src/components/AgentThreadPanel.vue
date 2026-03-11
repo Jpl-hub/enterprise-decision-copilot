@@ -5,7 +5,11 @@
         <strong>{{ item.role === 'user' ? '你' : 'Agent' }}</strong>
         <span>{{ formatTime(item.created_at) }}</span>
       </div>
-      <p>{{ item.content }}</p>
+      <div class="thread-message-body">
+        <p v-for="(line, lineIndex) in splitContent(item.content)" :key="`${item.created_at}-${lineIndex}`" :class="{ bullet: line.startsWith('- ') }">
+          {{ normalizeLine(line) }}
+        </p>
+      </div>
     </div>
   </div>
   <p v-else class="empty-state">当前线程还没有对话记录。</p>
@@ -27,5 +31,16 @@ function formatTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function splitContent(value: string) {
+  return value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeLine(value: string) {
+  return value.startsWith('- ') ? value.slice(2) : value;
 }
 </script>

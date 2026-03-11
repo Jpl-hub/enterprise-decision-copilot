@@ -52,8 +52,8 @@
               <strong>{{ multimodalCoverageText }}</strong>
             </div>
             <div class="signal-inline-item">
-              <span>待复核</span>
-              <strong>{{ pendingReviewText }}</strong>
+              <span>待处理问题</span>
+              <strong>{{ pendingIssueText }}</strong>
             </div>
           </div>
         </div>
@@ -222,7 +222,7 @@ const multimodalCoverageText = computed(() => {
   if (!qualitySummary.value) return '加载中';
   return `${Math.round((qualitySummary.value.multimodal_extract_coverage_ratio || 0) * 100)}%`;
 });
-const pendingReviewText = computed(() => {
+const pendingIssueText = computed(() => {
   if (!qualitySummary.value) return '加载中';
   return `${qualitySummary.value.pending_review_count} 条`;
 });
@@ -287,6 +287,7 @@ async function applyMission(mode: 'risk' | 'compare' | 'growth') {
   await agentStore.ask(prompts[mode], {
     companyCode: company.company_code,
     companyName: company.company_name,
+    taskMode: mode === 'risk' ? 'company_risk_forecast' : 'company_decision_brief',
   });
 }
 

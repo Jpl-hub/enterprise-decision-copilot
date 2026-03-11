@@ -144,6 +144,20 @@ class AgentService:
             conn.commit()
         return updated
 
+    def _build_assistant_message(self, payload: dict[str, Any]) -> str:
+        lines: list[str] = []
+        title = str(payload.get('title') or '').strip()
+        summary = str(payload.get('summary') or '').strip()
+        if title:
+            lines.append(title)
+        if summary and summary != title:
+            lines.append(summary)
+        for item in list(payload.get('highlights') or [])[:3]:
+            content = str(item).strip()
+            if content:
+                lines.append(f'- {content}')
+        return '\n'.join(lines) or '已完成本轮分析。'
+
     def _ensure_access(self, thread: dict | None, user_id: str | None, role: str | None) -> dict:
         if thread is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='分析线程不存在。')
@@ -229,8 +243,7 @@ class AgentService:
         self._append_message(thread['thread_id'], user_message)
         payload = self.workflow.execute(normalized_question, preferred_task_mode=task_mode)
         thread = self._update_focus(thread, payload)
-        assistant_summary = payload.get('summary') or payload.get('title') or '已完成本轮分析。'
-        assistant_message = ThreadMessage(role='assistant', content=str(assistant_summary))
+        assistant_message = ThreadMessage(role='assistant', content=self._build_assistant_message(payload))
         self._append_message(thread['thread_id'], assistant_message)
         if self.audit_service is not None:
             self.audit_service.log_event(

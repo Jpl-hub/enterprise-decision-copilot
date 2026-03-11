@@ -717,6 +717,52 @@ select {
   color: #1f3343;
 }
 
+.thread-message-body {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.thread-message-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.thread-message-body p.bullet {
+  padding-left: 14px;
+  position: relative;
+}
+
+.thread-message-body p.bullet::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(21, 62, 117, 0.7);
+}
+
+.error-banner {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(216, 97, 55, 0.18);
+  color: #fff;
+  font-weight: 700;
+}
+
+.pending-answer-card {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.transcript-panel {
+  min-height: 420px;
+  align-content: start;
+}
+
 .info-banner {
   padding: 14px 16px;
   border-radius: 18px;

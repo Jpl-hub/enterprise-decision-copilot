@@ -53,12 +53,12 @@ class AIStackService:
                 },
                 {
                     'engine_id': 'data-governance',
-                    'name': '数据治理与证据链引擎',
+                    'name': '数据底座与证据链引擎',
                     'category': 'Data Engineering',
                     'status': 'active',
-                    'role': '负责多源异构数据接入、覆盖监控、异常检测、复核闭环与证据追溯。',
+                    'role': '负责多源异构数据接入、覆盖监控、异常检测、问题处理与证据追溯。',
                     'primary_inputs': ['交易所财报', '研究报告', '宏观指标', '多模态抽取结果'],
-                    'primary_outputs': ['质量摘要', '异常热区', '复核队列', '可信度状态'],
+                    'primary_outputs': ['质量摘要', '异常热区', '待处理问题', '可信度状态'],
                     'metrics': {
                         'official_coverage_ratio': quality_summary.get('official_report_coverage_ratio'),
                         'pending_review_count': quality_summary.get('pending_review_count'),

@@ -26,7 +26,7 @@ const stepLabels: Record<string, string> = {
   comparison_scope: '确认对比范围',
   comparison_evidence: '抽取横向证据',
   quality_scope: '检查数据覆盖',
-  review_queue: '整理复核队列',
+  review_queue: '整理待处理问题',
   risk_features: '提取风险特征',
   risk_scoring: '生成风险判断',
   company_evidence: '汇总企业证据',
