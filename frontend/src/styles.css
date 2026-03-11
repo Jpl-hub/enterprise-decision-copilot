@@ -1749,3 +1749,175 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+.advanced-overview {
+  gap: 18px;
+}
+
+.mission-deck,
+.cockpit-grid,
+.ai-deck-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.mission-deck {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mission-card,
+.cockpit-panel,
+.ai-engine-card {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+
+.mission-card {
+  padding: 22px;
+  text-align: left;
+  display: grid;
+  gap: 10px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.mission-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 38px rgba(17, 40, 64, 0.12);
+  border-color: rgba(21, 62, 117, 0.18);
+}
+
+.mission-card span {
+  color: var(--brand);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.mission-card strong {
+  font-size: 1.16rem;
+}
+
+.mission-card p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.cockpit-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+}
+
+.cockpit-panel,
+.ai-engine-card {
+  padding: 22px;
+}
+
+.radar-list,
+.queue-list {
+  display: grid;
+  gap: 14px;
+}
+
+.radar-item,
+.queue-card {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(246, 248, 252, 0.92);
+  border: 1px solid rgba(23, 36, 47, 0.08);
+  display: grid;
+  gap: 10px;
+}
+
+.radar-head,
+.radar-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.radar-meta span,
+.queue-card p {
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.ai-deck-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ai-engine-card {
+  display: grid;
+  gap: 14px;
+}
+
+.primary-engine-card {
+  background: linear-gradient(145deg, rgba(21, 62, 117, 0.94), rgba(33, 96, 164, 0.92));
+  color: #fff;
+}
+
+.primary-engine-card .badge-subtle,
+.primary-engine-card p,
+.primary-engine-card .trace-title-row strong {
+  color: #fff;
+}
+
+.engine-ring {
+  width: 148px;
+  height: 148px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
+.engine-ring > div {
+  width: 104px;
+  height: 104px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 12px;
+}
+
+.primary-engine-card .engine-ring > div {
+  background: rgba(10, 28, 49, 0.9);
+}
+
+.engine-ring span {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.primary-engine-card .engine-ring span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.engine-ring strong {
+  font-size: 1.45rem;
+  color: var(--brand);
+}
+
+.primary-engine-card .engine-ring strong {
+  color: #fff;
+}
+
+.ai-engine-card p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.primary-engine-card p {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+@media (max-width: 1200px) {
+  .mission-deck,
+  .cockpit-grid,
+  .ai-deck-grid {
+    grid-template-columns: 1fr;
+  }
+}
