@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.dependencies import get_audit_service, get_current_user, get_quality_service
+from app.api.dependencies import get_audit_service, get_current_user, get_quality_service, require_roles
 from app.schemas.quality import (
     AutoReviewSyncResponse,
     DataQualitySummaryResponse,
@@ -26,7 +26,7 @@ async def get_quality_summary(
 @router.post("/reviews", response_model=ManualReviewSubmitResponse)
 async def submit_manual_review(
     payload: ManualReviewRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles('admin', 'analyst')),
     quality_service: DataQualityService = Depends(get_quality_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> dict:
@@ -53,7 +53,7 @@ async def submit_manual_review(
 @router.post("/reviews/auto", response_model=AutoReviewSyncResponse)
 async def sync_auto_reviews(
     limit: int = Query(12, ge=1, le=100),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles('admin')),
     quality_service: DataQualityService = Depends(get_quality_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> dict:

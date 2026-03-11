@@ -3,7 +3,7 @@
     <PagePanel title="多源数据与可信度中心" eyebrow="Trust Layer" description="先判断数据够不够全、来源够不够真、问题是否已进入复核，再决定结论能不能直接用。">
       <template #actions>
         <div class="toolbar-cluster">
-          <button class="button-ghost" @click="syncAutoReviews" :disabled="loading || autoSyncing">自动生成复核任务</button>
+          <button class="button-ghost" @click="syncAutoReviews" :disabled="loading || autoSyncing || !authStore.canAutoSyncReviews">自动生成复核任务</button>
           <button class="button-primary" @click="loadSummary" :disabled="loading">刷新状态</button>
         </div>
       </template>
@@ -125,17 +125,20 @@
           </div>
           <div class="sub-panel">
             <h3>手动补充复核</h3>
-            <div class="form-grid">
-              <input v-model="review.company_code" class="text-input" placeholder="公司代码" />
-              <input v-model.number="review.report_year" class="text-input" type="number" placeholder="报告年度" />
-              <input v-model="review.finding_level" class="text-input" placeholder="优先级" />
-              <input v-model="review.finding_type" class="text-input" placeholder="问题类型" />
-            </div>
-            <textarea v-model="review.note" class="text-area" rows="5" placeholder="补充说明"></textarea>
-            <div class="button-row left-align">
-              <button class="button-primary" @click="submitReview">提交复核</button>
-              <span class="muted" v-if="submitMessage">{{ submitMessage }}</span>
-            </div>
+            <p v-if="!authStore.canManageReviews" class="empty-state">当前账号可以查看治理结果，如需提交复核，请联系分析员或管理员。</p>
+            <template v-else>
+              <div class="form-grid">
+                <input v-model="review.company_code" class="text-input" placeholder="公司代码" />
+                <input v-model.number="review.report_year" class="text-input" type="number" placeholder="报告年度" />
+                <input v-model="review.finding_level" class="text-input" placeholder="优先级" />
+                <input v-model="review.finding_type" class="text-input" placeholder="问题类型" />
+              </div>
+              <textarea v-model="review.note" class="text-area" rows="5" placeholder="补充说明"></textarea>
+              <div class="button-row left-align">
+                <button class="button-primary" @click="submitReview">提交复核</button>
+                <span class="muted" v-if="submitMessage">{{ submitMessage }}</span>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -149,7 +152,9 @@ import { onMounted, ref } from 'vue';
 import { api } from '../api/client';
 import type { QualitySummaryResponse } from '../api/types';
 import PagePanel from '../components/PagePanel.vue';
+import { useAuthStore } from '../stores/auth';
 
+const authStore = useAuthStore();
 const loading = ref(false);
 const autoSyncing = ref(false);
 const summary = ref<QualitySummaryResponse | null>(null);
@@ -173,6 +178,7 @@ async function loadSummary() {
 }
 
 async function syncAutoReviews() {
+  if (!authStore.canAutoSyncReviews) return;
   autoSyncing.value = true;
   try {
     const payload = await api.syncAutoReviews(12);
@@ -184,6 +190,7 @@ async function syncAutoReviews() {
 }
 
 async function submitReview() {
+  if (!authStore.canManageReviews) return;
   const result = await api.submitReview(review.value);
   summary.value = result.summary;
   submitMessage.value = `${result.review.company_code} ${result.review.report_year} 已加入复核队列`;

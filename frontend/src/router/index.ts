@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
+import AuditView from '../views/AuditView.vue';
 import CompareView from '../views/CompareView.vue';
 import CompetitionView from '../views/CompetitionView.vue';
 import LoginView from '../views/LoginView.vue';
@@ -16,6 +17,7 @@ export const router = createRouter({
     { path: '/compare', name: 'compare', component: CompareView, meta: { requiresAuth: true } },
     { path: '/workbench/:companyCode?', name: 'workbench', component: WorkbenchView, props: true, meta: { requiresAuth: true } },
     { path: '/quality', name: 'quality', component: QualityCenterView, meta: { requiresAuth: true } },
+    { path: '/audit', name: 'audit', component: AuditView, meta: { requiresAuth: true } },
     { path: '/competition/:companyCode?', name: 'competition', component: CompetitionView, props: true, meta: { requiresAuth: true } },
   ],
   scrollBehavior() {

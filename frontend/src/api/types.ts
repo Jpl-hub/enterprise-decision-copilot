@@ -23,6 +23,21 @@ export interface RegisterResponse {
   user: AuthUser;
 }
 
+export interface AuditLogItem {
+  log_id: string;
+  user_id?: string | null;
+  event_type: string;
+  target_type?: string | null;
+  target_id?: string | null;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AuditLogListResponse {
+  total: number;
+  items: AuditLogItem[];
+}
+
 export interface TargetCompany {
   company_code: string;
   company_name: string;

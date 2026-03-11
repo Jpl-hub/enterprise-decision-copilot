@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -47,6 +49,19 @@ def get_current_user(
     if credentials is None or credentials.scheme.lower() != 'bearer':
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='请先登录。')
     return auth_service.get_user_by_token(credentials.credentials)
+
+
+
+def require_roles(*allowed_roles: str) -> Callable[[dict], dict]:
+    allowed = {role.strip().lower() for role in allowed_roles if role.strip()}
+
+    def dependency(current_user: dict = Depends(get_current_user)) -> dict:
+        role = str(current_user.get('role') or '').lower()
+        if role not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='当前账号没有此操作权限。')
+        return current_user
+
+    return dependency
 
 
 

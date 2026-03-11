@@ -1,5 +1,6 @@
 import type {
   AgentResponse,
+  AuditLogListResponse,
   AuthUser,
   CompanyCompareResponse,
   CompanyReportResponse,
@@ -64,6 +65,9 @@ export const api = {
     return request<{ success: boolean }>('/api/auth/logout', {
       method: 'POST',
     });
+  },
+  getAuditLogs(limit = 30) {
+    return request<AuditLogListResponse>(`/api/audit/logs?limit=${limit}`);
   },
   getDashboard() {
     return request<DashboardPayload>('/api/dashboard');

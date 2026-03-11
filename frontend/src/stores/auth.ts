@@ -22,6 +22,21 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated(state) {
       return Boolean(state.user && getStoredAuthToken());
     },
+    role(state) {
+      return state.user?.role || 'viewer';
+    },
+    canExport(state) {
+      return ['admin', 'analyst'].includes(state.user?.role || '');
+    },
+    canManageReviews(state) {
+      return ['admin', 'analyst'].includes(state.user?.role || '');
+    },
+    canAutoSyncReviews(state) {
+      return (state.user?.role || '') === 'admin';
+    },
+    canViewAudit(state) {
+      return (state.user?.role || '') === 'admin';
+    },
   },
   actions: {
     async restoreSession() {
