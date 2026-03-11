@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack workbench-page">
-    <PagePanel title="企业分析主台" eyebrow="Enterprise Analysis" description="围绕一家公司完成结论、证据、风险和追问，不让用户在多个页面之间来回拼接。">
+    <PagePanel title="企业分析" eyebrow="Enterprise Analysis" description="围绕一家公司连续分析，不需要你自己在多个页面之间拼信息。">
       <template #actions>
         <div class="toolbar-cluster">
           <select v-model="selectedCode" class="select-input toolbar-select">
@@ -12,7 +12,7 @@
 
       <div class="analysis-hero" v-if="report">
         <div class="analysis-hero-main">
-          <p class="section-tag">Current Target</p>
+          <p class="section-tag">当前对象</p>
           <h3>{{ report.company_name }}</h3>
           <p class="panel-description strong-copy">{{ report.summary }}</p>
         </div>
@@ -36,10 +36,10 @@
         <div class="analysis-main-stack">
           <div class="sub-panel">
             <div class="sub-panel-header">
-              <h3>决策结论</h3>
-              <span class="badge-subtle">Agent-ready</span>
+              <h3>现在该怎么判断</h3>
+              <span class="badge-subtle">当前结论</span>
             </div>
-            <div v-if="briefLoading" class="empty-state">正在生成决策简报...</div>
+            <div v-if="briefLoading" class="empty-state">正在生成决策结论...</div>
             <div v-else-if="brief" class="stack-list">
               <div class="info-card compact emphasis-card">
                 <strong>{{ brief.verdict }}</strong>
@@ -62,7 +62,7 @@
 
           <div class="sub-panel">
             <div class="sub-panel-header">
-              <h3>经营分析</h3>
+              <h3>经营分析展开</h3>
               <RouterLink :to="`/competition/${selectedCode}`">导出分析材料</RouterLink>
             </div>
             <div v-if="reportLoading" class="empty-state">正在生成综合报告...</div>
@@ -103,21 +103,26 @@
           </div>
 
           <div class="sub-panel">
-            <h3>语义证据</h3>
+            <h3>证据资料</h3>
             <EvidenceList :items="brief?.evidence.semantic_stock_reports || []" />
           </div>
         </div>
       </div>
     </PagePanel>
 
-    <PagePanel title="Agent 深问" eyebrow="Follow-up" description="你可以继续追问，系统保留工具轨迹和回答证据。">
+    <PagePanel title="继续问这家公司" eyebrow="Follow-up" description="保留当前对象上下文，适合把结论继续拆细。">
       <div class="hero-command">
-        <input v-model="question" class="text-input hero-input" placeholder="继续追问，例如：把风险拆成财务、经营、行业三层" @keydown.enter="runAgent" />
-        <button class="button-primary hero-button" @click="runAgent">继续追问</button>
+        <input v-model="question" class="text-input hero-input" placeholder="例如：把风险拆成财务、经营、行业三层" @keydown.enter="runAgent" />
+        <button class="button-primary hero-button" @click="runAgent">继续提问</button>
       </div>
-      <div class="panel-split two-cols">
+      <div class="quick-prompt-row left-align top-gap" v-if="agentResult?.suggested_questions?.length">
+        <button v-for="item in agentResult.suggested_questions.slice(0, 4)" :key="item" class="button-ghost chip-button" @click="applySuggestedQuestion(item)">
+          {{ item }}
+        </button>
+      </div>
+      <div class="panel-split two-cols top-gap">
         <div class="sub-panel">
-          <h3>Agent 输出</h3>
+          <h3>本轮回答</h3>
           <p v-if="agentLoading" class="empty-state">正在分析...</p>
           <div v-else-if="agentResult" class="stack-list">
             <div class="info-card compact emphasis-card">
@@ -130,7 +135,7 @@
           </div>
         </div>
         <div class="sub-panel">
-          <h3>工具轨迹</h3>
+          <h3>本次调用</h3>
           <TracePanel :trace="agentResult?.trace" />
         </div>
       </div>
@@ -208,6 +213,11 @@ function formatPercent(value: number | null | undefined) {
 
 function formatMetric(value: number | null | undefined) {
   return value == null ? '暂无' : value.toFixed(3);
+}
+
+function applySuggestedQuestion(text: string) {
+  question.value = text;
+  void runAgent();
 }
 
 async function runAgent() {

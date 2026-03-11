@@ -656,3 +656,80 @@ select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.analysis-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.analysis-hero-main,
+.analysis-hero-metrics,
+.source-card {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+}
+
+.analysis-hero-main {
+  padding: 20px;
+}
+
+.analysis-hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.company-question-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.42fr) minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.hero-select {
+  min-width: 0;
+}
+
+.top-gap {
+  margin-top: 12px;
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.source-card {
+  padding: 20px;
+}
+
+.source-card h3 {
+  margin: 10px 0 8px;
+  font-size: 34px;
+  color: var(--brand);
+}
+
+.suggestion-block {
+  background: rgba(237, 245, 255, 0.86);
+}
+
+.compare-top-layout {
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .analysis-hero,
+  .source-grid,
+  .company-question-row {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-hero-metrics {
+    grid-template-columns: 1fr;
+  }
+}

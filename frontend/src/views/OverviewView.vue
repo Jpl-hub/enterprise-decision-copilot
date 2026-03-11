@@ -2,19 +2,22 @@
   <div class="page-stack overview-page">
     <section class="hero-panel">
       <div class="hero-copy">
-        <p class="section-tag">Agent Command</p>
-        <h2>先给结论，再给证据，再给行动建议。</h2>
+        <p class="section-tag">Start Here</p>
+        <h2>先选企业，再把问题交给系统。</h2>
         <p class="hero-text">
-          面向医药行业企业运营分析场景，系统把官方财报、研究报告、宏观指标、多模态抽取和风险模型编排成一个可追溯的 Agent 决策流程。
+          你可以直接问经营质量、竞争格局、风险变化和后续动作。系统会把财报、研报、宏观指标和图表表格里的关键信息组织成一份可追溯结论。
         </p>
-        <div class="hero-command">
+        <div class="hero-command company-question-row">
+          <select v-model="selectedCode" class="select-input hero-select">
+            <option v-for="item in store.targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
+          </select>
           <input
             v-model="question"
             class="text-input hero-input"
-            placeholder="例如：结合行业研报和财报，判断迈瑞医疗未来两年的经营风险与机会"
+            placeholder="例如：这家公司未来两年的主要风险和机会是什么？"
             @keydown.enter="runAgent"
           />
-          <button class="button-primary hero-button" @click="runAgent" :disabled="agentLoading">发起分析</button>
+          <button class="button-primary hero-button" @click="runAgent" :disabled="agentLoading">开始分析</button>
         </div>
         <div class="quick-prompt-row">
           <button v-for="prompt in quickPrompts" :key="prompt" class="button-ghost chip-button" @click="applyPrompt(prompt)">
@@ -24,11 +27,11 @@
       </div>
       <div class="hero-side">
         <div class="hero-highlight-card">
-          <p class="section-tag">Product Logic</p>
+          <p class="section-tag">你可以直接问</p>
           <ul class="hero-list">
-            <li>用户先提问题，系统再自动调度报告、风险、检索和治理链路。</li>
-            <li>结论必须有证据，证据必须能回到原始来源和抽取记录。</li>
-            <li>不仅给判断，还要能继续追问、对比和复核。</li>
+            <li>这家公司现在更值得扩张、观望还是重点防风险？</li>
+            <li>和同行相比，它的盈利、成长和研发投入处在什么位置？</li>
+            <li>这份结论分别来自哪些财报字段、研报观点和宏观信号？</li>
           </ul>
         </div>
         <div class="hero-stat-strip" v-if="store.payload?.metrics">
@@ -50,27 +53,27 @@
 
     <section class="three-card-grid">
       <RouterLink to="/workbench" class="capability-card capability-card-agent">
-        <p class="section-tag">01</p>
-        <h3>企业分析主入口</h3>
-        <p>围绕单家企业展开综合报告、决策简报、风险预测和 Agent 深问，不再让用户自己拼页面。</p>
+        <p class="section-tag">单家公司</p>
+        <h3>我想看一家企业现在是什么状态</h3>
+        <p>进入企业分析页，直接拿到经营结论、风险画像、关键证据和可继续追问的线程。</p>
       </RouterLink>
       <RouterLink to="/compare" class="capability-card capability-card-compare">
-        <p class="section-tag">02</p>
-        <h3>竞争格局与对比</h3>
-        <p>直接比较多家企业的盈利、成长、研发、韧性和风险，不让用户在多页中来回跳转。</p>
+        <p class="section-tag">多家公司</p>
+        <h3>我想知道谁更值得重点跟踪</h3>
+        <p>对比盈利、成长、研发和风险，不用自己在多张表之间来回切换。</p>
       </RouterLink>
       <RouterLink to="/quality" class="capability-card capability-card-data">
-        <p class="section-tag">03</p>
-        <h3>数据治理与可信度</h3>
-        <p>展示官方财报覆盖、多模态抽取、异常复核和人工治理队列，把“结论可信”讲透。</p>
+        <p class="section-tag">可信度</p>
+        <h3>我想确认数据够不够全、结论靠不靠谱</h3>
+        <p>查看官方资料覆盖、抽取质量和待复核问题，判断结果是否可直接使用。</p>
       </RouterLink>
     </section>
 
-    <PagePanel title="Agent 回答" eyebrow="Response" description="首页直接展示 Agent 输出，让用户先感受到这是一个智能体产品。">
-      <div v-if="agentLoading" class="empty-state">正在编排工具链并生成答案...</div>
+    <PagePanel title="当前分析结果" eyebrow="Answer" description="先给判断，再给来源，再告诉你下一步还能怎么问。">
+      <div v-if="agentLoading" class="empty-state">正在整合资料并生成结论...</div>
       <div v-else-if="agentResult" class="panel-split two-cols agent-answer-grid">
         <div class="sub-panel emphasis-panel">
-          <p class="section-tag">Answer</p>
+          <p class="section-tag">结论</p>
           <h3>{{ agentResult.title }}</h3>
           <p class="panel-description strong-copy">{{ agentResult.summary }}</p>
           <div class="stack-list" v-if="agentResult.highlights.length">
@@ -78,73 +81,56 @@
               <p>{{ item }}</p>
             </div>
           </div>
+          <div class="stack-list" v-if="agentResult.suggested_questions?.length">
+            <div class="info-card compact suggestion-block">
+              <strong>下一步可以继续问</strong>
+              <div class="quick-prompt-row left-align top-gap">
+                <button
+                  v-for="item in agentResult.suggested_questions.slice(0, 3)"
+                  :key="item"
+                  class="button-ghost chip-button"
+                  @click="applyPrompt(item)"
+                >
+                  {{ item }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="sub-panel">
-          <p class="section-tag">Execution Trace</p>
+          <p class="section-tag">本次调用</p>
           <TracePanel :trace="agentResult.trace" />
         </div>
       </div>
-      <div v-else class="empty-state">输入一个经营问题，系统会自动调用企业分析、检索、风险和质量治理链路。</div>
+      <div v-else class="empty-state">输入一个问题，系统会自动组织企业分析、研报检索、风险评估和可信度检查。</div>
     </PagePanel>
 
-    <PagePanel title="系统能力地图" eyebrow="Architecture" description="把 Agent、Data、AI 三条主线摆清楚，而不是堆杂乱数字。">
-      <div class="architecture-grid">
-        <div class="pillar-card">
-          <p class="section-tag">Agent</p>
-          <h3>决策编排层</h3>
-          <ul class="pillar-list">
-            <li>意图识别 + 工具路由 + 执行轨迹</li>
-            <li>企业报告、风险预测、质量治理统一入口</li>
-            <li>输出结论时附证据引用与追溯链</li>
-          </ul>
+    <PagePanel title="这些结论来自哪里" eyebrow="Sources" description="系统先理解资料，再生成答案。技术细节藏在后面，证据链留给你核对。">
+      <div class="source-grid">
+        <div class="source-card">
+          <p class="section-tag">官方财报</p>
+          <h3>{{ qualitySummary ? `${qualitySummary.official_report_downloaded_slots} / ${qualitySummary.official_report_expected_slots}` : '加载中' }}</h3>
+          <p class="muted">来自交易所披露的正式年报，覆盖率越高，经营分析越完整。</p>
         </div>
-        <div class="pillar-card">
-          <p class="section-tag">AI</p>
-          <h3>多模态与预测层</h3>
-          <ul class="pillar-list">
-            <li>多模态财报抽取进入正式治理流程</li>
-            <li>研报语义召回与证据级引用</li>
-            <li>表格模型 + 时序模型形成风险双引擎</li>
-          </ul>
+        <div class="source-card">
+          <p class="section-tag">研究报告</p>
+          <h3>{{ store.payload?.metrics ? store.payload.metrics.research_report_count + store.payload.metrics.industry_report_count : '加载中' }}</h3>
+          <p class="muted">个股研报和行业研报一起提供市场观点、竞争格局和景气判断。</p>
         </div>
-        <div class="pillar-card">
-          <p class="section-tag">Data</p>
-          <h3>大数据工程层</h3>
-          <ul class="pillar-list">
-            <li>交易所财报、研报、宏观数据统一分层管理</li>
-            <li>DuckDB 分析仓 + 质量中心 + 自动复核队列</li>
-            <li>面向扩容赛道和后续分布式处理预留路径</li>
-          </ul>
+        <div class="source-card">
+          <p class="section-tag">宏观指标</p>
+          <h3>{{ store.payload?.macro?.length ?? 0 }}</h3>
+          <p class="muted">国家统计局公开指标用来判断行业周期、需求环境和外部压力。</p>
+        </div>
+        <div class="source-card">
+          <p class="section-tag">图表与表格</p>
+          <h3>{{ qualitySummary ? `${(qualitySummary.multimodal_extract_coverage_ratio * 100).toFixed(0)}%` : '加载中' }}</h3>
+          <p class="muted">复杂 PDF 里的表格和版面会被补成结构化证据，减少漏字段和读错表的问题。</p>
         </div>
       </div>
     </PagePanel>
 
-    <PagePanel title="核心运行指标" eyebrow="Signals" description="只保留用户真正需要判断系统状态的关键信号。">
-      <div class="signal-grid">
-        <div class="signal-card" v-if="store.payload?.metrics">
-          <span class="signal-label">运营分析覆盖</span>
-          <strong>{{ store.payload.metrics.sample_count }}</strong>
-          <p>已纳入企业样本，最新年度 {{ store.payload.metrics.latest_year }}</p>
-        </div>
-        <div class="signal-card" v-if="qualitySummary">
-          <span class="signal-label">多模态抽取</span>
-          <strong>{{ `${(qualitySummary.multimodal_extract_coverage_ratio * 100).toFixed(0)}%` }}</strong>
-          <p>已覆盖 {{ qualitySummary.multimodal_extract_report_count }} / {{ qualitySummary.multimodal_expected_report_count }} 份年报</p>
-        </div>
-        <div class="signal-card" v-if="riskModel">
-          <span class="signal-label">风险模型 AUC</span>
-          <strong>{{ formatMetric(riskModel.metrics.roc_auc, 3) }}</strong>
-          <p>{{ riskModel.model_type || 'tabular model' }}，训练样本 {{ riskModel.sample_count }}</p>
-        </div>
-        <div class="signal-card" v-if="warehouse">
-          <span class="signal-label">分析仓就绪</span>
-          <strong>{{ warehouse.table_count }}</strong>
-          <p>张表已入仓，支撑查询、治理和材料导出</p>
-        </div>
-      </div>
-    </PagePanel>
-
-    <PagePanel title="重点观察企业" eyebrow="Targets" description="把用户带到具体业务对象，而不是让他在首页迷路。">
+    <PagePanel title="现在可以从这几家公司开始" eyebrow="Targets" description="系统先把常用分析对象准备好，避免你一进来不知道该点哪里。">
       <div class="target-spotlight-grid" v-if="store.payload?.targets?.length">
         <div v-for="item in store.payload.targets.slice(0, 6)" :key="item.company_code" class="target-spotlight-card">
           <div class="trace-title-row">
@@ -153,8 +139,8 @@
           </div>
           <p class="muted">{{ item.segment }} · {{ item.industry }}</p>
           <div class="button-row left-align">
-            <RouterLink class="button-ghost" :to="`/workbench/${item.company_code}`">进入企业分析</RouterLink>
-            <RouterLink class="button-ghost" :to="`/competition/${item.company_code}`">导出分析材料</RouterLink>
+            <button class="button-ghost" @click="openTarget(item.company_code, `${item.company_name}当前最值得关注的经营问题是什么？`)">直接提问</button>
+            <RouterLink class="button-ghost" :to="`/workbench/${item.company_code}`">查看企业分析</RouterLink>
           </div>
         </div>
       </div>
@@ -164,35 +150,46 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 
 import { api } from '../api/client';
-import type { AgentResponse, QualitySummaryResponse, RiskModelSummaryResponse, WarehouseOverviewResponse } from '../api/types';
+import type { AgentResponse, QualitySummaryResponse } from '../api/types';
 import PagePanel from '../components/PagePanel.vue';
 import TracePanel from '../components/TracePanel.vue';
 import { useDashboardStore } from '../stores/dashboard';
 
+const router = useRouter();
 const store = useDashboardStore();
 const agentLoading = ref(false);
 const agentResult = ref<AgentResponse | null>(null);
-const warehouse = ref<WarehouseOverviewResponse | null>(null);
-const riskModel = ref<RiskModelSummaryResponse | null>(null);
 const qualitySummary = ref<QualitySummaryResponse | null>(null);
-const question = ref('结合行业研报与财报，判断迈瑞医疗未来两年的经营风险与机会');
+const selectedCode = ref('');
+const question = ref('迈瑞医疗当前最值得关注的经营问题是什么？');
 
 const quickPrompts = [
-  '分析迈瑞医疗当前经营韧性',
-  '比较迈瑞医疗和联影医疗谁更值得跟踪',
-  '系统数据质量覆盖和多模态抽取情况怎么样',
+  '这家公司未来两年的主要风险和机会是什么？',
+  '把这家公司的风险拆成财务、经营、行业三层',
+  '如果我要继续跟踪它，接下来最该盯哪些指标？',
 ];
 
+function currentCompanyName() {
+  return store.targets.find((item) => item.company_code === selectedCode.value)?.company_name || '这家公司';
+}
+
+function normalizeQuestion(prompt: string) {
+  return prompt.replace(/这家公司/g, currentCompanyName());
+}
+
 function applyPrompt(prompt: string) {
-  question.value = prompt;
+  question.value = normalizeQuestion(prompt);
   void runAgent();
 }
 
-function formatMetric(value: number | null | undefined, digits = 2) {
-  return value == null ? '暂无' : value.toFixed(digits);
+function openTarget(companyCode: string, prompt: string) {
+  selectedCode.value = companyCode;
+  question.value = prompt;
+  void runAgent();
+  void router.push('/');
 }
 
 async function runAgent() {
@@ -209,14 +206,11 @@ onMounted(async () => {
   if (!store.payload && !store.loading) {
     await store.load();
   }
-  const [warehouseResult, riskModelResult, qualityResult] = await Promise.all([
-    api.getWarehouseOverview(),
-    api.getRiskModelSummary(),
-    api.getQualitySummary(),
-  ]);
-  warehouse.value = warehouseResult;
-  riskModel.value = riskModelResult;
-  qualitySummary.value = qualityResult;
+  if (!selectedCode.value && store.targets.length) {
+    selectedCode.value = store.targets[0].company_code;
+    question.value = `${currentCompanyName()}当前最值得关注的经营问题是什么？`;
+  }
+  qualitySummary.value = await api.getQualitySummary();
   await runAgent();
 });
 </script>

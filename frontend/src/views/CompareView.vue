@@ -1,7 +1,7 @@
 <template>
-  <div class="page-stack">
-    <PagePanel title="企业对比驾驶舱" eyebrow="Compare" description="基于真实财报、研报和趋势证据，对多家企业做横向评估与维度拆解。">
-      <div class="panel-split two-cols">
+  <div class="page-stack compare-page">
+    <PagePanel title="企业对比" eyebrow="Compare" description="先回答谁更值得重点跟踪，再展开原因和证据。">
+      <div class="panel-split two-cols compare-top-layout">
         <div class="sub-panel">
           <div class="sub-panel-header">
             <h3>选择企业</h3>
@@ -25,21 +25,25 @@
               </div>
             </label>
           </div>
-          <div class="button-row">
+          <div class="button-row left-align">
             <button class="button-primary" @click="loadComparison" :disabled="selectedCodes.length < 2 || loading">开始对比</button>
             <button class="button-ghost" @click="resetSelection">重置为默认组合</button>
           </div>
         </div>
         <div class="sub-panel">
-          <h3>对比说明</h3>
+          <h3>你会直接得到</h3>
           <div class="stack-list">
             <div class="info-card compact">
-              <strong>评估维度</strong>
-              <p class="muted">综合表现、盈利能力、成长性、创新投入、经营韧性、风险水平。</p>
+              <strong>优先跟踪对象</strong>
+              <p class="muted">系统先告诉你当前谁更值得重点看，而不是先扔一堆维度分数。</p>
             </div>
             <div class="info-card compact">
-              <strong>证据来源</strong>
-              <p class="muted">交易所年报、个股研报、行业研报和多年度趋势摘要，不使用无出处结论。</p>
+              <strong>差异原因</strong>
+              <p class="muted">会拆成盈利、成长、研发和风险几个层面，让你知道赢在什么地方。</p>
+            </div>
+            <div class="info-card compact">
+              <strong>可核对来源</strong>
+              <p class="muted">对比结论可回到交易所财报和研报摘要，不用担心结论无出处。</p>
             </div>
             <div class="info-card compact">
               <strong>当前选择</strong>
@@ -55,27 +59,27 @@
       <div v-else-if="result" class="page-stack">
         <div class="metrics-grid">
           <MetricCard label="对比企业数" :value="result.comparison_rows.length" />
-          <MetricCard label="领先企业" :value="result.winner_company_name" :hint="`${result.report_year} 年`" />
-          <MetricCard label="胜出维度" :value="winnerDimensionCount" />
-          <MetricCard label="高亮结论" :value="result.highlights.length" />
+          <MetricCard label="优先跟踪" :value="result.winner_company_name" :hint="`${result.report_year} 年`" />
+          <MetricCard label="领先维度" :value="winnerDimensionCount" />
+          <MetricCard label="重点结论" :value="result.highlights.length" />
         </div>
 
         <div class="panel-split two-cols">
           <div class="sub-panel">
-            <h3>综合结论</h3>
+            <h3>谁更值得优先跟踪</h3>
             <div class="info-card compact compare-hero-card">
-              <p class="section-tag">Leader</p>
+              <p class="section-tag">当前结论</p>
               <h3>{{ result.winner_company_name }}</h3>
               <p class="muted">{{ result.summary }}</p>
             </div>
-            <div class="stack-list">
+            <div class="stack-list top-gap">
               <div v-for="item in result.highlights" :key="item" class="info-card compact">
                 <p class="muted">{{ item }}</p>
               </div>
             </div>
           </div>
           <div class="sub-panel">
-            <h3>企业横向快照</h3>
+            <h3>对比快照</h3>
             <div class="stack-list">
               <div v-for="item in result.comparison_rows" :key="item.company_code" class="info-card compact">
                 <div class="trace-title-row">
@@ -96,7 +100,7 @@
         </div>
 
         <div class="sub-panel">
-          <h3>维度拆解</h3>
+          <h3>差异主要出在哪里</h3>
           <div class="dimension-grid">
             <div v-for="dimension in result.dimensions" :key="dimension.dimension" class="info-card compact">
               <div class="trace-title-row">
@@ -115,7 +119,7 @@
         </div>
 
         <div class="sub-panel">
-          <h3>核心指标表</h3>
+          <h3>关键指标对照</h3>
           <div class="compare-table">
             <div class="compare-table-row compare-table-head">
               <span>企业</span>
@@ -137,7 +141,7 @@
         </div>
 
         <div class="sub-panel">
-          <h3>证据与溯源</h3>
+          <h3>资料来源</h3>
           <div class="panel-split two-cols">
             <div
               v-for="company in result.evidence.companies || []"
