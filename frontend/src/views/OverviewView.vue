@@ -148,114 +148,193 @@
       </aside>
     </section>
 
-    <section class="competition-visual-board">
-      <article class="support-panel dark-panel competition-visual-panel competition-ring-panel">
+    <section class="cockpit-intel-hub">
+      <article class="support-panel dark-panel cockpit-intel-shell">
         <div class="panel-header-row compact-panel-header">
           <div>
-            <h3>系统能力</h3>
+            <h3>情报视图</h3>
           </div>
-          <RouterLink to="/quality" class="text-link-button">查看系统底座</RouterLink>
-        </div>
-        <EChartPanel :option="capabilityRingOption" height="340px" @chart-click="handleCapabilityChartClick" />
-        <div class="competition-metric-strip">
-          <div v-for="item in aiPillarHighlights" :key="item.name" class="competition-metric-card">
-            <span>{{ item.name }}</span>
-            <strong>{{ item.score }}</strong>
-            <p>{{ item.summary }}</p>
-          </div>
-        </div>
-      </article>
-
-      <div class="competition-visual-grid">
-        <article class="support-panel dark-panel competition-visual-panel">
-          <div class="panel-header-row compact-panel-header">
-            <div>
-              <h3>企业分布</h3>
-            </div>
-          </div>
-          <EChartPanel :option="companyMatrixOption" height="320px" @chart-click="handleCompanyMatrixClick" />
-        </article>
-
-        <article class="support-panel dark-panel competition-visual-panel">
-          <div class="panel-header-row compact-panel-header">
-            <div>
-              <h3>数据时效</h3>
-            </div>
-          </div>
-          <EChartPanel :option="freshnessPulseOption" height="320px" @chart-click="handleFreshnessChartClick" />
-        </article>
-      </div>
-    </section>
-
-    <section class="overview-intel-grid cockpit-intel-grid">
-      <article class="support-panel dark-panel">
-        <div class="panel-header-row compact-panel-header">
-          <div>
-            <h3>行业热度</h3>
-          </div>
+          <RouterLink to="/quality" class="text-link-button">查看治理台</RouterLink>
         </div>
 
-        <div class="heat-list" v-if="industryHeatRows.length">
+        <div class="cockpit-intel-tab-row">
           <button
-            v-for="item in industryHeatRows"
-            :key="item.industry_name"
             type="button"
-            class="heat-card cockpit-action-card"
-            @click="primeAgentPrompt(buildIndustryPrompt(item.industry_name), 'industry_trend')"
+            class="cockpit-intel-tab"
+            :class="{ active: activeIntelView === 'enterprise' }"
+            @click="activeIntelView = 'enterprise'"
           >
-            <div class="trace-title-row">
-              <strong>{{ formatIndustry(item.industry_name) }}</strong>
-              <span>{{ item.report_count }} 篇</span>
-            </div>
-            <div class="bar-track"><div class="bar-fill" :style="{ width: heatWidth(item.report_count, industryHeatMax) }"></div></div>
-            <p>正向 {{ item.positive_count }} · 负向 {{ item.negative_count }} · 最新 {{ formatDate(item.latest_report_date) }}</p>
+            企业态势
+          </button>
+          <button
+            type="button"
+            class="cockpit-intel-tab"
+            :class="{ active: activeIntelView === 'market' }"
+            @click="activeIntelView = 'market'"
+          >
+            行业与宏观
+          </button>
+          <button
+            type="button"
+            class="cockpit-intel-tab"
+            :class="{ active: activeIntelView === 'system' }"
+            @click="activeIntelView = 'system'"
+          >
+            系统可信度
           </button>
         </div>
-      </article>
 
-      <article class="support-panel dark-panel">
-        <div class="panel-header-row compact-panel-header">
-          <div>
-            <h3>企业关注度</h3>
-          </div>
-        </div>
-
-        <div class="heat-list" v-if="companyResearchRows.length">
-          <RouterLink
-            v-for="item in companyResearchRows"
-            :key="item.company_code"
-            :to="`/workbench/${item.company_code}`"
-            class="heat-card cockpit-link-card"
-          >
-            <div class="trace-title-row">
-              <strong>{{ item.company_name }}</strong>
-              <span>{{ item.report_count }} 篇</span>
+        <div v-if="activeIntelView === 'enterprise'" class="cockpit-intel-layout">
+          <article class="competition-visual-panel">
+            <div class="panel-header-row compact-panel-header">
+              <div>
+                <h3>企业分布</h3>
+              </div>
             </div>
-            <div class="bar-track"><div class="bar-fill" :style="{ width: heatWidth(item.report_count, companyResearchMax) }"></div></div>
-            <p>正向 {{ item.positive_count }} · 负向 {{ item.negative_count }} · 最新 {{ formatDate(item.latest_report_date) }}</p>
-          </RouterLink>
-        </div>
-      </article>
+            <EChartPanel :option="companyMatrixOption" height="320px" @chart-click="handleCompanyMatrixClick" />
+          </article>
 
-      <article class="support-panel dark-panel">
-        <div class="panel-header-row compact-panel-header">
-          <div>
-            <h3>宏观信号</h3>
+          <div class="cockpit-intel-side-stack">
+            <article class="support-panel dark-panel">
+              <div class="panel-header-row compact-panel-header">
+                <div>
+                  <h3>企业关注度</h3>
+                </div>
+              </div>
+              <div class="heat-list" v-if="companyResearchRows.length">
+                <RouterLink
+                  v-for="item in companyResearchRows"
+                  :key="item.company_code"
+                  :to="`/workbench/${item.company_code}`"
+                  class="heat-card cockpit-link-card"
+                >
+                  <div class="trace-title-row">
+                    <strong>{{ item.company_name }}</strong>
+                    <span>{{ item.report_count }} 篇</span>
+                  </div>
+                  <div class="bar-track"><div class="bar-fill" :style="{ width: heatWidth(item.report_count, companyResearchMax) }"></div></div>
+                  <p>正向 {{ item.positive_count }} · 负向 {{ item.negative_count }} · 最新 {{ formatDate(item.latest_report_date) }}</p>
+                </RouterLink>
+              </div>
+            </article>
           </div>
         </div>
 
-        <div class="macro-pulse-list" v-if="macroRows.length">
-          <button
-            v-for="item in macroRows"
-            :key="String(item.indicator_name)"
-            type="button"
-            class="macro-pulse-card cockpit-action-card"
-            @click="primeAgentPrompt(buildMacroPrompt(item), 'company_decision_brief')"
-          >
-            <span>{{ String(item.indicator_name || '指标') }}</span>
-            <strong>{{ formatMacroValue(item.indicator_value, item.unit) }}</strong>
-            <p>{{ macroFreshnessText }}</p>
-          </button>
+        <div v-else-if="activeIntelView === 'market'" class="cockpit-intel-layout">
+          <article class="competition-visual-panel">
+            <div class="panel-header-row compact-panel-header">
+              <div>
+                <h3>数据时效</h3>
+              </div>
+            </div>
+            <EChartPanel :option="freshnessPulseOption" height="320px" @chart-click="handleFreshnessChartClick" />
+          </article>
+
+          <div class="cockpit-intel-side-stack">
+            <article class="support-panel dark-panel">
+              <div class="panel-header-row compact-panel-header">
+                <div>
+                  <h3>行业热度</h3>
+                </div>
+              </div>
+              <div class="heat-list" v-if="industryHeatRows.length">
+                <button
+                  v-for="item in industryHeatRows"
+                  :key="item.industry_name"
+                  type="button"
+                  class="heat-card cockpit-action-card"
+                  @click="primeAgentPrompt(buildIndustryPrompt(item.industry_name), 'industry_trend')"
+                >
+                  <div class="trace-title-row">
+                    <strong>{{ formatIndustry(item.industry_name) }}</strong>
+                    <span>{{ item.report_count }} 篇</span>
+                  </div>
+                  <div class="bar-track"><div class="bar-fill" :style="{ width: heatWidth(item.report_count, industryHeatMax) }"></div></div>
+                  <p>正向 {{ item.positive_count }} · 负向 {{ item.negative_count }} · 最新 {{ formatDate(item.latest_report_date) }}</p>
+                </button>
+              </div>
+            </article>
+
+            <article class="support-panel dark-panel">
+              <div class="panel-header-row compact-panel-header">
+                <div>
+                  <h3>宏观信号</h3>
+                </div>
+              </div>
+              <div class="macro-pulse-list" v-if="macroRows.length">
+                <button
+                  v-for="item in macroRows"
+                  :key="String(item.indicator_name)"
+                  type="button"
+                  class="macro-pulse-card cockpit-action-card"
+                  @click="primeAgentPrompt(buildMacroPrompt(item), 'company_decision_brief')"
+                >
+                  <span>{{ String(item.indicator_name || '指标') }}</span>
+                  <strong>{{ formatMacroValue(item.indicator_value, item.unit) }}</strong>
+                  <p>{{ macroFreshnessText }}</p>
+                </button>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div v-else class="cockpit-intel-layout">
+          <article class="competition-visual-panel competition-ring-panel">
+            <div class="panel-header-row compact-panel-header">
+              <div>
+                <h3>系统能力</h3>
+              </div>
+            </div>
+            <EChartPanel :option="capabilityRingOption" height="340px" @chart-click="handleCapabilityChartClick" />
+          </article>
+
+          <div class="cockpit-intel-side-stack">
+            <article class="support-panel dark-panel">
+              <div class="panel-header-row compact-panel-header">
+                <div>
+                  <h3>能力摘要</h3>
+                </div>
+              </div>
+              <div class="competition-metric-strip intel-metric-strip">
+                <div v-for="item in aiPillarHighlights" :key="item.name" class="competition-metric-card">
+                  <span>{{ item.name }}</span>
+                  <strong>{{ item.score }}</strong>
+                  <p>{{ item.summary }}</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="support-panel dark-panel">
+              <div class="panel-header-row compact-panel-header">
+                <div>
+                  <h3>可信状态</h3>
+                </div>
+              </div>
+              <div class="stack-list">
+                <div class="heat-card cockpit-link-card">
+                  <div class="trace-title-row">
+                    <strong>官方财报覆盖</strong>
+                    <span>{{ qualityCoverageText }}</span>
+                  </div>
+                  <p>核心样本披露覆盖与治理状态。</p>
+                </div>
+                <div class="heat-card cockpit-link-card">
+                  <div class="trace-title-row">
+                    <strong>图表补全</strong>
+                    <span>{{ multimodalCoverageText }}</span>
+                  </div>
+                  <p>多模态财报锚点是否已进入证据链。</p>
+                </div>
+                <div class="heat-card cockpit-link-card">
+                  <div class="trace-title-row">
+                    <strong>待复核事项</strong>
+                    <span>{{ pendingReviewText }}</span>
+                  </div>
+                  <p>当前自动治理队列和人工复核压力。</p>
+                </div>
+              </div>
+            </article>
+          </div>
         </div>
       </article>
     </section>
@@ -307,6 +386,7 @@ const agentStore = useAgentThreadStore();
 const router = useRouter();
 const selectedCode = ref('');
 const seedQuestionOverride = ref('');
+const activeIntelView = ref<'enterprise' | 'market' | 'system'>('enterprise');
 const aiStackSummary = ref<AIStackSummaryResponse | null>(null);
 const qualitySummary = ref<QualitySummaryResponse | null>(null);
 const riskModelSummary = ref<RiskModelSummaryResponse | null>(null);
@@ -397,6 +477,14 @@ const multimodalCoverageText = computed(() => {
   if (!qualitySummary.value) return '加载中';
   return `${Math.round((qualitySummary.value.multimodal_extract_coverage_ratio || 0) * 100)}%`;
 });
+const qualityCoverageText = computed(() => {
+  if (!qualitySummary.value) return '加载中';
+  return `${Math.round((qualitySummary.value.official_report_coverage_ratio || 0) * 100)}%`;
+});
+const pendingReviewText = computed(() => {
+  if (!qualitySummary.value) return '加载中';
+  return `${qualitySummary.value.pending_review_count} 项`;
+});
 const evidenceVolumeText = computed(() => {
   if (!dashboardMetrics.value) return '待刷新';
   return `${dashboardMetrics.value.research_report_count + dashboardMetrics.value.industry_report_count} 份`;
@@ -413,7 +501,7 @@ const latestOfficialText = computed(() => {
 const aiPillars = computed(() => aiStackSummary.value?.pillars || []);
 const aiPillarHighlights = computed(() => aiPillars.value.slice(0, 3).map((item) => ({
   name: item.name,
-  score: `${item.readiness_score}`,
+  score: `${Math.round((item.readiness_score || 0) * 100)}`,
   summary: item.summary,
 })));
 const capabilityRingOption = computed(() => {

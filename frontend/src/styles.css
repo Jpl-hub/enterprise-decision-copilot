@@ -4333,6 +4333,74 @@ select {
   line-height: 1.6;
 }
 
+.cockpit-intel-hub {
+  display: grid;
+}
+
+.cockpit-intel-shell {
+  display: grid;
+  gap: 16px;
+  border-color: rgba(113, 171, 255, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(76, 201, 240, 0.12), transparent 26%),
+    linear-gradient(180deg, rgba(10, 22, 40, 0.96), rgba(8, 18, 34, 0.98));
+}
+
+.cockpit-intel-tab-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cockpit-intel-tab {
+  min-width: 112px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(116, 182, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #b8d6f0;
+  font-weight: 700;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, color 160ms ease;
+}
+
+.cockpit-intel-tab:hover,
+.cockpit-intel-tab:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(139, 204, 255, 0.3);
+  color: #ffffff;
+}
+
+.cockpit-intel-tab.active {
+  background: linear-gradient(135deg, rgba(50, 125, 255, 0.28), rgba(76, 201, 240, 0.2));
+  color: #ffffff;
+  border-color: rgba(128, 198, 255, 0.4);
+  box-shadow: 0 14px 32px rgba(8, 20, 38, 0.24);
+}
+
+.cockpit-intel-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 16px;
+}
+
+.cockpit-intel-side-stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.intel-metric-strip {
+  grid-template-columns: 1fr;
+}
+
+.cockpit-intel-shell .support-panel.dark-panel,
+.cockpit-intel-shell .competition-visual-panel {
+  border-color: rgba(113, 171, 255, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(76, 201, 240, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(12, 27, 48, 0.94), rgba(8, 18, 34, 0.98));
+}
+
 .multimodal-evidence-card {
   background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
@@ -4483,7 +4551,8 @@ select {
   .analysis-support-strip,
   .overview-signal-deck,
   .overview-command-grid,
-  .overview-intel-grid {
+  .overview-intel-grid,
+  .cockpit-intel-layout {
     grid-template-columns: 1fr;
   }
 
@@ -4494,6 +4563,11 @@ select {
 
 @media (max-width: 760px) {
   .competition-metric-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .cockpit-intel-tab-row {
+    display: grid;
     grid-template-columns: 1fr;
   }
 }
