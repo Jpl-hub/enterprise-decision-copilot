@@ -6,7 +6,6 @@
           <select v-model="selectedCode" class="select-input toolbar-select">
             <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
           </select>
-          <RouterLink to="/" class="button-ghost">回到主分析区</RouterLink>
           <button class="button-primary" @click="loadAll">刷新</button>
         </div>
       </template>
@@ -63,17 +62,27 @@
         </div>
       </div>
 
-      <section class="sub-panel workbench-action-strip">
-        <RouterLink to="/" class="button-primary">回到首页</RouterLink>
-        <RouterLink :to="compareRoute" class="button-ghost">进入企业对比</RouterLink>
-        <RouterLink :to="`/competition/${selectedCode}`" class="button-ghost">导出报告</RouterLink>
+      <section v-if="report || brief || risk" class="sub-panel workbench-closure-strip">
+        <div class="workbench-closure-main">
+          <div class="trace-title-row">
+            <strong>分析闭环</strong>
+            <span class="badge-subtle">{{ closureEvidenceText }}</span>
+          </div>
+          <p>{{ closureSummaryText }}</p>
+        </div>
+        <div class="workbench-action-strip">
+          <RouterLink to="/" class="button-primary">继续追问</RouterLink>
+          <RouterLink :to="compareRoute" class="button-ghost">企业对比</RouterLink>
+          <RouterLink :to="`/competition/${selectedCode}`" class="button-ghost">导出报告</RouterLink>
+          <a v-if="financialSourceUrl" :href="financialSourceUrl" target="_blank" rel="noreferrer" class="button-ghost">财报原文</a>
+        </div>
       </section>
 
       <div class="analysis-grid two-main-one-side">
         <div class="analysis-main-stack">
           <div class="sub-panel">
             <div class="sub-panel-header">
-              <h3>结论摘要</h3>
+              <h3>管理判断</h3>
             </div>
             <div v-if="briefLoading" class="empty-state">正在生成判断...</div>
             <div v-else-if="brief" class="stack-list">
@@ -110,7 +119,7 @@
 
         <div class="analysis-side-stack">
           <div class="sub-panel">
-            <h3>风险画像</h3>
+            <h3>风险判断</h3>
             <div v-if="riskLoading" class="empty-state">正在生成风险预测...</div>
             <div v-else-if="risk" class="stack-list">
               <div class="info-card compact">
@@ -134,7 +143,7 @@
 
           <div class="sub-panel">
             <div class="sub-panel-header">
-              <h3>证据资料</h3>
+              <h3>证据回链</h3>
               <span class="badge-subtle">{{ stockEvidenceCount + industryEvidenceCount }} 条</span>
             </div>
             <div class="stack-list evidence-dual-stack">
@@ -256,6 +265,17 @@ const multimodalDigest = computed<MultimodalEvidenceDigest | null>(() => {
 });
 const multimodalMetrics = computed<MultimodalMetricItem[]>(() => multimodalDigest.value?.metrics?.slice(0, 6) || []);
 const multimodalAssetLinks = computed<MultimodalAssetLink[]>(() => multimodalDigest.value?.page_asset_links?.slice(0, 4) || []);
+const closureEvidenceText = computed(() => {
+  const evidenceCount = stockEvidenceCount.value + industryEvidenceCount.value;
+  const multimodalCount = multimodalDigest.value?.filled_field_count || 0;
+  return `研报 ${evidenceCount} 条 · 图表 ${multimodalCount} 项`;
+});
+const closureSummaryText = computed(() => {
+  const riskLevel = risk.value?.risk_level || '待判断';
+  const reportYear = report.value?.report_year ? `${report.value.report_year} 年报` : '财报待补齐';
+  const disclosure = multimodalDigest.value?.published_at || '披露时间待补齐';
+  return `${reportYear} 已进入当前企业闭环，当前判断为 ${riskLevel} 风险，最新财报锚点 ${disclosure}。`;
+});
 const compareRoute = computed(() => {
   const rankingRows = (store.payload?.ranking || []) as Array<Record<string, unknown>>;
   const peerCode = rankingRows
