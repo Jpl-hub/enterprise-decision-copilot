@@ -336,6 +336,8 @@ def test_agent_response_exposes_thread_summary() -> None:
     payload = container.agent_service.answer('分析迈瑞医疗')
 
     assert payload['thread_summary']
+    assert payload['thread_memory']
+    assert payload['thread_memory']['conclusion']
     assert '企业诊断' in payload['thread_summary']
 
 
@@ -362,7 +364,9 @@ def test_agent_thread_history_and_detail_expose_thread_summary() -> None:
         shutil.rmtree(db_dir, ignore_errors=True)
 
     assert history['items'][0]['thread_summary']
+    assert history['items'][0]['thread_memory']
     assert detail['thread_summary']
+    assert detail['thread_memory']
     assert detail['thread_summary'] == history['items'][0]['thread_summary']
 
 
@@ -404,3 +408,4 @@ def test_agent_augments_short_follow_up_with_thread_summary() -> None:
     assert len(workflow.captured_questions) == 2
     assert '上一轮结论：' in workflow.captured_questions[1]
     assert '继续问题：迈瑞医疗展开讲讲' in workflow.captured_questions[1]
+

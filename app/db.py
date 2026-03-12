@@ -104,6 +104,7 @@ SCHEMA = {
             last_task_mode TEXT,
             last_task_label TEXT,
             thread_summary TEXT,
+            thread_memory TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -147,6 +148,7 @@ THREAD_COLUMN_MIGRATIONS = {
     'last_task_mode': 'TEXT',
     'last_task_label': 'TEXT',
     'thread_summary': 'TEXT',
+    'thread_memory': 'TEXT',
 }
 
 
@@ -191,4 +193,5 @@ def table_has_rows(table_name: str) -> bool:
             return row is not None
         except sqlite3.Error:
             return False
+
 

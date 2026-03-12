@@ -26,7 +26,7 @@
                 <strong>{{ item.title }}</strong>
                 <span>{{ formatDate(item.updated_at) }}</span>
               </div>
-              <p>{{ item.last_message || '本线程还没有摘要。' }}</p>
+              <p>{{ item.thread_summary || item.last_message || '本线程还没有摘要。' }}</p>
               <div class="thread-record-meta">
                 <span>{{ item.focus?.company_name || '未固定企业' }}</span>
                 <span>{{ item.message_count }} 条消息</span>
@@ -48,6 +48,14 @@
                 <p>当前对象：{{ agentStore.focusCompanyName || '未固定企业' }}</p>
               </div>
               <button class="button-ghost" @click="goOverview">继续追问</button>
+            </div>
+            <div v-if="agentStore.threadMemory || agentStore.threadSummary" class="info-card compact section-card">
+              <strong>线程记忆</strong>
+              <p v-if="agentStore.threadSummary">{{ agentStore.threadSummary }}</p>
+              <p v-if="agentStore.threadMemory?.conclusion">结论：{{ agentStore.threadMemory.conclusion }}</p>
+              <p v-if="agentStore.threadMemory?.key_signals?.length">关键点：{{ agentStore.threadMemory.key_signals.join('；') }}</p>
+              <p v-if="agentStore.threadMemory?.evidence_focus?.length">证据焦点：{{ agentStore.threadMemory.evidence_focus.join('、') }}</p>
+              <p v-if="agentStore.threadMemory?.next_steps?.length">下一步：{{ agentStore.threadMemory.next_steps.join('；') }}</p>
             </div>
             <AgentThreadPanel :messages="agentStore.messages" />
           </div>

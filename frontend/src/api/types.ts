@@ -343,10 +343,20 @@ export interface AgentFocus {
   company_name?: string | null;
 }
 
+export interface AgentThreadMemory {
+  task_label?: string | null;
+  conclusion?: string | null;
+  key_signals: string[];
+  next_steps: string[];
+  evidence_focus: string[];
+}
+
 export interface AgentThreadSummary {
   thread_id: string;
   title: string;
   focus?: AgentFocus | null;
+  thread_summary?: string | null;
+  thread_memory?: AgentThreadMemory | null;
   last_message?: string | null;
   message_count: number;
   created_at: string;
@@ -362,6 +372,8 @@ export interface AgentThreadDetailResponse {
   thread_id: string;
   title: string;
   focus?: AgentFocus | null;
+  thread_summary?: string | null;
+  thread_memory?: AgentThreadMemory | null;
   created_at: string;
   updated_at: string;
   messages: AgentThreadMessage[];
@@ -384,6 +396,8 @@ export interface AgentResponse {
   thread_id: string;
   thread_title: string;
   focus?: AgentFocus | null;
+  thread_summary?: string | null;
+  thread_memory?: AgentThreadMemory | null;
   thread_messages: AgentThreadMessage[];
 }
 
@@ -530,6 +544,9 @@ export interface WarehouseOverviewResponse extends WarehouseSummaryResponse {
     latest_report_date?: string | null;
   }>;
 }
+
+
+
 
 
 

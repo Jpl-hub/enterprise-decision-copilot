@@ -1,11 +1,13 @@
 import { defineStore } from 'pinia';
 
 import { api } from '../api/client';
-import type { AgentResponse, AgentThreadDetailResponse, AgentThreadMessage, AgentThreadSummary } from '../api/types';
+import type { AgentResponse, AgentThreadDetailResponse, AgentThreadMemory, AgentThreadMessage, AgentThreadSummary } from '../api/types';
 
 interface AgentThreadState {
   threadId: string | null;
   threadTitle: string;
+  threadSummary: string | null;
+  threadMemory: AgentThreadMemory | null;
   focusCompanyCode: string | null;
   focusCompanyName: string | null;
   taskMode: string | null;
@@ -21,6 +23,8 @@ export const useAgentThreadStore = defineStore('agent-thread', {
   state: (): AgentThreadState => ({
     threadId: null,
     threadTitle: '企业分析线程',
+    threadSummary: null,
+    threadMemory: null,
     focusCompanyCode: null,
     focusCompanyName: null,
     taskMode: null,
@@ -45,6 +49,8 @@ export const useAgentThreadStore = defineStore('agent-thread', {
     resetThread(companyCode?: string | null, companyName?: string | null) {
       this.threadId = null;
       this.threadTitle = companyName || '企业分析线程';
+      this.threadSummary = null;
+      this.threadMemory = null;
       this.focusCompanyCode = companyCode != null ? String(companyCode) : null;
       this.focusCompanyName = companyName || null;
       this.taskMode = null;
@@ -71,6 +77,8 @@ export const useAgentThreadStore = defineStore('agent-thread', {
         });
         this.threadId = response.thread_id;
         this.threadTitle = response.thread_title;
+        this.threadSummary = response.thread_summary || null;
+        this.threadMemory = response.thread_memory || null;
         this.focusCompanyCode = response.focus?.company_code || this.focusCompanyCode;
         this.focusCompanyName = response.focus?.company_name || this.focusCompanyName;
         this.taskMode = response.task_mode || this.taskMode;
@@ -101,6 +109,8 @@ export const useAgentThreadStore = defineStore('agent-thread', {
         const response: AgentThreadDetailResponse = await api.getAgentThread(threadId);
         this.threadId = response.thread_id;
         this.threadTitle = response.title;
+        this.threadSummary = response.thread_summary || null;
+        this.threadMemory = response.thread_memory || null;
         this.focusCompanyCode = response.focus?.company_code || null;
         this.focusCompanyName = response.focus?.company_name || null;
         this.messages = response.messages;
@@ -115,4 +125,3 @@ export const useAgentThreadStore = defineStore('agent-thread', {
     },
   },
 });
-
