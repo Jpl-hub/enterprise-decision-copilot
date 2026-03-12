@@ -131,7 +131,7 @@ function renderCompetitionPackage(container, data) {
     const citations = (data.citations || []).slice(0, 6).map((item) => `<li>[${item.citation_id}] ${item.title}</li>`).join("");
     container.classList.remove("empty");
     container.innerHTML = `
-        <h3>${data.company_name} 答辩稿骨架</h3>
+        <h3>${data.company_name} 分析材料</h3>
         <p>${data.summary}</p>
         <div class="brief-block"><h4>章节提纲</h4><ul>${sections}</ul></div>
         <div class="brief-block"><h4>引用证据</h4><ul>${citations}</ul></div>
@@ -311,11 +311,11 @@ async function fetchRiskForecast(companyCode) {
 async function fetchCompetitionPackage(companyCode, companyName) {
     const container = document.getElementById("competition-result");
     container.classList.remove("empty");
-    container.innerHTML = "<p>正在导出答辩稿骨架...</p>";
+    container.innerHTML = "<p>正在导出分析材料...</p>";
 
-    const response = await fetch(`/api/company/${companyCode}/competition-package?question=${encodeURIComponent(`结合真实数据为${companyName}生成企业运营分析答辩稿`)}`);
+    const response = await fetch(`/api/company/${companyCode}/competition-package?question=${encodeURIComponent(`结合真实数据为${companyName}生成企业运营分析材料`)}`);
     if (!response.ok) {
-        container.innerHTML = "<p>答辩稿导出失败，请稍后重试。</p>";
+        container.innerHTML = "<p>分析材料导出失败，请稍后重试。</p>";
         return;
     }
     const data = await response.json();

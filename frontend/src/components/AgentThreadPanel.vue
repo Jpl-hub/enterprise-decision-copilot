@@ -16,8 +16,7 @@
     </div>
   </div>
   <div v-else class="thread-empty-state">
-    <p>当前线程还没有对话记录。</p>
-    <span>先问一个经营、风险或行业问题，主分析区会保留上下文继续追问。</span>
+    <p>开始提问。</p>
   </div>
 </template>
 

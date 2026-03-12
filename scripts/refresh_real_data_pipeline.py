@@ -16,6 +16,7 @@ BASE_SCRIPTS = [
     'scripts/fetch_szse_official_reports.py',
     'scripts/fetch_bse_official_reports.py',
     'scripts/build_official_report_inventory.py',
+    'scripts/fetch_official_periodic_snapshots.py',
     'scripts/fetch_eastmoney_stock_reports.py',
     'scripts/fetch_eastmoney_industry_reports.py',
     'scripts/fetch_industry_company_universe.py',

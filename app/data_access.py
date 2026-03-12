@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -68,6 +69,29 @@ INDUSTRY_UNIVERSE_COLUMNS = [
     'latest_source_url',
 ]
 MACRO_COLUMNS = ['period', 'indicator_name', 'indicator_value', 'unit', 'source_url']
+OFFICIAL_PERIODIC_SNAPSHOT_COLUMNS = [
+    'exchange',
+    'company_code',
+    'company_name',
+    'period_type',
+    'period_label',
+    'report_year',
+    'title',
+    'published_at',
+    'source_url',
+]
+MULTIMODAL_EXTRACT_COLUMNS = [
+    'company_code',
+    'company_name',
+    'report_year',
+    'source_url',
+    'published_at',
+    'backend',
+    'model_id',
+    'page_images',
+    'field_sources',
+    'notes',
+]
 
 
 def _read_csv(path: Path, columns: list[str]) -> pd.DataFrame:
@@ -129,3 +153,48 @@ def load_macro_indicators() -> pd.DataFrame:
     if not frame.empty:
         return frame[MACRO_COLUMNS]
     return _read_csv(settings.processed_dir / 'macro_indicators.csv', MACRO_COLUMNS)
+
+
+def load_official_periodic_snapshots() -> pd.DataFrame:
+    frame = _read_csv(settings.processed_dir / 'official_periodic_snapshots.csv', OFFICIAL_PERIODIC_SNAPSHOT_COLUMNS)
+    if not frame.empty and 'report_year' in frame.columns:
+        frame['report_year'] = pd.to_numeric(frame['report_year'], errors='coerce').astype('Int64')
+    return frame
+
+
+def load_multimodal_extracts() -> pd.DataFrame:
+    extract_dir = settings.cache_dir / 'official_extract_multimodal'
+    if not extract_dir.exists():
+        return pd.DataFrame(columns=MULTIMODAL_EXTRACT_COLUMNS)
+
+    records: list[dict] = []
+    for path in sorted(extract_dir.glob('*.json')):
+        try:
+            payload = json.loads(path.read_text(encoding='utf-8'))
+        except Exception:
+            continue
+        company_code = str(payload.get('company_code') or '').strip()
+        report_year = pd.to_numeric(payload.get('report_year'), errors='coerce')
+        if not company_code or pd.isna(report_year):
+            continue
+        normalized = dict(payload)
+        normalized['company_code'] = company_code
+        normalized['report_year'] = int(report_year)
+        normalized['company_name'] = str(payload.get('company_name') or '').strip() or None
+        normalized['source_url'] = str(payload.get('source_url') or '').strip() or None
+        normalized['published_at'] = str(payload.get('published_at') or '').strip() or None
+        normalized['backend'] = str(payload.get('backend') or '').strip() or None
+        normalized['model_id'] = str(payload.get('model_id') or '').strip() or None
+        normalized['page_images'] = list(payload.get('page_images') or [])
+        normalized['field_sources'] = payload.get('field_sources') or {}
+        notes = payload.get('notes') or []
+        normalized['notes'] = notes if isinstance(notes, list) else [str(notes)]
+        records.append(normalized)
+
+    if not records:
+        return pd.DataFrame(columns=MULTIMODAL_EXTRACT_COLUMNS)
+
+    frame = pd.DataFrame(records)
+    frame['company_code'] = frame['company_code'].astype(str)
+    frame['report_year'] = pd.to_numeric(frame['report_year'], errors='coerce').astype('Int64')
+    return frame

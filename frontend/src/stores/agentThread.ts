@@ -113,6 +113,7 @@ export const useAgentThreadStore = defineStore('agent-thread', {
         this.threadMemory = response.thread_memory || null;
         this.focusCompanyCode = response.focus?.company_code || null;
         this.focusCompanyName = response.focus?.company_name || null;
+        this.taskMode = response.last_task_mode || null;
         this.messages = response.messages;
         this.latest = null;
         return response;

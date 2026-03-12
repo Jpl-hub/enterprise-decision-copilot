@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.api.routes.quality import get_quality_summary, submit_manual_review, sync_auto_reviews
+from app.api.routes.quality import get_preparation_summary, get_quality_summary, submit_manual_review, sync_auto_reviews
 from app.schemas.quality import ManualReviewRequest
 from app.services.audit import AuditService
 from app.services.quality import DataQualityService
@@ -168,6 +168,23 @@ def test_quality_service_returns_company_multimodal_snapshot() -> None:
     assert snapshot["multimodal_extracts"][0]["filled_field_count"] >= 6
 
 
+def test_quality_service_returns_real_preparation_summary() -> None:
+    service = DataQualityService()
+    summary = service.get_preparation_summary()
+
+    assert summary["promotion_candidate_count"] >= summary["selected_candidate_count"] >= 0
+    assert summary["promoted_report_download_count"] >= 0
+    assert summary["promoted_report_missing_count"] >= 0
+    assert len(summary["promotion_years"]) >= 1
+    assert summary["promoted_report_download_count"] + summary["promoted_report_missing_count"] >= summary["selected_candidate_count"]
+    assert isinstance(summary["promoted_exchange_status"], list)
+    assert isinstance(summary["promoted_companies"], list)
+    if summary["promoted_companies"]:
+        first = summary["promoted_companies"][0]
+        assert "downloaded_years" in first
+        assert "missing_years" in first
+
+
 
 def test_quality_service_can_sync_auto_reviews() -> None:
     base_dir = create_test_dir()
@@ -222,3 +239,11 @@ def test_quality_routes_return_summary_and_accept_review() -> None:
     assert auto_payload["summary"]["pending_review_count"] >= 2
     assert any(item['event_type'] == 'quality.review.submit' for item in logs)
     assert any(item['event_type'] == 'quality.review.auto_sync' for item in logs)
+
+
+def test_quality_route_returns_preparation_payload() -> None:
+    payload = asyncio.run(get_preparation_summary(quality_service=DataQualityService()))
+
+    assert payload["promotion_candidate_count"] >= payload["selected_candidate_count"] >= 0
+    assert "promoted_exchange_status" in payload
+    assert "promoted_companies" in payload

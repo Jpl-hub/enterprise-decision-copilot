@@ -1,10 +1,28 @@
+export interface AIHeadlineMetric {
+  label: string;
+  value: string;
+  tone: string;
+}
+
 export interface AIEngineMetricSet {
   sample_count?: number | null;
   roc_auc?: number | null;
   model_type?: string | null;
+  trained_at?: string | null;
+  feature_count?: number | null;
   coverage_ratio?: number | null;
   avg_filled_field_count?: number | null;
   backends: string[];
+  extract_report_count?: number | null;
+  expected_report_count?: number | null;
+  text_extract_report_count?: number | null;
+  sft_sample_count?: number | null;
+  artifact_count?: number | null;
+  warehouse_table_count?: number | null;
+  warehouse_row_count?: number | null;
+  mart_view_count?: number | null;
+  parquet_artifact_count?: number | null;
+  tool_count?: number | null;
   official_coverage_ratio?: number | null;
   pending_review_count?: number | null;
   anomaly_company_count?: number | null;
@@ -15,14 +33,35 @@ export interface AIEngineSummary {
   name: string;
   category: string;
   status: string;
+  stage_label?: string | null;
+  readiness_score?: number | null;
   role: string;
   primary_inputs: string[];
   primary_outputs: string[];
+  headline_metrics: AIHeadlineMetric[];
+  gaps: string[];
   metrics?: AIEngineMetricSet | null;
 }
 
+export interface AIPillarSummary {
+  pillar_id: string;
+  name: string;
+  status: string;
+  stage_label: string;
+  readiness_score: number;
+  summary: string;
+  headline_metrics: AIHeadlineMetric[];
+  strengths: string[];
+  gaps: string[];
+  next_steps: string[];
+}
+
 export interface AIStackSummaryResponse {
+  generated_at: string;
+  pillars: AIPillarSummary[];
   engines: AIEngineSummary[];
+  priority_actions: string[];
+  system_story: string[];
   design_choices: string[];
 }
 
@@ -84,10 +123,32 @@ export interface DashboardMetrics {
   industry_report_count: number;
 }
 
+export interface DashboardFreshnessPeriod {
+  period_type: string;
+  period_label: string;
+  covered_companies: number;
+  coverage_ratio: number;
+  latest_report_year?: number | null;
+  latest_published_at?: string | null;
+  latest_company_name?: string | null;
+}
+
+export interface DashboardFreshness {
+  annual_report_year?: number | null;
+  annual_report_published_at?: string | null;
+  latest_research_report?: string | null;
+  latest_industry_report?: string | null;
+  latest_macro_period?: string | null;
+  latest_official_disclosure?: string | null;
+  latest_periodic_label?: string | null;
+  period_summaries: DashboardFreshnessPeriod[];
+}
+
 export interface DashboardPayload {
   status: PipelineStatus;
   targets: TargetCompany[];
   metrics: DashboardMetrics | null;
+  freshness?: DashboardFreshness | null;
   ranking: Array<Record<string, unknown>>;
   watchlist: Array<Record<string, unknown>>;
   macro: Array<Record<string, unknown>>;
@@ -102,6 +163,37 @@ export interface EvidenceItem {
   matched_excerpt?: string | null;
   rerank_score?: number;
   ranking_signals?: string[];
+}
+
+export interface MultimodalMetricItem {
+  field: string;
+  label: string;
+  value?: number | null;
+  display_value: string;
+}
+
+export interface MultimodalAssetLink {
+  label: string;
+  group?: string | null;
+  url?: string | null;
+}
+
+export interface MultimodalEvidenceDigest {
+  available: boolean;
+  company_code?: string | null;
+  company_name?: string | null;
+  report_year?: number | null;
+  published_at?: string | null;
+  backend?: string | null;
+  model_id?: string | null;
+  source_url?: string | null;
+  filled_field_count: number;
+  field_source_count?: number | null;
+  page_refs: string[];
+  page_asset_links: MultimodalAssetLink[];
+  notes: string[];
+  metrics: MultimodalMetricItem[];
+  summary: string;
 }
 
 export interface CompanyReportResponse {
@@ -191,6 +283,7 @@ export interface CompanyComparisonRow {
   profit_cagr_pct?: number | null;
   research_report_count: number;
   industry_report_count: number;
+  multimodal_field_count?: number | null;
 }
 
 export interface ComparisonDimensionValue {
@@ -207,6 +300,42 @@ export interface ComparisonDimension {
   values: ComparisonDimensionValue[];
 }
 
+export interface CompareCompanyFreshnessDigest {
+  annual_report_year?: number | null;
+  annual_report_published_at?: string | null;
+  latest_official_disclosure?: string | null;
+  latest_periodic_label?: string | null;
+  latest_stock_report?: string | null;
+  latest_industry_report?: string | null;
+}
+
+export interface CompareEvidenceDigest {
+  count?: number;
+  positive?: number;
+  negative?: number;
+  latest_titles?: string[];
+  latest_institutions?: string[];
+  latest_rows?: Array<Record<string, unknown>>;
+  industries?: string[];
+  start_year?: number;
+  end_year?: number;
+  revenue_cagr_pct?: number;
+  profit_cagr_pct?: number;
+}
+
+export interface CompareEvidenceCompany {
+  company_code: string;
+  company_name: string;
+  financial_source_url?: string | null;
+  financial_published_at?: string | null;
+  trend_digest?: CompareEvidenceDigest;
+  research_digest?: CompareEvidenceDigest;
+  industry_digest?: CompareEvidenceDigest;
+  multimodal_digest?: MultimodalEvidenceDigest;
+  risk_flags?: string[];
+  freshness_digest?: CompareCompanyFreshnessDigest;
+}
+
 export interface CompanyCompareResponse {
   report_year: number;
   winner_company_code: string;
@@ -216,15 +345,8 @@ export interface CompanyCompareResponse {
   comparison_rows: CompanyComparisonRow[];
   dimensions: ComparisonDimension[];
   evidence: {
-    companies?: Array<{
-      company_code: string;
-      company_name: string;
-      financial_source_url?: string | null;
-      trend_digest?: Record<string, unknown>;
-      research_digest?: Record<string, unknown>;
-      industry_digest?: Record<string, unknown>;
-      risk_flags?: string[];
-    }>;
+    companies?: CompareEvidenceCompany[];
+    freshness?: CompareCompanyFreshnessDigest;
   } & Record<string, unknown>;
 }
 
@@ -357,6 +479,8 @@ export interface AgentThreadSummary {
   focus?: AgentFocus | null;
   thread_summary?: string | null;
   thread_memory?: AgentThreadMemory | null;
+  last_task_mode?: string | null;
+  last_task_label?: string | null;
   last_message?: string | null;
   message_count: number;
   created_at: string;
@@ -374,6 +498,8 @@ export interface AgentThreadDetailResponse {
   focus?: AgentFocus | null;
   thread_summary?: string | null;
   thread_memory?: AgentThreadMemory | null;
+  last_task_mode?: string | null;
+  last_task_label?: string | null;
   created_at: string;
   updated_at: string;
   messages: AgentThreadMessage[];
@@ -476,6 +602,106 @@ export interface QualitySummaryResponse {
   recent_reviews: ManualReviewRecord[];
 }
 
+export interface DataFoundationHotspotField {
+  table: string;
+  field: string;
+  null_ratio: number;
+}
+
+export interface DataFoundationDatasetProfile {
+  table: string;
+  rows: number;
+  columns: number;
+  duplicate_rows: number;
+  max_null_ratio: number;
+  hotspot_fields: DataFoundationHotspotField[];
+}
+
+export interface DataFoundationLayerProfile {
+  layer: string;
+  table_count: number;
+  row_count: number;
+}
+
+export interface DataFoundationSummaryResponse {
+  warehouse_db?: string | null;
+  warehouse_table_count: number;
+  mart_views: string[];
+  csv_artifact_count: number;
+  parquet_artifact_count: number;
+  total_warehouse_rows: number;
+  lake_layers: DataFoundationLayerProfile[];
+  dataset_profiles: DataFoundationDatasetProfile[];
+  top_null_fields: DataFoundationHotspotField[];
+  official_inventory_rows: number;
+  multimodal_extract_report_count: number;
+}
+
+export interface PreparationSourceStatus {
+  source_key: string;
+  label: string;
+  rows: number;
+  latest?: string | null;
+  coverage_note?: string | null;
+}
+
+export interface PreparationCandidate {
+  company_code: string;
+  company_name: string;
+  industry_name?: string | null;
+  report_count: number;
+  institution_count: number;
+  latest_report_date?: string | null;
+  priority_score: number;
+}
+
+export interface PreparationPromotionExchangeStatus {
+  exchange: string;
+  selected_companies: number;
+  downloaded_reports: number;
+  missing_reports: number;
+}
+
+export interface PreparationPromotionCompany {
+  company_code: string;
+  company_name: string;
+  exchange: string;
+  industry_name?: string | null;
+  priority_score: number;
+  downloaded_reports: number;
+  downloaded_years: number[];
+  missing_years: number[];
+  latest_published_at?: string | null;
+}
+
+export interface DataPreparationSummaryResponse {
+  generated_at?: string | null;
+  source_count: number;
+  processed_dataset_count: number;
+  target_pool_company_count: number;
+  universe_company_count: number;
+  annual_years: number[];
+  latest_macro_period?: string | null;
+  latest_stock_report_date?: string | null;
+  latest_industry_report_date?: string | null;
+  periodic_report_rows: number;
+  promotion_candidate_count: number;
+  selected_candidate_count: number;
+  promotion_years: number[];
+  promoted_report_download_count: number;
+  promoted_report_missing_count: number;
+  promoted_ready_company_count: number;
+  promoted_partial_company_count: number;
+  multimodal_sft_sample_count: number;
+  multimodal_extract_count: number;
+  risk_model_file_count: number;
+  source_status: PreparationSourceStatus[];
+  top_candidates: PreparationCandidate[];
+  promoted_exchange_status: PreparationPromotionExchangeStatus[];
+  promoted_companies: PreparationPromotionCompany[];
+  preparation_notes: string[];
+}
+
 export interface ManualReviewSubmitResponse {
   review: ManualReviewRecord;
   summary: QualitySummaryResponse;
@@ -544,9 +770,3 @@ export interface WarehouseOverviewResponse extends WarehouseSummaryResponse {
     latest_report_date?: string | null;
   }>;
 }
-
-
-
-
-
-

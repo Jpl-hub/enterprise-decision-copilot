@@ -47,6 +47,23 @@ class DecisionService:
                 highlights.append(f"{label}证据：{prefix}指出“{excerpt}”。")
         return highlights[:4]
 
+    def _build_multimodal_highlight(self, multimodal: dict) -> str | None:
+        if not multimodal.get("available"):
+            return None
+        metrics = multimodal.get("metrics", [])[:2]
+        metric_text = "、".join(
+            f"{item.get('label')} {item.get('display_value')}"
+            for item in metrics
+            if item.get("label") and item.get("display_value")
+        )
+        anchors = " / ".join(multimodal.get("page_refs", [])[:3])
+        parts = [f"财报图表锚点识别 {int(multimodal.get('filled_field_count') or 0)} 项字段"]
+        if anchors:
+            parts.append(f"定位页 {anchors}")
+        if metric_text:
+            parts.append(f"关键值包括 {metric_text}")
+        return "财报证据：" + "，".join(parts) + "。"
+
     def build_company_decision_brief(self, company_code: str, question: str) -> dict | None:
         row = self.analytics_service.get_company_record(company_code)
         if row is None:
@@ -56,8 +73,12 @@ class DecisionService:
         research = self.analytics_service.get_company_research_digest(company_code)
         industry = self.analytics_service.get_company_industry_digest(company_code)
         macro = self.analytics_service.get_macro_digest()
+        multimodal = self.analytics_service.get_company_multimodal_digest(company_code, report_year=int(row["report_year"]))
         evidence = self.retrieval_service.retrieve_company_evidence(company_code, question, limit=4)
         evidence_highlights = self._build_evidence_highlights(evidence)
+        multimodal_highlight = self._build_multimodal_highlight(multimodal)
+        if multimodal_highlight:
+            evidence_highlights = [multimodal_highlight, *evidence_highlights][:4]
         verdict = self._verdict(row, trend)
         macro_line = "；".join(
             f"{item['indicator_name']}{item['indicator_value']}{item['unit']}"
@@ -110,7 +131,8 @@ class DecisionService:
         summary = (
             f"{row['company_name']} 当前经营判断为“{verdict}”。"
             f"综合得分 {float(row['total_score']):.1f}，风险等级 {row['risk_level']}，"
-            f"语义召回到个股证据 {len(evidence['stock_reports'])} 条、行业证据 {len(evidence['industry_reports'])} 条。"
+            f"语义召回到个股证据 {len(evidence['stock_reports'])} 条、行业证据 {len(evidence['industry_reports'])} 条，"
+            f"财报图表锚点 {int(multimodal.get('filled_field_count') or 0)} 项。"
         )
 
         brief = {
@@ -128,6 +150,7 @@ class DecisionService:
                 "query_profile": evidence.get("query_profile", {}),
                 "semantic_stock_reports": evidence["stock_reports"],
                 "semantic_industry_reports": evidence["industry_reports"],
+                "multimodal_digest": multimodal,
                 "macro_items": macro.get("items", []),
                 "trend_digest": trend,
             },

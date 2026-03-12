@@ -13,7 +13,9 @@ from app.services.audit import AuditService
 from app.services.auth import AuthService
 from app.services.competition_report import CompetitionReportService
 from app.services.decision import DecisionService
+from app.services.narrative import NarrativeService
 from app.services.quality import DataQualityService
+from app.services.retrieval import RetrievalService
 from app.services.risk import RiskService
 from app.services.risk_model import RiskModelService
 from app.services.universe import IndustryUniverseService
@@ -29,7 +31,9 @@ def get_container(request: Request) -> ServiceContainer:
 
 
 def get_analytics_service(container: ServiceContainer = Depends(get_container)) -> AnalyticsService:
-    return container.analytics_service
+    # Analytics payloads are used by live dashboards and should reflect the latest refreshed data files.
+    # Instantiate on demand here instead of pinning to the startup snapshot in the service container.
+    return AnalyticsService()
 
 
 
@@ -44,7 +48,12 @@ def get_audit_service(container: ServiceContainer = Depends(get_container)) -> A
 
 
 def get_ai_stack_service(container: ServiceContainer = Depends(get_container)) -> AIStackService:
-    return container.ai_stack_service
+    # Stack readiness should reflect the latest artifacts produced by refresh, extraction and training scripts.
+    return AIStackService(
+        RiskModelService(),
+        DataQualityService(),
+        agent_skill_count=len(container.agent_service.workflow.skill_registry.skills),
+    )
 
 
 
@@ -77,12 +86,17 @@ def get_agent_service(container: ServiceContainer = Depends(get_container)) -> A
 
 
 def get_decision_service(container: ServiceContainer = Depends(get_container)) -> DecisionService:
-    return container.decision_service
+    analytics_service = AnalyticsService()
+    return DecisionService(
+        analytics_service,
+        RetrievalService(analytics_service),
+        narrative_service=NarrativeService(),
+    )
 
 
 
 def get_risk_service(container: ServiceContainer = Depends(get_container)) -> RiskService:
-    return container.risk_service
+    return RiskService(AnalyticsService(), container.risk_model_service)
 
 
 
@@ -102,7 +116,19 @@ def get_quality_service(container: ServiceContainer = Depends(get_container)) ->
 
 
 def get_competition_report_service(container: ServiceContainer = Depends(get_container)) -> CompetitionReportService:
-    return container.competition_report_service
+    analytics_service = AnalyticsService()
+    decision_service = DecisionService(
+        analytics_service,
+        RetrievalService(analytics_service),
+        narrative_service=NarrativeService(),
+    )
+    risk_service = RiskService(analytics_service, container.risk_model_service)
+    return CompetitionReportService(
+        analytics_service,
+        decision_service,
+        risk_service,
+        container.quality_service,
+    )
 
 
 

@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Query
 from app.api.dependencies import get_audit_service, get_current_user, get_quality_service, require_roles
 from app.schemas.quality import (
     AutoReviewSyncResponse,
+    DataFoundationSummaryResponse,
+    DataPreparationSummaryResponse,
     DataQualitySummaryResponse,
     ManualReviewRequest,
     ManualReviewSubmitResponse,
@@ -21,6 +23,20 @@ async def get_quality_summary(
     quality_service: DataQualityService = Depends(get_quality_service),
 ) -> dict:
     return quality_service.get_quality_summary()
+
+
+@router.get("/foundation", response_model=DataFoundationSummaryResponse)
+async def get_foundation_summary(
+    quality_service: DataQualityService = Depends(get_quality_service),
+) -> dict:
+    return quality_service.get_foundation_summary()
+
+
+@router.get("/preparation", response_model=DataPreparationSummaryResponse)
+async def get_preparation_summary(
+    quality_service: DataQualityService = Depends(get_quality_service),
+) -> dict:
+    return quality_service.get_preparation_summary()
 
 
 @router.post("/reviews", response_model=ManualReviewSubmitResponse)

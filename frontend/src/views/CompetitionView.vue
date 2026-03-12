@@ -8,8 +8,7 @@
       </template>
       <div v-if="!authStore.canExport" class="empty-state">当前账号可以查看分析页面，如需导出材料，请联系分析员或管理员。</div>
       <template v-else>
-        <div class="button-row">
-          <input v-model="question" class="text-input flex-grow" placeholder="结合真实数据生成企业运营分析材料" />
+        <div class="button-row left-align">
           <button class="button-primary" @click="loadPackage">导出材料</button>
         </div>
         <div v-if="loading" class="empty-state">正在生成分析材料...</div>
@@ -71,7 +70,6 @@ const route = useRoute();
 const authStore = useAuthStore();
 const store = useDashboardStore();
 const selectedCode = ref(props.companyCode || '');
-const question = ref('结合真实数据生成企业运营分析材料');
 const loading = ref(false);
 const result = ref<CompetitionPackageResponse | null>(null);
 const targets = computed(() => store.targets);
@@ -90,7 +88,7 @@ async function loadPackage() {
   loading.value = true;
   try {
     const companyName = targets.value.find((item) => item.company_code === selectedCode.value)?.company_name || '该企业';
-    result.value = await api.getCompetitionPackage(selectedCode.value, question.value || `结合真实数据为${companyName}生成企业运营分析材料`, true);
+    result.value = await api.getCompetitionPackage(selectedCode.value, `结合真实数据为${companyName}生成企业运营分析材料`, true);
   } finally {
     loading.value = false;
   }

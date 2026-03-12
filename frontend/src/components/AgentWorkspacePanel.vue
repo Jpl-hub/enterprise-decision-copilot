@@ -5,22 +5,22 @@
         <p v-if="eyebrow" class="section-tag">{{ eyebrow }}</p>
         <h3 v-if="title">{{ title }}</h3>
       </div>
-      <div class="button-row left-align">
-        <button class="button-ghost compact-action" @click="resetThread">新线程</button>
-      </div>
     </div>
 
-    <div class="task-mode-toggle-row">
-      <button
-        v-for="item in taskModes"
-        :key="item.value"
-        type="button"
-        class="task-mode-toggle"
-        :class="{ active: activeTaskMode === item.value }"
-        @click="selectTaskMode(item.value)"
-      >
-        <span>{{ item.label }}</span>
-      </button>
+    <div class="task-mode-toggle-row task-mode-toolbar">
+      <div class="task-mode-pill-group">
+        <button
+          v-for="item in taskModes"
+          :key="item.value"
+          type="button"
+          class="task-mode-toggle"
+          :class="{ active: activeTaskMode === item.value }"
+          @click="selectTaskMode(item.value)"
+        >
+          <span>{{ item.label }}</span>
+        </button>
+      </div>
+      <button class="button-ghost compact-action task-mode-toolbar-action" @click="resetThread">新建线程</button>
     </div>
 
     <div class="agent-thread-shell">
@@ -119,11 +119,11 @@ const props = withDefaults(defineProps<{
 });
 
 const taskModes = [
-  { value: 'company_diagnosis', label: '企业诊断' },
-  { value: 'company_risk_forecast', label: '风险预警' },
+  { value: 'company_diagnosis', label: '经营分析' },
+  { value: 'company_risk_forecast', label: '风险判断' },
   { value: 'company_decision_brief', label: '决策建议' },
   { value: 'industry_trend', label: '行业趋势' },
-  { value: 'data_quality', label: '数据底座' },
+  { value: 'data_quality', label: '数据治理' },
 ];
 
 const agentStore = useAgentThreadStore();

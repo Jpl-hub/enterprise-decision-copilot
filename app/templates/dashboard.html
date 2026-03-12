@@ -46,7 +46,7 @@
     <article class="panel">
         <div class="panel-header">
             <h3>人工复核入口</h3>
-            <p>将异常字段、疑似抽取偏差和年报版式问题登记到本地复核队列，用于后续修正和答辩展示。</p>
+            <p>将异常字段、疑似抽取偏差和年报版式问题登记到本地复核队列，用于后续修正和结果核查。</p>
         </div>
         <form id="quality-review-form" class="agent-form review-form">
             <div class="review-grid">
@@ -85,7 +85,7 @@
                     <button class="quick-report" type="button" data-company-code="{{ item.company_code }}">综合报告</button>
                     <button class="quick-brief" type="button" data-company-code="{{ item.company_code }}" data-company-name="{{ item.company_name }}">决策简报</button>
                     <button class="quick-risk" type="button" data-company-code="{{ item.company_code }}" data-company-name="{{ item.company_name }}">风险预测</button>
-                    <button class="quick-package" type="button" data-company-code="{{ item.company_code }}" data-company-name="{{ item.company_name }}">答辩稿</button>
+                    <button class="quick-package" type="button" data-company-code="{{ item.company_code }}" data-company-name="{{ item.company_name }}">材料包</button>
                 </div>
             </div>
             {% endfor %}
@@ -139,11 +139,11 @@
 <section class="panel-grid">
     <article class="panel">
         <div class="panel-header">
-            <h3>答辩稿工作台</h3>
-            <p>输出带引用编号的章节化答辩稿骨架，并把证据包导出到本地 <code>data/exports</code>。</p>
+            <h3>材料导出</h3>
+            <p>输出带引用编号的结构化分析材料，并把证据包导出到本地 <code>data/exports</code>。</p>
         </div>
         <div id="competition-result" class="agent-result empty">
-            <p>答辩稿导出结果将在这里展示。</p>
+            <p>导出结果将在这里展示。</p>
         </div>
     </article>
 </section>
@@ -169,7 +169,7 @@
     <article class="panel">
         <div class="panel-header">
             <h3>角色入口</h3>
-            <p>直接对应赛题中的三类核心用户场景。</p>
+            <p>直接对应三类核心用户场景。</p>
         </div>
         <div class="persona-grid">
             {% for item in persona_entries %}
@@ -186,8 +186,8 @@
 <section class="panel-grid">
     <article class="panel">
         <div class="panel-header">
-            <h3>答辩亮点</h3>
-            <p>当前系统最适合在答辩时直接展示的能力组合。</p>
+            <h3>核心能力</h3>
+            <p>当前系统最适合直接使用的能力组合。</p>
         </div>
         <div class="list-grid">
             <div class="list-item"><div><strong>真实数据底座</strong><p>交易所财报 + 东方财富研报 + 国家统计局宏观指标</p></div><span>Data</span></div>
@@ -198,7 +198,7 @@
     <article class="panel">
         <div class="panel-header">
             <h3>主题对齐</h3>
-            <p>系统能力严格围绕赛题要求展开，不做无关炫技。</p>
+            <p>系统能力围绕真实业务问题展开，不做无关炫技。</p>
         </div>
         <div class="list-grid">
             <div class="list-item"><div><strong>智能问数</strong><p>自然语言交互、问数、对比、澄清与多轮分析</p></div><span>NLQ</span></div>

@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
         allow_headers=['*'],
     )
     app.mount('/static', StaticFiles(directory=BASE_DIR / 'static'), name='static')
+    app.mount('/cache-assets', StaticFiles(directory=settings.cache_dir), name='cache-assets')
     app.include_router(web_router)
     app.include_router(auth_router)
     app.include_router(agent_router, dependencies=[Depends(get_current_user)])

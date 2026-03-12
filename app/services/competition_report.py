@@ -68,6 +68,18 @@ class CompetitionReportService:
             add_item("stock_research_report", item, excerpt_key="title")
         for item in report.get("evidence", {}).get("industry_reports", [])[:4]:
             add_item("industry_research_report", item, excerpt_key="title")
+        multimodal = report.get("evidence", {}).get("multimodal_digest", {}) or {}
+        if multimodal.get("available"):
+            citations.append(
+                {
+                    "source_type": "multimodal_financial_anchor",
+                    "title": f"{report['company_name']} 财报图表锚点",
+                    "source_url": multimodal.get("source_url") or financial_url or None,
+                    "report_date": multimodal.get("published_at"),
+                    "institution": multimodal.get("backend") or "多模态抽取",
+                    "excerpt": multimodal.get("summary") or "多模态财报锚点摘要",
+                }
+            )
         for item in brief.get("evidence", {}).get("semantic_stock_reports", [])[:4]:
             add_item("semantic_stock_evidence", item)
         for item in brief.get("evidence", {}).get("semantic_industry_reports", [])[:4]:
@@ -99,7 +111,7 @@ class CompetitionReportService:
             {
                 "title": "项目对象",
                 "content": (
-                    f"本答辩稿围绕 {report['company_name']} 展开，基于 {report['report_year']} 年真实披露财报、"
+                    f"本分析材料围绕 {report['company_name']} 展开，基于 {report['report_year']} 年真实披露财报、"
                     "近两年公开研报、行业研报与宏观指标生成经营分析与决策支持结论。"
                     f"{self._refs(citations, 0, 1)}"
                 ),
@@ -152,7 +164,7 @@ class CompetitionReportService:
 
     def _render_markdown(self, package: dict) -> str:
         lines = [
-            f"# {package['company_name']} 企业运营分析答辩稿骨架",
+            f"# {package['company_name']} 企业运营分析材料",
             "",
             f"- 公司代码：{package['company_code']}",
             f"- 报告年度：{package['report_year']}",
@@ -177,13 +189,13 @@ class CompetitionReportService:
             )
         lines.append("")
         lines.append("## 导出说明")
-        lines.append("本文件可直接作为作品报告、答辩讲稿和后续 DOCX/PPT 自动生成的中间稿。")
+        lines.append("本文件可直接作为分析材料、汇报文稿和后续 DOCX/PPT 自动生成的中间稿。")
         return "\n".join(lines)
 
     def build_company_competition_package(
         self,
         company_code: str,
-        question: str = "结合真实数据生成企业运营分析答辩稿",
+        question: str = "结合真实数据生成企业运营分析材料",
         persist: bool = True,
     ) -> dict | None:
         report = self.analytics_service.get_company_report(company_code)
@@ -222,7 +234,7 @@ class CompetitionReportService:
             stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
             export_dir = self.export_root / str(company_code) / stamp
             export_dir.mkdir(parents=True, exist_ok=True)
-            markdown_path = export_dir / "competition_report.md"
+            markdown_path = export_dir / "analysis_material.md"
             evidence_path = export_dir / "evidence_bundle.json"
             markdown_path.write_text(markdown_content, encoding="utf-8")
             evidence_path.write_text(

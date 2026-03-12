@@ -90,6 +90,106 @@ class DataQualitySummaryResponse(BaseModel):
     recent_reviews: list[ManualReviewRecord] = Field(default_factory=list)
 
 
+class DataFoundationHotspotField(BaseModel):
+    table: str
+    field: str
+    null_ratio: float
+
+
+class DataFoundationDatasetProfile(BaseModel):
+    table: str
+    rows: int
+    columns: int
+    duplicate_rows: int
+    max_null_ratio: float
+    hotspot_fields: list[DataFoundationHotspotField] = Field(default_factory=list)
+
+
+class DataFoundationLayerProfile(BaseModel):
+    layer: str
+    table_count: int
+    row_count: int
+
+
+class DataFoundationSummaryResponse(BaseModel):
+    warehouse_db: str | None = None
+    warehouse_table_count: int = 0
+    mart_views: list[str] = Field(default_factory=list)
+    csv_artifact_count: int = 0
+    parquet_artifact_count: int = 0
+    total_warehouse_rows: int = 0
+    lake_layers: list[DataFoundationLayerProfile] = Field(default_factory=list)
+    dataset_profiles: list[DataFoundationDatasetProfile] = Field(default_factory=list)
+    top_null_fields: list[DataFoundationHotspotField] = Field(default_factory=list)
+    official_inventory_rows: int = 0
+    multimodal_extract_report_count: int = 0
+
+
+class PreparationSourceStatus(BaseModel):
+    source_key: str
+    label: str
+    rows: int
+    latest: str | None = None
+    coverage_note: str | None = None
+
+
+class PreparationCandidate(BaseModel):
+    company_code: str
+    company_name: str
+    industry_name: str | None = None
+    report_count: int = 0
+    institution_count: int = 0
+    latest_report_date: str | None = None
+    priority_score: float = 0.0
+
+
+class PreparationPromotionExchangeStatus(BaseModel):
+    exchange: str
+    selected_companies: int = 0
+    downloaded_reports: int = 0
+    missing_reports: int = 0
+
+
+class PreparationPromotionCompany(BaseModel):
+    company_code: str
+    company_name: str
+    exchange: str
+    industry_name: str | None = None
+    priority_score: float = 0.0
+    downloaded_reports: int = 0
+    downloaded_years: list[int] = Field(default_factory=list)
+    missing_years: list[int] = Field(default_factory=list)
+    latest_published_at: str | None = None
+
+
+class DataPreparationSummaryResponse(BaseModel):
+    generated_at: str | None = None
+    source_count: int = 0
+    processed_dataset_count: int = 0
+    target_pool_company_count: int = 0
+    universe_company_count: int = 0
+    annual_years: list[int] = Field(default_factory=list)
+    latest_macro_period: str | None = None
+    latest_stock_report_date: str | None = None
+    latest_industry_report_date: str | None = None
+    periodic_report_rows: int = 0
+    promotion_candidate_count: int = 0
+    selected_candidate_count: int = 0
+    promotion_years: list[int] = Field(default_factory=list)
+    promoted_report_download_count: int = 0
+    promoted_report_missing_count: int = 0
+    promoted_ready_company_count: int = 0
+    promoted_partial_company_count: int = 0
+    multimodal_sft_sample_count: int = 0
+    multimodal_extract_count: int = 0
+    risk_model_file_count: int = 0
+    source_status: list[PreparationSourceStatus] = Field(default_factory=list)
+    top_candidates: list[PreparationCandidate] = Field(default_factory=list)
+    promoted_exchange_status: list[PreparationPromotionExchangeStatus] = Field(default_factory=list)
+    promoted_companies: list[PreparationPromotionCompany] = Field(default_factory=list)
+    preparation_notes: list[str] = Field(default_factory=list)
+
+
 class ManualReviewSubmitResponse(BaseModel):
     review: ManualReviewRecord
     summary: dict[str, Any] = Field(default_factory=dict)

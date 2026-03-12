@@ -38,6 +38,51 @@ field_sources, notes
 5. 不要输出 JSON 以外文本。
 """
 
+PAGE_KEYWORDS: list[tuple[str, int]] = [
+    ("主要会计数据", 6),
+    ("主要财务指标", 6),
+    ("营业收入", 5),
+    ("归属于上市公司股东的净利润", 5),
+    ("归属于母公司股东的净利润", 5),
+    ("经营活动产生的现金流量净额", 5),
+    ("研发投入", 4),
+    ("资产负债表", 4),
+    ("利润表", 4),
+    ("现金流量表", 4),
+    ("货币资金", 3),
+    ("短期借款", 3),
+    ("流动资产", 3),
+    ("流动负债", 3),
+    ("应收账款", 3),
+    ("存货", 3),
+    ("加权平均净资产收益率", 3),
+]
+
+EXPECTED_KEYS = [
+    "company_code",
+    "company_name",
+    "report_year",
+    "revenue_million",
+    "net_profit_million",
+    "gross_margin_pct",
+    "net_margin_pct",
+    "rd_total_million",
+    "rd_ratio_pct",
+    "debt_ratio_pct",
+    "current_assets_million",
+    "current_liabilities_million",
+    "current_ratio",
+    "monetary_funds_million",
+    "short_term_debt_million",
+    "cash_to_short_debt",
+    "inventory_turnover",
+    "receivable_turnover",
+    "operating_cashflow_million",
+    "roe_pct",
+    "field_sources",
+    "notes",
+]
+
 
 class LocalQwenVLExtractor:
     def __init__(self, model_id: str) -> None:
@@ -126,6 +171,72 @@ def load_inventory() -> list[dict]:
     return frame.to_dict("records")
 
 
+def _normalize_note_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if value is None:
+        return []
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _normalize_field_sources(value: object, page_names: list[str]) -> dict[str, list[str]]:
+    if isinstance(value, dict):
+        normalized: dict[str, list[str]] = {}
+        for key, item in value.items():
+            if isinstance(item, list):
+                refs = [str(ref).strip() for ref in item if str(ref).strip()]
+            elif item is None:
+                refs = []
+            else:
+                refs = [part.strip() for part in str(item).split(",") if part.strip()]
+            if refs:
+                normalized[str(key).strip() or "page_refs"] = refs
+        if normalized:
+            return normalized
+    if isinstance(value, list):
+        refs = [str(item).strip() for item in value if str(item).strip()]
+        return {"page_refs": refs or page_names}
+    if value is not None:
+        refs = [part.strip() for part in str(value).split(",") if part.strip()]
+        if refs:
+            return {"page_refs": refs}
+    return {"page_refs": page_names}
+
+
+def _normalize_result(result: dict, page_names: list[str]) -> dict:
+    payload = {key: result.get(key) for key in EXPECTED_KEYS if key in result}
+    for key in EXPECTED_KEYS:
+        payload.setdefault(key, None)
+    payload["notes"] = _normalize_note_list(payload.get("notes"))
+    payload["field_sources"] = _normalize_field_sources(payload.get("field_sources"), page_names)
+    return payload
+
+
+def _select_page_indexes(pdf_path: Path, max_pages: int) -> list[int]:
+    try:
+        import fitz  # type: ignore
+    except Exception as exc:
+        raise RuntimeError("缺少 PyMuPDF 依赖，请先安装 pymupdf>=1.24") from exc
+
+    doc = fitz.open(pdf_path)
+    ranked: list[tuple[int, int]] = []
+    for idx in range(doc.page_count):
+        text = doc.load_page(idx).get_text("text")
+        score = 0
+        for keyword, weight in PAGE_KEYWORDS:
+            if keyword in text:
+                score += weight
+        if score > 0:
+            ranked.append((idx, score))
+    doc.close()
+    if not ranked:
+        return list(range(min(max_pages, 4)))
+    ranked = sorted(ranked, key=lambda item: (item[1], -item[0]), reverse=True)
+    selected = sorted(idx for idx, _ in ranked[:max_pages])
+    return selected
+
+
 def render_pdf_pages(pdf_path: Path, out_dir: Path, max_pages: int, dpi: int) -> list[Path]:
     try:
         import fitz  # type: ignore
@@ -137,12 +248,21 @@ def render_pdf_pages(pdf_path: Path, out_dir: Path, max_pages: int, dpi: int) ->
     zoom = max(dpi / 72.0, 1.0)
     matrix = fitz.Matrix(zoom, zoom)
     image_paths: list[Path] = []
-    for idx in range(min(max_pages, doc.page_count)):
+    for idx in _select_page_indexes(pdf_path, max_pages=max_pages):
         page = doc.load_page(idx)
         pix = page.get_pixmap(matrix=matrix, alpha=False)
         image_path = out_dir / f"page_{idx + 1:02d}.png"
         pix.save(image_path)
         image_paths.append(image_path)
+    if not image_paths:
+        for idx in range(min(max_pages, doc.page_count)):
+            page = doc.load_page(idx)
+            pix = page.get_pixmap(matrix=matrix, alpha=False)
+            image_path = out_dir / f"page_{idx + 1:02d}.png"
+            pix.save(image_path)
+            image_paths.append(image_path)
+            if len(image_paths) >= max_pages:
+                break
     doc.close()
     return image_paths
 
@@ -154,6 +274,7 @@ def build_user_prompt(record: dict, image_paths: list[Path]) -> str:
             f"company_code: {record['company_code']}",
             f"report_year_target: {int(record['year'])}",
             f"source_url: {record.get('source_url') or ''}",
+            "这些页面已按财务关键词命中度预筛选，更可能包含关键表格与指标。",
             "请根据附带页面图像抽取关键财务字段。",
             "页面文件：",
             preview,
@@ -207,6 +328,7 @@ def main() -> None:
         else:
             raise RuntimeError("未初始化抽取后端")
 
+        result = _normalize_result(result, page_names=[path.name for path in image_paths])
         result["company_code"] = company_code
         result["report_year"] = report_year
         result["source_url"] = str(record.get("source_url") or "")

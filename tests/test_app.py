@@ -26,6 +26,18 @@ def test_dashboard_payload_has_targets() -> None:
     service = AnalyticsService()
     payload = service.get_dashboard_payload()
     assert len(payload["targets"]) >= 1
+    assert "freshness" in payload
+
+
+def test_dashboard_payload_exposes_freshness_summary() -> None:
+    service = AnalyticsService()
+    freshness = service.get_data_freshness()
+
+    assert "period_summaries" in freshness
+    assert len(freshness["period_summaries"]) == 4
+    assert freshness["latest_research_report"]
+    assert freshness["latest_industry_report"]
+    assert freshness["latest_macro_period"]
 
 
 def test_dashboard_context_has_persona_entries() -> None:
@@ -48,6 +60,8 @@ def test_company_report_has_sections() -> None:
     assert report["company_name"]
     assert len(report["sections"]) >= 4
     assert "evidence" in report
+    assert report["evidence"]["multimodal_digest"]["available"] is True
+    assert report["evidence"]["multimodal_digest"]["filled_field_count"] >= 1
 
 
 def test_company_compare_has_dimensions_and_evidence() -> None:
@@ -58,6 +72,9 @@ def test_company_compare_has_dimensions_and_evidence() -> None:
     assert len(comparison["comparison_rows"]) == 2
     assert any(item["dimension"] == "综合表现" for item in comparison["dimensions"])
     assert len(comparison["evidence"]["companies"]) == 2
+    assert comparison["evidence"]["freshness"]["latest_official_disclosure"]
+    assert comparison["evidence"]["companies"][0]["freshness_digest"]["annual_report_year"]
+    assert comparison["evidence"]["companies"][0]["multimodal_digest"]["filled_field_count"] >= 1
 
 
 def test_agent_can_generate_company_report() -> None:
@@ -106,6 +123,7 @@ def test_decision_brief_contains_evidence_highlights() -> None:
     assert brief["evidence"]["query_profile"]["query_variants"]
     assert brief["evidence_highlights"]
     assert all("证据：" in item for item in brief["evidence_highlights"])
+    assert brief["evidence"]["multimodal_digest"]["available"] is True
 
 
 def test_risk_service_returns_forecast() -> None:
@@ -135,6 +153,7 @@ def test_compare_api_returns_structured_payload() -> None:
     assert payload["summary"]
     assert payload["comparison_rows"]
     assert any(item["dimension"] == "风险水平" for item in payload["dimensions"])
+    assert payload["evidence"]["freshness"]["latest_stock_report"]
 
 
 def test_agent_can_answer_quality_governance_questions() -> None:
@@ -248,9 +267,13 @@ def test_ai_stack_summary_exposes_core_engines() -> None:
     service = AIStackService(container.risk_model_service, container.quality_service)
     payload = service.get_stack_summary()
     engine_ids = {item['engine_id'] for item in payload['engines']}
+    pillar_ids = {item['pillar_id'] for item in payload['pillars']}
     assert 'agent-orchestrator' in engine_ids
     assert 'risk-model' in engine_ids
     assert 'multimodal-extractor' in engine_ids
+    assert 'traditional-agent' in pillar_ids
+    assert 'deep-learning' in pillar_ids
+    assert 'big-data' in pillar_ids
 
 def test_agent_returns_safe_payload_when_workflow_fails() -> None:
     class BrokenWorkflow:

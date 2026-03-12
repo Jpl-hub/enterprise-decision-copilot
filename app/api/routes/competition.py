@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/company", tags=["competition"])
 @router.get("/{company_code}/competition-package", response_model=CompetitionPackageResponse)
 async def get_company_competition_package(
     company_code: str,
-    question: str = Query("结合真实数据生成企业运营分析答辩稿", min_length=2),
+    question: str = Query("结合真实数据生成企业运营分析材料", min_length=2),
     persist: bool = Query(True, description="Whether to persist markdown and evidence bundle under data/exports."),
     current_user: dict = Depends(require_roles('admin', 'analyst')),
     competition_report_service: CompetitionReportService = Depends(get_competition_report_service),

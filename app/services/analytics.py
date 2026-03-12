@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 
+from app.config import settings
 from app.data_access import (
     load_financial_features,
     load_industry_reports,
     load_macro_indicators,
+    load_multimodal_extracts,
+    load_official_periodic_snapshots,
     load_research_reports,
     load_targets,
 )
@@ -18,6 +22,57 @@ class PipelineStatus:
     has_financials: bool
     has_reports: bool
     has_macro: bool
+
+
+MULTIMODAL_FIELD_LABELS = {
+    "revenue_million": "营收",
+    "net_profit_million": "净利润",
+    "gross_margin_pct": "毛利率",
+    "net_margin_pct": "净利率",
+    "rd_total_million": "研发费用",
+    "rd_ratio_pct": "研发强度",
+    "debt_ratio_pct": "资产负债率",
+    "current_assets_million": "流动资产",
+    "current_liabilities_million": "流动负债",
+    "current_ratio": "流动比率",
+    "monetary_funds_million": "货币资金",
+    "short_term_debt_million": "短期债务",
+    "cash_to_short_debt": "现金短债比",
+    "inventory_turnover": "存货周转",
+    "receivable_turnover": "应收周转",
+    "operating_cashflow_million": "经营现金流",
+    "roe_pct": "ROE",
+}
+MULTIMODAL_PERCENT_FIELDS = {"gross_margin_pct", "net_margin_pct", "rd_ratio_pct", "debt_ratio_pct", "roe_pct"}
+MULTIMODAL_PRIORITY_FIELDS = [
+    "revenue_million",
+    "net_profit_million",
+    "net_margin_pct",
+    "rd_ratio_pct",
+    "debt_ratio_pct",
+    "current_ratio",
+    "cash_to_short_debt",
+    "operating_cashflow_million",
+    "roe_pct",
+    "gross_margin_pct",
+    "inventory_turnover",
+    "receivable_turnover",
+]
+MULTIMODAL_META_FIELDS = {
+    "company_code",
+    "company_name",
+    "report_year",
+    "source_url",
+    "published_at",
+    "page_images",
+    "backend",
+    "model_id",
+    "field_sources",
+    "notes",
+}
+PAGE_REF_LABELS = {
+    "page_refs": "财报锚点",
+}
 
 
 def _short_name(name: str) -> str:
@@ -51,6 +106,10 @@ def _format_number(value: object, digits: int = 2, suffix: str = "") -> str:
     return f"{numeric:.{digits}f}{suffix}"
 
 
+def _safe_path_text(value: object) -> str:
+    return str(value or "").strip().replace("\\", "/")
+
+
 class AnalyticsService:
     def __init__(self) -> None:
         self.targets = load_targets().copy()
@@ -58,6 +117,150 @@ class AnalyticsService:
         self.reports = load_research_reports().copy()
         self.industry_reports = load_industry_reports().copy()
         self.macro = load_macro_indicators().copy()
+        self.official_periodic_snapshots = load_official_periodic_snapshots().copy()
+        self.multimodal_extracts = load_multimodal_extracts().copy()
+
+    def _filled_multimodal_fields(self, payload: dict) -> int:
+        filled = 0
+        for key, value in payload.items():
+            if key in MULTIMODAL_META_FIELDS:
+                continue
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            if isinstance(value, list) and not value:
+                continue
+            if isinstance(value, dict) and not value:
+                continue
+            if pd.isna(value):
+                continue
+            filled += 1
+        return filled
+
+    def _normalize_field_sources(self, value: object) -> dict[str, list[str]]:
+        if isinstance(value, dict):
+            normalized: dict[str, list[str]] = {}
+            for key, item in value.items():
+                if isinstance(item, list):
+                    refs = [str(ref).strip() for ref in item if str(ref).strip()]
+                elif item is None:
+                    refs = []
+                else:
+                    refs = [part.strip() for part in str(item).split(",") if part.strip()]
+                if refs:
+                    normalized[str(key).strip() or "page_refs"] = refs
+            return normalized
+        if isinstance(value, list):
+            refs = [str(item).strip() for item in value if str(item).strip()]
+            return {"page_refs": refs} if refs else {}
+        if value is not None:
+            refs = [part.strip() for part in str(value).split(",") if part.strip()]
+            return {"page_refs": refs} if refs else {}
+        return {}
+
+    def _normalize_notes(self, value: object) -> list[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if value is None:
+            return []
+        text = str(value).strip()
+        return [text] if text else []
+
+    def _format_multimodal_metric(self, field: str, value: object) -> str:
+        numeric = _numeric_value(value)
+        if numeric is None:
+            return "暂无"
+        if field in MULTIMODAL_PERCENT_FIELDS:
+            return f"{numeric:.2f}%"
+        return f"{numeric:,.2f}"
+
+    def _cache_asset_url(self, value: object) -> str | None:
+        text = _safe_path_text(value)
+        if not text:
+            return None
+        markers = ("data/cache/", "/data/cache/", "cache/")
+        relative = None
+        for marker in markers:
+            if marker in text:
+                relative = text.split(marker, 1)[1]
+                break
+        if relative is None:
+            try:
+                candidate = Path(text)
+                if not candidate.is_absolute():
+                    candidate = settings.data_dir / candidate
+                relative = str(candidate.resolve().relative_to(settings.cache_dir.resolve())).replace("\\", "/")
+            except Exception:
+                return None
+        relative = str(relative).replace("\\", "/").lstrip("/")
+        return f"/cache-assets/{relative}" if relative else None
+
+    def _multimodal_metric_items(self, payload: dict, limit: int = 6) -> list[dict]:
+        items: list[dict] = []
+        for field in MULTIMODAL_PRIORITY_FIELDS:
+            value = payload.get(field)
+            if value is None or pd.isna(value):
+                continue
+            items.append(
+                {
+                    "field": field,
+                    "label": MULTIMODAL_FIELD_LABELS.get(field, field),
+                    "value": _numeric_value(value),
+                    "display_value": self._format_multimodal_metric(field, value),
+                }
+            )
+            if len(items) >= limit:
+                break
+        return items
+
+    def _page_asset_links(self, payload: dict, field_sources: dict[str, list[str]]) -> list[dict]:
+        page_images = list(payload.get("page_images") or [])
+        image_map: dict[str, str] = {}
+        for item in page_images:
+            text = _safe_path_text(item)
+            if not text:
+                continue
+            file_name = Path(text).name
+            asset_url = self._cache_asset_url(text)
+            if file_name and asset_url:
+                image_map[file_name] = asset_url
+
+        links: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+        for key, refs in field_sources.items():
+            group_label = PAGE_REF_LABELS.get(key, "图表锚点")
+            for ref in refs:
+                file_name = Path(_safe_path_text(ref)).name or str(ref)
+                url = image_map.get(file_name)
+                label = Path(file_name).stem.replace("_", " ").upper() or file_name
+                cache_key = (label, url or file_name)
+                if cache_key in seen:
+                    continue
+                seen.add(cache_key)
+                links.append(
+                    {
+                        "label": label,
+                        "group": group_label,
+                        "url": url,
+                    }
+                )
+        if links:
+            return links[:6]
+
+        for item in page_images[:4]:
+            text = _safe_path_text(item)
+            url = self._cache_asset_url(text)
+            if not url:
+                continue
+            links.append(
+                {
+                    "label": Path(text).stem.replace("_", " ").upper(),
+                    "group": "图表锚点",
+                    "url": url,
+                }
+            )
+        return links
 
     def get_pipeline_status(self) -> PipelineStatus:
         return PipelineStatus(
@@ -247,6 +450,63 @@ class AnalyticsService:
             ),
         }
 
+    def get_company_multimodal_digest(self, company_code: str, report_year: int | None = None) -> dict:
+        code = str(company_code)
+        if self.multimodal_extracts.empty:
+            return {
+                "available": False,
+                "filled_field_count": 0,
+                "summary": "多模态财报锚点待补齐。",
+                "metrics": [],
+                "page_asset_links": [],
+                "notes": [],
+            }
+
+        extracts = self.multimodal_extracts[self.multimodal_extracts["company_code"].astype(str) == code].copy()
+        if extracts.empty:
+            return {
+                "available": False,
+                "filled_field_count": 0,
+                "summary": "当前企业尚未完成多模态财报抽取。",
+                "metrics": [],
+                "page_asset_links": [],
+                "notes": [],
+            }
+        if report_year is not None:
+            scoped = extracts[extracts["report_year"].astype("Int64") == int(report_year)].copy()
+            if not scoped.empty:
+                extracts = scoped
+        extracts["report_year"] = pd.to_numeric(extracts["report_year"], errors="coerce")
+        extracts["published_at"] = extracts.get("published_at", pd.Series(index=extracts.index, dtype=object)).astype(str)
+        payload = extracts.sort_values(["report_year", "published_at"], ascending=[False, False]).iloc[0].to_dict()
+        field_sources = self._normalize_field_sources(payload.get("field_sources"))
+        notes = self._normalize_notes(payload.get("notes"))
+        metrics = self._multimodal_metric_items(payload)
+        page_asset_links = self._page_asset_links(payload, field_sources)
+        filled_field_count = self._filled_multimodal_fields(payload)
+        summary_parts = [f"多模态抽取识别 {filled_field_count} 项字段"]
+        if page_asset_links:
+            summary_parts.append("页锚点 " + " / ".join(item["label"] for item in page_asset_links[:3]))
+        if metrics:
+            summary_parts.append("关键值包括 " + "、".join(f"{item['label']} {item['display_value']}" for item in metrics[:3]))
+        return {
+            "available": True,
+            "company_code": code,
+            "company_name": payload.get("company_name"),
+            "report_year": int(payload["report_year"]) if pd.notna(payload.get("report_year")) else report_year,
+            "published_at": payload.get("published_at"),
+            "backend": payload.get("backend"),
+            "model_id": payload.get("model_id"),
+            "source_url": payload.get("source_url"),
+            "filled_field_count": filled_field_count,
+            "field_source_count": sum(len(refs) for refs in field_sources.values()),
+            "page_asset_links": page_asset_links,
+            "page_refs": [item["label"] for item in page_asset_links],
+            "notes": notes,
+            "metrics": metrics,
+            "summary": "；".join(summary_parts) + "。",
+        }
+
     def get_company_research_digest(self, company_code: str) -> dict:
         code = str(company_code)
         reports = self.reports[self.reports["company_code"].astype(str) == code].copy()
@@ -320,6 +580,66 @@ class AnalyticsService:
             "top_industries": top_industries,
         }
 
+    def get_data_freshness(self) -> dict:
+        target_count = int(self.targets["company_code"].astype(str).nunique()) if not self.targets.empty else 0
+        annual_snapshot = self.latest_snapshot()
+        annual_report_year = int(annual_snapshot["report_year"].max()) if not annual_snapshot.empty else None
+        annual_report_published_at = (
+            annual_snapshot["published_at"].astype(str).max()
+            if not annual_snapshot.empty and "published_at" in annual_snapshot.columns
+            else None
+        )
+        latest_research_report = self.reports["report_date"].astype(str).max() if not self.reports.empty else None
+        latest_industry_report = self.industry_reports["report_date"].astype(str).max() if not self.industry_reports.empty else None
+        latest_macro_period = self.macro["period"].astype(str).max() if not self.macro.empty else None
+
+        period_summaries = []
+        latest_periodic_rows = self.official_periodic_snapshots.copy()
+        if not latest_periodic_rows.empty:
+            latest_periodic_rows["report_year"] = pd.to_numeric(latest_periodic_rows["report_year"], errors="coerce")
+            latest_periodic_rows["published_at"] = latest_periodic_rows["published_at"].astype(str)
+        for period_type, period_label in (
+            ("annual", "年报"),
+            ("q1", "一季报"),
+            ("h1", "半年报"),
+            ("q3", "三季报"),
+        ):
+            scoped = latest_periodic_rows[latest_periodic_rows["period_type"] == period_type].copy() if not latest_periodic_rows.empty else pd.DataFrame()
+            covered_companies = int(scoped["company_code"].astype(str).nunique()) if not scoped.empty else 0
+            coverage_ratio = round(covered_companies / target_count, 4) if target_count else 0.0
+            latest_row = (
+                scoped.sort_values(["report_year", "published_at"], ascending=[False, False]).head(1).to_dict("records")[0]
+                if not scoped.empty
+                else None
+            )
+            period_summaries.append(
+                {
+                    "period_type": period_type,
+                    "period_label": period_label,
+                    "covered_companies": covered_companies,
+                    "coverage_ratio": coverage_ratio,
+                    "latest_report_year": int(latest_row["report_year"]) if latest_row and pd.notna(latest_row.get("report_year")) else None,
+                    "latest_published_at": latest_row.get("published_at") if latest_row else None,
+                    "latest_company_name": latest_row.get("company_name") if latest_row else None,
+                }
+            )
+
+        latest_periodic = (
+            latest_periodic_rows.sort_values(["published_at", "report_year"], ascending=[False, False]).head(1).to_dict("records")[0]
+            if not latest_periodic_rows.empty
+            else None
+        )
+        return {
+            "annual_report_year": annual_report_year,
+            "annual_report_published_at": annual_report_published_at,
+            "latest_research_report": latest_research_report,
+            "latest_industry_report": latest_industry_report,
+            "latest_macro_period": latest_macro_period,
+            "latest_official_disclosure": latest_periodic.get("published_at") if latest_periodic else annual_report_published_at,
+            "latest_periodic_label": latest_periodic.get("period_label") if latest_periodic else None,
+            "period_summaries": period_summaries,
+        }
+
     def get_company_report(self, company_code: str) -> dict | None:
         row = self.get_company_record(company_code)
         if row is None:
@@ -328,6 +648,7 @@ class AnalyticsService:
         research = self.get_company_research_digest(company_code)
         industry = self.get_company_industry_digest(company_code)
         macro = self.get_macro_digest()
+        multimodal = self.get_company_multimodal_digest(company_code, report_year=int(row["report_year"]))
 
         strengths = []
         risks = list(row.get("risk_flags") or [])
@@ -400,12 +721,17 @@ class AnalyticsService:
                     ),
                 },
                 {"title": "宏观环境", "content": macro_summary},
+                {
+                    "title": "财报图表锚点",
+                    "content": multimodal.get("summary") or "多模态财报锚点待补齐。",
+                },
                 {"title": "优势与风险", "content": f"优势：{'；'.join(strengths)}。风险：{'；'.join(risks)}。"},
             ],
             "strengths": strengths,
             "risks": risks,
             "evidence": {
                 "financial_source_url": row.get("source_url"),
+                "multimodal_digest": multimodal,
                 "research_reports": research.get("latest_rows", []),
                 "industry_reports": industry.get("latest_rows", []),
                 "macro_items": macro.get("items", []),
@@ -416,16 +742,50 @@ class AnalyticsService:
     def compare_companies(self, company_codes: list[str]) -> dict | None:
         unique_codes = list(dict.fromkeys(str(code) for code in company_codes if str(code).strip()))
         company_rows = []
+        periodic_rows = self.official_periodic_snapshots.copy()
+        if not periodic_rows.empty:
+            periodic_rows["report_year"] = pd.to_numeric(periodic_rows["report_year"], errors="coerce")
+            periodic_rows["published_at"] = periodic_rows["published_at"].astype(str)
+
+        def _build_company_freshness(row: dict, research: dict, industry: dict) -> dict:
+            code = str(row["company_code"])
+            scoped_periodic = (
+                periodic_rows[periodic_rows["company_code"].astype(str) == code].copy()
+                if not periodic_rows.empty
+                else pd.DataFrame()
+            )
+            latest_periodic = (
+                scoped_periodic.sort_values(["published_at", "report_year"], ascending=[False, False]).head(1).to_dict("records")[0]
+                if not scoped_periodic.empty
+                else None
+            )
+            latest_stock_rows = research.get("latest_rows", [])
+            latest_industry_rows = industry.get("latest_rows", [])
+            annual_published_at = str(row.get("published_at")) if pd.notna(row.get("published_at")) else None
+            return {
+                "annual_report_year": int(row["report_year"]) if pd.notna(row.get("report_year")) else None,
+                "annual_report_published_at": annual_published_at,
+                "latest_official_disclosure": latest_periodic.get("published_at") if latest_periodic else annual_published_at,
+                "latest_periodic_label": latest_periodic.get("period_label") if latest_periodic else ("年报" if annual_published_at else None),
+                "latest_stock_report": latest_stock_rows[0].get("report_date") if latest_stock_rows else None,
+                "latest_industry_report": latest_industry_rows[0].get("report_date") if latest_industry_rows else None,
+            }
+
         for code in unique_codes:
             row = self.get_company_record(code)
             if row is None:
                 continue
+            research = self.get_company_research_digest(code)
+            industry = self.get_company_industry_digest(code)
+            multimodal = self.get_company_multimodal_digest(code, report_year=int(row["report_year"]))
             company_rows.append(
                 {
                     "row": row,
                     "trend": self.get_company_trend_digest(code),
-                    "research": self.get_company_research_digest(code),
-                    "industry": self.get_company_industry_digest(code),
+                    "research": research,
+                    "industry": industry,
+                    "multimodal": multimodal,
+                    "freshness": _build_company_freshness(row, research, industry),
                 }
             )
 
@@ -520,11 +880,14 @@ class AnalyticsService:
 
         comparison_rows = []
         evidence_rows = []
+        freshness_rows = []
         for item in company_rows:
             row = item["row"]
             trend = item["trend"]
             research = item["research"]
             industry = item["industry"]
+            multimodal = item["multimodal"]
+            freshness = item["freshness"]
             comparison_rows.append(
                 {
                     "company_code": str(row["company_code"]),
@@ -540,6 +903,7 @@ class AnalyticsService:
                     "profit_cagr_pct": _numeric_value(trend.get("profit_cagr_pct")),
                     "research_report_count": int(research.get("count", 0)),
                     "industry_report_count": int(industry.get("count", 0)),
+                    "multimodal_field_count": int(multimodal.get("filled_field_count", 0)),
                 }
             )
             evidence_rows.append(
@@ -547,12 +911,32 @@ class AnalyticsService:
                     "company_code": str(row["company_code"]),
                     "company_name": row["company_name"],
                     "financial_source_url": row.get("source_url"),
+                    "financial_published_at": freshness.get("annual_report_published_at"),
                     "trend_digest": trend,
                     "research_digest": research,
                     "industry_digest": industry,
+                    "multimodal_digest": multimodal,
                     "risk_flags": row.get("risk_flags", []),
+                    "freshness_digest": freshness,
                 }
             )
+            freshness_rows.append(freshness)
+
+        latest_freshness = max(
+            freshness_rows,
+            key=lambda item: (
+                str(item.get("latest_official_disclosure") or ""),
+                str(item.get("latest_periodic_label") or ""),
+            ),
+            default=None,
+        )
+        freshness_summary = {
+            "annual_report_year": report_year,
+            "latest_official_disclosure": latest_freshness.get("latest_official_disclosure") if latest_freshness else None,
+            "latest_periodic_label": latest_freshness.get("latest_periodic_label") if latest_freshness else None,
+            "latest_stock_report": max((str(item.get("latest_stock_report") or "") for item in freshness_rows), default="") or None,
+            "latest_industry_report": max((str(item.get("latest_industry_report") or "") for item in freshness_rows), default="") or None,
+        }
 
         profit_dimension = next(item for item in dimensions if item["dimension"] == "盈利能力")
         growth_dimension = next(item for item in dimensions if item["dimension"] == "成长性")
@@ -569,6 +953,10 @@ class AnalyticsService:
         ]
         if leader["row"].get("risk_flags"):
             highlights.append(f"{leader['row']['company_name']} 仍需关注：{'；'.join(leader['row']['risk_flags'])}。")
+        if leader["multimodal"].get("available"):
+            highlights.append(
+                f"财报图表锚点：{leader['row']['company_name']}{leader['multimodal'].get('summary')}"
+            )
 
         summary = (
             f"基于 {report_year} 年真实披露数据与多年度趋势，{leader['row']['company_name']} 当前综合表现领先；"
@@ -584,7 +972,7 @@ class AnalyticsService:
             "highlights": highlights,
             "comparison_rows": comparison_rows,
             "dimensions": dimensions,
-            "evidence": {"companies": evidence_rows},
+            "evidence": {"companies": evidence_rows, "freshness": freshness_summary},
         }
 
     def get_dashboard_payload(self) -> dict:
@@ -594,6 +982,7 @@ class AnalyticsService:
                 "status": status,
                 "targets": self.get_targets(),
                 "metrics": None,
+                "freshness": self.get_data_freshness(),
                 "ranking": [],
                 "watchlist": [],
                 "macro": [],
@@ -616,6 +1005,7 @@ class AnalyticsService:
             "status": status,
             "targets": self.get_targets(),
             "metrics": metrics,
+            "freshness": self.get_data_freshness(),
             "ranking": ranking.to_dict("records"),
             "watchlist": watchlist[["company_code", "company_name", "risk_level", "risk_flags"]].to_dict("records"),
             "macro": macro,

@@ -8,6 +8,8 @@ import type {
   CompanyCompareResponse,
   CompanyReportResponse,
   CompetitionPackageResponse,
+  DataFoundationSummaryResponse,
+  DataPreparationSummaryResponse,
   DashboardPayload,
   DecisionBriefResponse,
   LoginResponse,
@@ -147,6 +149,12 @@ export const api = {
   },
   getQualitySummary() {
     return request<QualitySummaryResponse>('/api/quality/summary');
+  },
+  getQualityFoundation() {
+    return request<DataFoundationSummaryResponse>('/api/quality/foundation');
+  },
+  getQualityPreparation() {
+    return request<DataPreparationSummaryResponse>('/api/quality/preparation');
   },
   syncAutoReviews(limit = 12) {
     return request<{ created_count: number; skipped_count: number; created: Array<Record<string, unknown>>; summary: QualitySummaryResponse }>(`/api/quality/reviews/auto?limit=${limit}`, {
