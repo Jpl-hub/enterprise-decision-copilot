@@ -9,6 +9,7 @@ import type {
   CompanyReportResponse,
   CompetitionPackageResponse,
   DataFoundationSummaryResponse,
+  DataGovernanceSummaryResponse,
   DataPreparationSummaryResponse,
   DashboardPayload,
   DecisionBriefResponse,
@@ -152,6 +153,9 @@ export const api = {
   },
   getQualityFoundation() {
     return request<DataFoundationSummaryResponse>('/api/quality/foundation');
+  },
+  getQualityGovernance() {
+    return request<DataGovernanceSummaryResponse>('/api/quality/governance');
   },
   getQualityPreparation() {
     return request<DataPreparationSummaryResponse>('/api/quality/preparation');

@@ -6,6 +6,7 @@ from app.api.dependencies import get_audit_service, get_current_user, get_qualit
 from app.schemas.quality import (
     AutoReviewSyncResponse,
     DataFoundationSummaryResponse,
+    DataGovernanceSummaryResponse,
     DataPreparationSummaryResponse,
     DataQualitySummaryResponse,
     ManualReviewRequest,
@@ -37,6 +38,13 @@ async def get_preparation_summary(
     quality_service: DataQualityService = Depends(get_quality_service),
 ) -> dict:
     return quality_service.get_preparation_summary()
+
+
+@router.get("/governance", response_model=DataGovernanceSummaryResponse)
+async def get_governance_summary(
+    quality_service: DataQualityService = Depends(get_quality_service),
+) -> dict:
+    return quality_service.get_governance_summary()
 
 
 @router.post("/reviews", response_model=ManualReviewSubmitResponse)

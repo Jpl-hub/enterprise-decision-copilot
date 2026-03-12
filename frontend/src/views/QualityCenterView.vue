@@ -210,6 +210,95 @@
           </div>
         </section>
 
+        <section v-if="governance" class="preparation-section">
+          <div class="sub-panel compact-data-panel foundation-overview-panel">
+            <div class="sub-panel-header">
+              <h3>可信治理表</h3>
+              <span class="badge-subtle">{{ governance.generated_at?.slice(0, 16).replace('T', ' ') || '实时快照' }}</span>
+            </div>
+            <p class="foundation-overview-text">
+              这里直接回答“数据从哪来、覆盖到哪、哪些字段能不能信、系统结论依赖什么证据”，不是再写抽象说明。
+            </p>
+          </div>
+
+          <div class="panel-split two-cols">
+            <div class="sub-panel compact-data-panel">
+              <div class="sub-panel-header">
+                <h3>数据源登记表</h3>
+                <span class="badge-subtle">{{ governance.source_catalog.length }} 条</span>
+              </div>
+              <div class="stack-list">
+                <div v-for="item in governance.source_catalog" :key="`${item.source_name}-${item.entry_url}`" class="foundation-dataset-card">
+                  <div class="trace-title-row">
+                    <strong>{{ item.source_name }}</strong>
+                    <span>{{ item.priority }}</span>
+                  </div>
+                  <p>{{ item.domain }} · {{ item.usage_scope }}</p>
+                  <span class="foundation-dataset-note">{{ item.compliance_note }}</span>
+                  <a :href="item.entry_url" target="_blank" rel="noreferrer" class="text-link-button">查看入口</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="sub-panel compact-data-panel">
+              <div class="sub-panel-header">
+                <h3>企业覆盖表</h3>
+                <span class="badge-subtle">{{ governance.company_coverage.length }} 家核心企业</span>
+              </div>
+              <div class="stack-list">
+                <div v-for="item in governance.company_coverage" :key="item.company_code" class="foundation-dataset-card">
+                  <div class="trace-title-row">
+                    <strong>{{ item.company_name }}</strong>
+                    <span>{{ formatExchange(item.exchange) }}</span>
+                  </div>
+                  <p>{{ item.industry || '未分类' }} · 年报 {{ item.annual_report_count }} 份 · 定期披露 {{ item.periodic_report_count }} 条</p>
+                  <span class="foundation-dataset-note">
+                    年份 {{ formatYearList(item.annual_years) }} · 研报 {{ item.research_report_count }} 条 · 多模态 {{ item.multimodal_extract_count }} 份
+                  </span>
+                  <span v-if="item.latest_disclosure" class="foundation-dataset-note">最新披露 {{ item.latest_disclosure }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-split two-cols">
+            <div class="sub-panel compact-data-panel">
+              <div class="sub-panel-header">
+                <h3>字段质量表</h3>
+                <span class="badge-subtle">按空值率排序</span>
+              </div>
+              <div class="stack-list">
+                <div v-for="item in governance.field_quality" :key="`${item.dataset}-${item.field}`" class="foundation-dataset-card">
+                  <div class="trace-title-row">
+                    <strong>{{ item.dataset }} / {{ item.field }}</strong>
+                    <span>{{ percent(item.null_ratio) }}</span>
+                  </div>
+                  <p>{{ item.source_type }} · {{ item.extraction_method }}</p>
+                  <span class="foundation-dataset-note">{{ item.review_status }} · {{ item.usage_scope }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="sub-panel compact-data-panel">
+              <div class="sub-panel-header">
+                <h3>证据映射表</h3>
+                <span class="badge-subtle">{{ governance.evidence_mapping.length }} 个模块</span>
+              </div>
+              <div class="stack-list">
+                <div v-for="item in governance.evidence_mapping" :key="item.module" class="foundation-dataset-card">
+                  <div class="trace-title-row">
+                    <strong>{{ item.module }}</strong>
+                    <span>{{ item.output_label }}</span>
+                  </div>
+                  <p>来源 {{ item.primary_sources.join(' / ') }}</p>
+                  <span class="foundation-dataset-note">证据字段 {{ item.evidence_fields.join(' / ') }}</span>
+                  <span class="foundation-dataset-note">{{ item.verification_rule }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section v-if="stack && (stackPillars.length || stackEngines.length)" class="system-blueprint-section">
           <div class="sub-panel compact-data-panel blueprint-summary-panel">
             <div class="sub-panel-header">
@@ -532,13 +621,21 @@
 import { computed, onMounted, ref } from 'vue';
 
 import { api } from '../api/client';
-import type { AIStackSummaryResponse, DataFoundationSummaryResponse, DataPreparationSummaryResponse, ExchangeQualityStatus, QualitySummaryResponse } from '../api/types';
+import type {
+  AIStackSummaryResponse,
+  DataFoundationSummaryResponse,
+  DataGovernanceSummaryResponse,
+  DataPreparationSummaryResponse,
+  ExchangeQualityStatus,
+  QualitySummaryResponse,
+} from '../api/types';
 import PagePanel from '../components/PagePanel.vue';
 import { useDashboardStore } from '../stores/dashboard';
 
 const loading = ref(false);
 const summary = ref<QualitySummaryResponse | null>(null);
 const foundation = ref<DataFoundationSummaryResponse | null>(null);
+const governance = ref<DataGovernanceSummaryResponse | null>(null);
 const preparation = ref<DataPreparationSummaryResponse | null>(null);
 const stack = ref<AIStackSummaryResponse | null>(null);
 const dashboardStore = useDashboardStore();
@@ -661,14 +758,16 @@ function formatYearList(values: number[]) {
 async function loadSummary() {
   loading.value = true;
   try {
-    const [quality, foundationSummary, preparationSummary, aiStack] = await Promise.all([
+    const [governanceSummary, qualitySummary, foundationSummary, preparationSummary, aiStack] = await Promise.all([
+      api.getQualityGovernance(),
       api.getQualitySummary(),
       api.getQualityFoundation(),
       api.getQualityPreparation(),
       api.getAIStack(),
       dashboardStore.payload ? Promise.resolve(dashboardStore.payload) : dashboardStore.load(),
     ]);
-    summary.value = quality;
+    governance.value = governanceSummary;
+    summary.value = qualitySummary;
     foundation.value = foundationSummary;
     preparation.value = preparationSummary;
     stack.value = aiStack;

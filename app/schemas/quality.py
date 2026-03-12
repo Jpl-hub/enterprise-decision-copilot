@@ -125,6 +125,56 @@ class DataFoundationSummaryResponse(BaseModel):
     multimodal_extract_report_count: int = 0
 
 
+class GovernanceSourceEntry(BaseModel):
+    source_type: str
+    source_name: str
+    domain: str
+    entry_url: str
+    usage_scope: str
+    compliance_note: str
+    priority: str
+
+
+class GovernanceCompanyCoverageItem(BaseModel):
+    company_code: str
+    company_name: str
+    exchange: str
+    industry: str | None = None
+    annual_years: list[int] = Field(default_factory=list)
+    annual_report_count: int = 0
+    periodic_report_count: int = 0
+    research_report_count: int = 0
+    multimodal_extract_count: int = 0
+    latest_disclosure: str | None = None
+    latest_research_report: str | None = None
+
+
+class GovernanceFieldQualityItem(BaseModel):
+    dataset: str
+    field: str
+    source_type: str
+    extraction_method: str
+    null_ratio: float = 0.0
+    review_status: str
+    usage_scope: str
+
+
+class GovernanceEvidenceMappingItem(BaseModel):
+    module: str
+    output_label: str
+    primary_sources: list[str] = Field(default_factory=list)
+    evidence_fields: list[str] = Field(default_factory=list)
+    verification_rule: str
+
+
+class DataGovernanceSummaryResponse(BaseModel):
+    generated_at: str | None = None
+    source_catalog: list[GovernanceSourceEntry] = Field(default_factory=list)
+    company_coverage: list[GovernanceCompanyCoverageItem] = Field(default_factory=list)
+    field_quality: list[GovernanceFieldQualityItem] = Field(default_factory=list)
+    evidence_mapping: list[GovernanceEvidenceMappingItem] = Field(default_factory=list)
+
+
 class PreparationSourceStatus(BaseModel):
     source_key: str
     label: str

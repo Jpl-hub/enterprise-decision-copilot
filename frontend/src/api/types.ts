@@ -637,6 +637,56 @@ export interface DataFoundationSummaryResponse {
   multimodal_extract_report_count: number;
 }
 
+export interface GovernanceSourceEntry {
+  source_type: string;
+  source_name: string;
+  domain: string;
+  entry_url: string;
+  usage_scope: string;
+  compliance_note: string;
+  priority: string;
+}
+
+export interface GovernanceCompanyCoverageItem {
+  company_code: string;
+  company_name: string;
+  exchange: string;
+  industry?: string | null;
+  annual_years: number[];
+  annual_report_count: number;
+  periodic_report_count: number;
+  research_report_count: number;
+  multimodal_extract_count: number;
+  latest_disclosure?: string | null;
+  latest_research_report?: string | null;
+}
+
+export interface GovernanceFieldQualityItem {
+  dataset: string;
+  field: string;
+  source_type: string;
+  extraction_method: string;
+  null_ratio: number;
+  review_status: string;
+  usage_scope: string;
+}
+
+export interface GovernanceEvidenceMappingItem {
+  module: string;
+  output_label: string;
+  primary_sources: string[];
+  evidence_fields: string[];
+  verification_rule: string;
+}
+
+export interface DataGovernanceSummaryResponse {
+  generated_at?: string | null;
+  source_catalog: GovernanceSourceEntry[];
+  company_coverage: GovernanceCompanyCoverageItem[];
+  field_quality: GovernanceFieldQualityItem[];
+  evidence_mapping: GovernanceEvidenceMappingItem[];
+}
+
 export interface PreparationSourceStatus {
   source_key: string;
   label: string;

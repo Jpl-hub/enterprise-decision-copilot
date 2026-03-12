@@ -69,6 +69,17 @@ class DataQualityService:
         payload = json.loads(path.read_text(encoding="utf-8"))
         return payload if isinstance(payload, list) else []
 
+    def _load_source_registry_frame(self) -> pd.DataFrame:
+        candidates = [
+            settings.processed_dir / "source_registry.csv",
+            settings.data_dir / "lake" / "silver" / "source_registry" / "part-0000.csv",
+            settings.data_dir / "lake" / "bronze" / "source_registry" / "part-0000.csv",
+        ]
+        for path in candidates:
+            if path.exists():
+                return self._read_csv(path)
+        return pd.DataFrame()
+
     def _latest_text(self, series: pd.Series) -> str | None:
         values = [str(item).strip() for item in series.dropna().tolist() if str(item).strip()]
         return max(values) if values else None
@@ -597,7 +608,7 @@ class DataQualityService:
         processed_dir = settings.processed_dir
         quality_dir = settings.data_dir / "quality"
         model_dir = settings.cache_dir / "models"
-        source_registry = self._read_csv(processed_dir / "source_registry.csv")
+        source_registry = self._load_source_registry_frame()
         financials = self._read_csv(processed_dir / "financial_features.csv", dtype={"company_code": str})
         research_reports = self._read_csv(processed_dir / "research_reports.csv", dtype={"company_code": str})
         industry_reports = self._read_csv(processed_dir / "industry_reports.csv")
@@ -787,6 +798,179 @@ class DataQualityService:
             "promoted_exchange_status": promoted_exchange_status,
             "promoted_companies": promoted_companies[:8],
             "preparation_notes": notes,
+        }
+
+    def get_governance_summary(self) -> dict:
+        processed_dir = settings.processed_dir
+        quality_dir = settings.data_dir / "quality"
+        source_registry = self._load_source_registry_frame()
+        financials = self._read_csv(processed_dir / "financial_features.csv", dtype={"company_code": str})
+        research_reports = self._read_csv(processed_dir / "research_reports.csv", dtype={"company_code": str})
+        periodic = self._read_csv(processed_dir / "official_periodic_snapshots.csv", dtype={"company_code": str})
+        quality_report = self._read_json(quality_dir / "quality_report.json")
+        targets = load_targets()
+        target_frame = pd.DataFrame(targets)
+        multimodal_extracts = pd.DataFrame(self._load_multimodal_extracts())
+
+        source_catalog = source_registry.fillna("").to_dict("records") if not source_registry.empty else []
+
+        financial_group = {}
+        if not financials.empty:
+            financial_group = {
+                code: group
+                for code, group in financials.groupby(financials["company_code"].astype(str))
+            }
+        research_group = {}
+        if not research_reports.empty:
+            research_group = {
+                code: group
+                for code, group in research_reports.groupby(research_reports["company_code"].astype(str))
+            }
+        periodic_group = {}
+        if not periodic.empty:
+            periodic_group = {
+                code: group
+                for code, group in periodic.groupby(periodic["company_code"].astype(str))
+            }
+        multimodal_group = {}
+        if not multimodal_extracts.empty:
+            multimodal_group = {
+                code: group
+                for code, group in multimodal_extracts.groupby(multimodal_extracts["company_code"].astype(str))
+            }
+
+        company_coverage: list[dict] = []
+        if not target_frame.empty:
+            for row in target_frame.to_dict("records"):
+                code = str(row.get("company_code") or "")
+                finance_rows = financial_group.get(code, pd.DataFrame())
+                research_rows = research_group.get(code, pd.DataFrame())
+                periodic_rows = periodic_group.get(code, pd.DataFrame())
+                multimodal_rows = multimodal_group.get(code, pd.DataFrame())
+                annual_years = []
+                if not finance_rows.empty and "report_year" in finance_rows.columns:
+                    annual_years = sorted(
+                        {
+                            self._safe_int(value)
+                            for value in finance_rows["report_year"].dropna().tolist()
+                            if self._safe_int(value) > 0
+                        }
+                    )
+                latest_disclosure = None
+                if not periodic_rows.empty and "published_at" in periodic_rows.columns:
+                    latest_disclosure = self._latest_text(periodic_rows["published_at"])
+                elif not finance_rows.empty and "published_at" in finance_rows.columns:
+                    latest_disclosure = self._latest_text(finance_rows["published_at"])
+                company_coverage.append(
+                    {
+                        "company_code": code,
+                        "company_name": str(row.get("company_name") or code),
+                        "exchange": str(row.get("exchange") or ""),
+                        "industry": str(row.get("industry") or "") or None,
+                        "annual_years": annual_years,
+                        "annual_report_count": len(annual_years),
+                        "periodic_report_count": int(len(periodic_rows)),
+                        "research_report_count": int(len(research_rows)),
+                        "multimodal_extract_count": int(len(multimodal_rows)),
+                        "latest_disclosure": latest_disclosure,
+                        "latest_research_report": self._latest_text(research_rows["report_date"]) if not research_rows.empty and "report_date" in research_rows.columns else None,
+                    }
+                )
+        company_coverage = sorted(
+            company_coverage,
+            key=lambda item: (
+                item["annual_report_count"],
+                item["periodic_report_count"],
+                item["research_report_count"],
+            ),
+            reverse=True,
+        )
+
+        extraction_map = {
+            "financial_features": ("financial", "规则抽取 + 人工复核", "经营诊断 / 企业对比 / 风险判断"),
+            "research_reports": ("research", "公开页面解析", "问答检索 / 观点证据"),
+            "industry_reports": ("research", "公开页面解析", "行业趋势 / 对比背景"),
+            "macro_indicators": ("macro", "公开统计录入", "宏观脉冲 / 决策背景"),
+            "source_registry": ("registry", "人工维护", "来源登记 / 合规说明"),
+            "company_fact": ("derived", "湖仓聚合", "工作台摘要 / 对比视图"),
+        }
+        field_quality: list[dict] = []
+        for dataset_name, payload in quality_report.items():
+            if not isinstance(payload, dict) or "null_ratio" not in payload:
+                continue
+            source_type, extraction_method, usage_scope = extraction_map.get(
+                dataset_name,
+                ("unknown", "待识别", "治理补充"),
+            )
+            for field_name, ratio in (payload.get("null_ratio") or {}).items():
+                try:
+                    null_ratio = float(ratio)
+                except (TypeError, ValueError):
+                    continue
+                if field_name in {"company_code", "source_url"}:
+                    continue
+                review_status = "稳定" if null_ratio <= 0.05 else "需关注" if null_ratio <= 0.2 else "重点复核"
+                field_quality.append(
+                    {
+                        "dataset": dataset_name,
+                        "field": str(field_name),
+                        "source_type": source_type,
+                        "extraction_method": extraction_method,
+                        "null_ratio": round(null_ratio, 4),
+                        "review_status": review_status,
+                        "usage_scope": usage_scope,
+                    }
+                )
+        field_quality = sorted(
+            field_quality,
+            key=lambda item: (item["null_ratio"], item["dataset"], item["field"]),
+            reverse=True,
+        )[:16]
+
+        evidence_mapping = [
+            {
+                "module": "首页问答",
+                "output_label": "问题理解与任务分流",
+                "primary_sources": ["financial_features", "research_reports", "industry_reports", "macro_indicators"],
+                "evidence_fields": ["query_terms", "task_mode", "thread_memory"],
+                "verification_rule": "每次问答必须回传任务模式、线程记忆和证据关键词。",
+            },
+            {
+                "module": "企业分析",
+                "output_label": "经营诊断结论",
+                "primary_sources": ["financial_features", "research_reports", "macro_indicators", "official_extract_multimodal"],
+                "evidence_fields": ["sections", "trend_digest", "multimodal_digest", "financial_source_url"],
+                "verification_rule": "结论页需能回到财报原文、图表锚点和研报证据。",
+            },
+            {
+                "module": "企业对比",
+                "output_label": "双企业横向判断",
+                "primary_sources": ["company_fact", "research_reports", "industry_reports", "official_periodic_snapshots"],
+                "evidence_fields": ["comparison_rows", "dimensions", "freshness_digest", "multimodal_digest"],
+                "verification_rule": "每个对比结论都必须带来源时效和证据摘要。",
+            },
+            {
+                "module": "风险判断",
+                "output_label": "风险等级与监测项",
+                "primary_sources": ["financial_features", "risk_model_artifacts", "research_reports"],
+                "evidence_fields": ["risk_score", "heuristic_score", "model_prediction", "monitoring_items"],
+                "verification_rule": "风险页同时展示规则分、模型概率和监测项，避免黑箱判断。",
+            },
+            {
+                "module": "报告导出",
+                "output_label": "结构化分析材料",
+                "primary_sources": ["company_report", "decision_brief", "citations", "quality_summary"],
+                "evidence_fields": ["sections", "citations", "quality_snapshot", "exported_at"],
+                "verification_rule": "导出内容必须带时间戳、引用清单和质量快照。",
+            },
+        ]
+
+        return {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "source_catalog": source_catalog,
+            "company_coverage": company_coverage,
+            "field_quality": field_quality,
+            "evidence_mapping": evidence_mapping,
         }
 
     def submit_manual_review(
