@@ -38,9 +38,12 @@ IDENTIFIER_COLUMNS = {"company_code", "industry_code", "security_code", "disclos
 class CorpusIndex:
     frame: pd.DataFrame
     chunk_frame: pd.DataFrame
-    vectorizer: TfidfVectorizer | None
-    matrix: object | None
+    char_vectorizer: TfidfVectorizer | None
+    char_matrix: object | None
+    word_vectorizer: TfidfVectorizer | None
+    word_matrix: object | None
     text_column: str
+    lexical_column: str
 
 
 class RetrievalService:
@@ -58,7 +61,16 @@ class RetrievalService:
     def _build_index(self, frame: pd.DataFrame, columns: list[str]) -> CorpusIndex:
         if frame.empty:
             empty = frame.copy()
-            return CorpusIndex(frame=empty, chunk_frame=empty, vectorizer=None, matrix=None, text_column="_search_text")
+            return CorpusIndex(
+                frame=empty,
+                chunk_frame=empty,
+                char_vectorizer=None,
+                char_matrix=None,
+                word_vectorizer=None,
+                word_matrix=None,
+                text_column="_search_text",
+                lexical_column="_lexical_terms",
+            )
 
         corpus = frame.copy().reset_index(drop=True)
         corpus["_report_id"] = corpus.index.astype(int)
@@ -78,28 +90,59 @@ class RetrievalService:
                         ]
                     )
                 )
+                lexical_terms = " ".join(self._tokenize_text(search_text)) or search_text or "暂无证据"
                 chunk_rows.append(
                     {
                         **row,
                         "_chunk_id": chunk_id,
                         "_chunk_text": chunk_text,
                         "_search_text": search_text,
+                        "_lexical_terms": lexical_terms,
                     }
                 )
 
         chunk_frame = pd.DataFrame(chunk_rows)
-        vectorizer = TfidfVectorizer(
+        char_vectorizer = TfidfVectorizer(
             analyzer="char_wb",
             ngram_range=(2, 4),
             min_df=1,
             max_features=12000,
             sublinear_tf=True,
         )
-        matrix = vectorizer.fit_transform(chunk_frame["_search_text"])
-        return CorpusIndex(frame=corpus, chunk_frame=chunk_frame, vectorizer=vectorizer, matrix=matrix, text_column="_search_text")
+        word_vectorizer = TfidfVectorizer(
+            analyzer="word",
+            ngram_range=(1, 2),
+            min_df=1,
+            max_features=8000,
+            sublinear_tf=True,
+        )
+        char_matrix = char_vectorizer.fit_transform(chunk_frame["_search_text"])
+        word_matrix = word_vectorizer.fit_transform(chunk_frame["_lexical_terms"])
+        return CorpusIndex(
+            frame=corpus,
+            chunk_frame=chunk_frame,
+            char_vectorizer=char_vectorizer,
+            char_matrix=char_matrix,
+            word_vectorizer=word_vectorizer,
+            word_matrix=word_matrix,
+            text_column="_search_text",
+            lexical_column="_lexical_terms",
+        )
 
     def _normalize_text(self, text: str) -> str:
         return re.sub(r"\s+", " ", str(text or "")).strip()
+
+    def _tokenize_text(self, text: str) -> list[str]:
+        normalized = self._normalize_text(text)
+        tokens: list[str] = []
+        for token in re.findall(r"[A-Za-z0-9]+|[\u4e00-\u9fff]{2,}", normalized):
+            compact = token.strip()
+            if len(compact) > 10:
+                continue
+            if compact in STOP_TOKENS or compact in tokens:
+                continue
+            tokens.append(compact)
+        return tokens
 
     def _chunk_document(self, row: dict, max_chars: int = 140) -> list[str]:
         primary = self._normalize_text(str(row.get("content") or ""))
@@ -181,18 +224,38 @@ class RetrievalService:
 
     def _extract_query_keywords(self, query: str) -> list[str]:
         normalized = self._normalize_text(query)
-        terms: list[str] = []
-        for token in re.findall(r"[A-Za-z0-9]+|[\u4e00-\u9fff]{2,}", normalized):
-            compact = token.strip()
-            if len(compact) > 10:
-                continue
-            if compact in STOP_TOKENS or compact in terms:
-                continue
-            terms.append(compact)
+        terms = self._tokenize_text(normalized)
         for phrase in QUERY_HINT_KEYWORDS:
             if phrase in normalized and phrase not in terms:
                 terms.append(phrase)
         return terms[:8]
+
+    def _dedupe_terms(self, terms: list[str], limit: int = 8) -> list[str]:
+        deduped: list[str] = []
+        for term in terms:
+            compact = self._normalize_text(term)
+            if not compact or compact in deduped or compact in STOP_TOKENS:
+                continue
+            deduped.append(compact)
+            if len(deduped) >= limit:
+                break
+        return deduped
+
+    def _build_query_variants(self, query: str, expansion_terms: list[str] | None = None) -> list[str]:
+        normalized = self._normalize_text(query)
+        query_terms = self._extract_query_keywords(normalized)
+        expansion_terms = self._dedupe_terms(list(expansion_terms or []), limit=6)
+        variants: list[str] = []
+        for candidate in [
+            normalized,
+            " ".join(query_terms[:6]),
+            f"{normalized} {' '.join(expansion_terms[:4])}".strip(),
+            " ".join(self._dedupe_terms(query_terms[:4] + expansion_terms[:4], limit=8)),
+        ]:
+            compact = self._normalize_text(candidate)
+            if compact and compact not in variants:
+                variants.append(compact)
+        return variants[:4] or ([normalized] if normalized else [])
 
     def _sentiment_bias(self, query: str, sentiment: str | None) -> float:
         text = self._normalize_text(query)
@@ -213,7 +276,7 @@ class RetrievalService:
         matched = [term for term in query_terms if term and (term in chunk_text or term in title)]
         if not query_terms:
             return 0.0, []
-        return min(0.18, 0.06 * len(matched)), matched
+        return min(0.22, 0.05 * len(matched)), matched
 
     def _date_boost(self, report_date: str, min_ord: int, max_ord: int) -> float:
         try:
@@ -224,7 +287,30 @@ class RetrievalService:
             return 0.02
         return round(((ordinal - min_ord) / (max_ord - min_ord)) * 0.08, 4)
 
-    def _search(self, index: CorpusIndex, query: str, limit: int, filter_mask: pd.Series | None = None) -> list[dict]:
+    def _hybrid_scores(self, index: CorpusIndex, query_variants: list[str]) -> tuple[np.ndarray, np.ndarray]:
+        chunk_count = len(index.chunk_frame)
+        char_scores = np.zeros(chunk_count, dtype=float)
+        word_scores = np.zeros(chunk_count, dtype=float)
+
+        if query_variants and index.char_vectorizer is not None and index.char_matrix is not None:
+            char_queries = index.char_vectorizer.transform(query_variants)
+            char_scores = np.asarray(linear_kernel(char_queries, index.char_matrix)).max(axis=0)
+
+        if query_variants and index.word_vectorizer is not None and index.word_matrix is not None:
+            lexical_queries = [" ".join(self._tokenize_text(item)) or item for item in query_variants]
+            word_queries = index.word_vectorizer.transform(lexical_queries)
+            word_scores = np.asarray(linear_kernel(word_queries, index.word_matrix)).max(axis=0)
+
+        return char_scores, word_scores
+
+    def _search(
+        self,
+        index: CorpusIndex,
+        query: str,
+        limit: int,
+        filter_mask: pd.Series | None = None,
+        expansion_terms: list[str] | None = None,
+    ) -> list[dict]:
         if index.frame.empty:
             return []
 
@@ -236,7 +322,7 @@ class RetrievalService:
         if candidate_reports.empty:
             return []
 
-        if not query.strip() or index.vectorizer is None or index.matrix is None:
+        if not query.strip() or (index.char_vectorizer is None and index.word_vectorizer is None):
             return self._latest_rows(candidate_reports, columns, limit)
 
         candidate_report_ids = set(candidate_reports["_report_id"].tolist())
@@ -245,10 +331,10 @@ class RetrievalService:
         if candidate_chunks.empty:
             return self._latest_rows(candidate_reports, columns, limit)
 
-        query_vector = index.vectorizer.transform([self._normalize_text(query)])
-        base_scores = linear_kernel(query_vector, index.matrix).ravel()
-        base_scores = np.where(candidate_chunk_mask.to_numpy(), base_scores, -1.0)
-        query_terms = self._extract_query_keywords(query)
+        query_terms = self._dedupe_terms(self._extract_query_keywords(query) + list(expansion_terms or []), limit=10)
+        query_variants = self._build_query_variants(query, expansion_terms=expansion_terms)
+        char_scores, word_scores = self._hybrid_scores(index, query_variants)
+        base_scores = np.where(candidate_chunk_mask.to_numpy(), char_scores * 0.62 + word_scores * 0.38, -1.0)
 
         report_dates = pd.to_datetime(candidate_reports.get("report_date"), errors="coerce") if "report_date" in candidate_reports else pd.Series(dtype="datetime64[ns]")
         min_ord = int(report_dates.min().toordinal()) if not report_dates.empty and pd.notna(report_dates.min()) else 0
@@ -256,35 +342,38 @@ class RetrievalService:
 
         ranked_chunks = []
         for chunk_idx in base_scores.argsort()[::-1]:
-            base_score = float(base_scores[chunk_idx])
-            if base_score <= 0:
+            hybrid_score = float(base_scores[chunk_idx])
+            if hybrid_score <= 0:
                 continue
             chunk_row = index.chunk_frame.iloc[int(chunk_idx)]
-            keyword_boost, matched_terms = self._keyword_overlap(
-                query_terms,
-                str(chunk_row.get("_chunk_text") or ""),
-                str(chunk_row.get("title") or ""),
-            )
+            matched_text = str(chunk_row.get("_chunk_text") or "")
+            title = str(chunk_row.get("title") or "")
+            keyword_boost, matched_terms = self._keyword_overlap(query_terms, matched_text, title)
             date_boost = self._date_boost(str(chunk_row.get("report_date") or ""), min_ord, max_ord)
             sentiment_boost = self._sentiment_bias(query, chunk_row.get("sentiment"))
-            company_boost = 0.05 if str(chunk_row.get("company_name") or "") and str(chunk_row.get("company_name")) in query else 0.0
-            rerank_score = round(base_score * 0.72 + keyword_boost + date_boost + sentiment_boost + company_boost, 4)
-            signals = [f"vector={base_score:.4f}"]
+            entity_boost = 0.04 if any(term in title for term in list(expansion_terms or [])[:2]) else 0.0
+            rerank_score = round(hybrid_score * 0.7 + keyword_boost + date_boost + sentiment_boost + entity_boost, 4)
+            signals = [
+                f"char={char_scores[chunk_idx]:.4f}",
+                f"word={word_scores[chunk_idx]:.4f}",
+                f"hybrid={hybrid_score:.4f}",
+                f"variants={len(query_variants)}",
+            ]
             if matched_terms:
                 signals.append("keyword=" + "|".join(matched_terms[:3]))
             if date_boost > 0:
                 signals.append(f"recency={date_boost:.3f}")
             if sentiment_boost != 0:
                 signals.append(f"sentiment={sentiment_boost:.3f}")
-            if company_boost > 0:
-                signals.append("entity=company")
-            ranked_chunks.append((rerank_score, base_score, chunk_row, signals))
+            if entity_boost > 0:
+                signals.append("entity=expanded")
+            ranked_chunks.append((rerank_score, hybrid_score, chunk_row, signals))
             if len(ranked_chunks) >= max(limit * 12, 24):
                 break
 
         selected_reports = []
         seen_report_ids: set[int] = set()
-        for rerank_score, base_score, chunk_row, signals in sorted(ranked_chunks, key=lambda item: item[0], reverse=True):
+        for rerank_score, hybrid_score, chunk_row, signals in sorted(ranked_chunks, key=lambda item: item[0], reverse=True):
             report_id = int(chunk_row["_report_id"])
             if report_id in seen_report_ids:
                 continue
@@ -293,7 +382,7 @@ class RetrievalService:
             report_row = {key: value for key, value in report_row.items() if not key.startswith("_")}
             report_row = self._normalize_result_row(report_row)
             report_row["matched_excerpt"] = self._build_excerpt(chunk_row)
-            report_row["relevance_score"] = round(base_score, 4)
+            report_row["relevance_score"] = round(hybrid_score, 4)
             report_row["rerank_score"] = rerank_score
             report_row["ranking_signals"] = signals
             selected_reports.append(report_row)
@@ -310,7 +399,9 @@ class RetrievalService:
 
         target = self.analytics_service.targets[self.analytics_service.targets["company_code"].astype(str) == company_code]
         keywords: list[str] = []
+        company_name = ""
         if not target.empty:
+            company_name = str(target.iloc[0].get("company_name") or "")
             keywords = self.analytics_service._segment_to_industry_keywords(str(target.iloc[0]["segment"]))
         industry_mask = None
         if not self.industry_index.frame.empty and keywords:
@@ -318,16 +409,33 @@ class RetrievalService:
                 lambda name: any(keyword in name for keyword in keywords)
             )
 
+        expansion_terms = self._dedupe_terms([company_name] + keywords, limit=6)
+        query_terms = self._extract_query_keywords(query)
+        query_profile = {
+            "query": query,
+            "query_terms": query_terms,
+            "expansion_terms": expansion_terms,
+            "query_variants": self._build_query_variants(query, expansion_terms=expansion_terms),
+        }
         return {
             "query": query,
-            "query_terms": self._extract_query_keywords(query),
-            "stock_reports": self._search(self.stock_index, query, limit, stock_mask),
-            "industry_reports": self._search(self.industry_index, query, limit, industry_mask),
+            "query_terms": query_terms,
+            "query_profile": query_profile,
+            "stock_reports": self._search(self.stock_index, query, limit, stock_mask, expansion_terms=expansion_terms),
+            "industry_reports": self._search(self.industry_index, query, limit, industry_mask, expansion_terms=expansion_terms),
         }
 
     def retrieve_industry_evidence(self, query: str, limit: int = 6) -> dict:
+        query_terms = self._extract_query_keywords(query)
+        query_profile = {
+            "query": query,
+            "query_terms": query_terms,
+            "expansion_terms": query_terms[:3],
+            "query_variants": self._build_query_variants(query, expansion_terms=query_terms[:3]),
+        }
         return {
             "query": query,
-            "query_terms": self._extract_query_keywords(query),
-            "industry_reports": self._search(self.industry_index, query, limit),
+            "query_terms": query_terms,
+            "query_profile": query_profile,
+            "industry_reports": self._search(self.industry_index, query, limit, expansion_terms=query_terms[:3]),
         }

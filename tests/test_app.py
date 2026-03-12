@@ -91,6 +91,7 @@ def test_agent_can_generate_decision_brief() -> None:
     payload = container.agent_service.answer("结合行业研报看迈瑞医疗的机会和风险")
     assert "决策简报" in payload["title"]
     assert payload["evidence"]["query_terms"]
+    assert payload["evidence"]["query_profile"]["query_variants"]
     assert payload["evidence"]["semantic_stock_reports"]
     assert payload["evidence"]["semantic_industry_reports"]
     assert payload["evidence"]["semantic_stock_reports"][0]["matched_excerpt"]
@@ -102,6 +103,7 @@ def test_decision_brief_contains_evidence_highlights() -> None:
     brief = container.decision_service.build_company_decision_brief("300760", "结合海外增长和风险看迈瑞医疗")
     assert brief is not None
     assert brief["evidence"]["query_terms"]
+    assert brief["evidence"]["query_profile"]["query_variants"]
     assert brief["evidence_highlights"]
     assert all("证据：" in item for item in brief["evidence_highlights"])
 
@@ -328,6 +330,9 @@ def test_company_report_tool_can_use_narrative_service() -> None:
     assert result.payload['summary'] == '重写摘要：生成更正式的企业综合报告'
     assert result.payload['highlights'][0] == '重写首段：经营概况更适合答辩口径。'
     assert result.payload['evidence']['narrative_mode'] == 'stub'
+
+
+
 
 
 

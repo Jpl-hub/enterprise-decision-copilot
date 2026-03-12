@@ -125,6 +125,7 @@ class DecisionService:
             "evidence": {
                 "financial_source_url": row.get("source_url"),
                 "query_terms": evidence.get("query_terms", []),
+                "query_profile": evidence.get("query_profile", {}),
                 "semantic_stock_reports": evidence["stock_reports"],
                 "semantic_industry_reports": evidence["industry_reports"],
                 "macro_items": macro.get("items", []),
