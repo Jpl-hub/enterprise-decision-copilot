@@ -1,18 +1,35 @@
 <template>
   <div class="page-stack workbench-page refined-workbench">
-    <PagePanel title="企业分析" eyebrow="Enterprise Detail">
+    <PagePanel title="企业分析" eyebrow="单企业判断">
       <template #actions>
         <div class="toolbar-cluster">
-          <select v-model="selectedCode" class="select-input toolbar-select">
-            <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
-          </select>
+          <label class="console-field">
+            <select v-model="selectedCode" class="select-input toolbar-select">
+              <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
+            </select>
+          </label>
           <button class="button-primary" @click="loadAll">刷新</button>
         </div>
       </template>
 
-      <div v-if="loadError" class="error-banner">
+      <div v-if="loadError" class="error-box">
         {{ loadError }}
       </div>
+
+      <section v-if="isBootstrapping" class="sub-panel workbench-loading-shell">
+        <div class="workbench-loading-copy">
+          <div class="spinner-placeholder"></div>
+          <div>
+            <strong>正在整理企业判断</strong>
+            <p>系统正在汇总财报、研报、风险信号与图表锚点。</p>
+          </div>
+        </div>
+        <div class="workbench-loading-grid">
+          <div class="workbench-loading-card"></div>
+          <div class="workbench-loading-card"></div>
+          <div class="workbench-loading-card"></div>
+        </div>
+      </section>
 
       <div class="analysis-hero compact-analysis-hero" v-if="report">
         <div class="analysis-hero-main">
@@ -22,26 +39,26 @@
         <div class="analysis-hero-metrics" v-if="risk">
           <div class="mini-metric-card">
             <span>风险等级</span>
-            <strong>{{ risk.risk_level }}</strong>
+            <strong :class="risk.risk_level === '高' ? 'text-danger' : 'text-primary'">{{ risk.risk_level }}</strong>
           </div>
           <div class="mini-metric-card">
             <span>风险分</span>
-            <strong>{{ risk.risk_score }}</strong>
+            <strong class="text-brand">{{ risk.risk_score }}</strong>
           </div>
           <div class="mini-metric-card" v-if="risk.model_prediction">
-            <span>模型概率</span>
-            <strong>{{ formatPercent(risk.model_prediction.high_risk_probability) }}</strong>
+            <span>AI 模型概率</span>
+            <strong class="text-brand">{{ formatPercent(risk.model_prediction.high_risk_probability) }}</strong>
           </div>
         </div>
       </div>
 
       <div v-if="report || brief || risk" class="company-metrics-grid analysis-signal-grid">
         <div class="company-metric-card">
-          <span>财报口径</span>
+          <span>财报基准口径</span>
           <strong>{{ report ? `${report.report_year} 年报` : '加载中' }}</strong>
         </div>
         <div class="company-metric-card">
-          <span>趋势区间</span>
+          <span>历史趋势区间</span>
           <strong>{{ trendYearsText }}</strong>
         </div>
         <div class="company-metric-card">
@@ -49,32 +66,32 @@
           <strong>{{ stockEvidenceCount }} 条</strong>
         </div>
         <div class="company-metric-card">
-          <span>行业证据</span>
+          <span>行业对比证据</span>
           <strong>{{ industryEvidenceCount }} 条</strong>
         </div>
         <div class="company-metric-card">
-          <span>宏观窗口</span>
+          <span>宏观信号窗口</span>
           <strong>{{ macroWindowText }}</strong>
         </div>
         <div class="company-metric-card">
-          <span>风险监测项</span>
-          <strong>{{ monitoringCount }} 项</strong>
+          <span>风险监测事项</span>
+          <strong :class="monitoringCount > 0 ? 'text-danger' : ''">{{ monitoringCount }} 项</strong>
         </div>
       </div>
 
       <section v-if="report || brief || risk" class="sub-panel workbench-closure-strip">
         <div class="workbench-closure-main">
           <div class="trace-title-row">
-            <strong>分析闭环</strong>
+            <strong>业务分析闭环</strong>
             <span class="badge-subtle">{{ closureEvidenceText }}</span>
           </div>
           <p>{{ closureSummaryText }}</p>
         </div>
         <div class="workbench-action-strip">
           <RouterLink to="/" class="button-primary">继续追问</RouterLink>
-          <RouterLink :to="compareRoute" class="button-ghost">企业对比</RouterLink>
-          <RouterLink :to="`/competition/${selectedCode}`" class="button-ghost">导出报告</RouterLink>
-          <a v-if="financialSourceUrl" :href="financialSourceUrl" target="_blank" rel="noreferrer" class="button-ghost">财报原文</a>
+          <RouterLink :to="compareRoute" class="button-ghost">发起核心企业对比</RouterLink>
+          <RouterLink :to="`/competition/${selectedCode}`" class="button-ghost">导出分析材料</RouterLink>
+          <a v-if="financialSourceUrl" :href="financialSourceUrl" target="_blank" rel="noreferrer" class="button-ghost">查看财报原文</a>
         </div>
       </section>
 
@@ -93,36 +110,50 @@
         </article>
       </section>
 
-      <div class="analysis-grid two-main-one-side">
+      <div v-if="!isBootstrapping" class="analysis-grid two-main-one-side">
         <div class="analysis-main-stack">
-          <div class="sub-panel">
+          <div class="sub-panel content-panel">
             <div class="sub-panel-header">
-              <h3>管理判断</h3>
+              <h3>经营判断</h3>
             </div>
-            <div v-if="briefLoading" class="empty-state">正在生成判断...</div>
+            <div v-if="briefLoading" class="empty-state">
+              <div class="spinner-placeholder"></div>
+              <p>正在整理判断依据...</p>
+            </div>
             <div v-else-if="brief" class="stack-list">
-              <div class="info-card compact emphasis-card">
+              <div class="info-card compact emphasis-card brand-glow">
                 <strong>{{ brief.verdict }}</strong>
                 <p>{{ brief.summary }}</p>
               </div>
               <div class="info-card compact">
-                <strong>关键判断</strong>
-                <p>{{ brief.key_judgements.join('；') }}</p>
+                <strong>核心判断依据</strong>
+                <ul class="bullet-list">
+                   <li v-for="j in brief.key_judgements" :key="j">{{ j }}</li>
+                </ul>
               </div>
               <div class="info-card compact">
-                <strong>建议动作</strong>
-                <p>{{ brief.action_recommendations.join('；') }}</p>
+                <strong>建议执行动作</strong>
+                <ul class="bullet-list">
+                   <li v-for="a in brief.action_recommendations" :key="a">{{ a }}</li>
+                </ul>
               </div>
               <div v-if="brief.evidence_highlights?.length" class="info-card compact">
-                <strong>证据摘要</strong>
-                <p>{{ brief.evidence_highlights.slice(0, 3).join('；') }}</p>
+                <strong>核心证据摘要</strong>
+                <ul class="bullet-list">
+                   <li v-for="e in brief.evidence_highlights.slice(0, 3)" :key="e">{{ e }}</li>
+                </ul>
               </div>
             </div>
           </div>
 
-          <div class="sub-panel">
-            <h3>经营分析</h3>
-            <div v-if="reportLoading" class="empty-state">正在生成分析...</div>
+          <div class="sub-panel content-panel">
+            <div class="sub-panel-header">
+              <h3>经营拆解</h3>
+            </div>
+            <div v-if="reportLoading" class="empty-state">
+              <div class="spinner-placeholder"></div>
+              <p>正在汇总经营数据...</p>
+            </div>
             <div v-else-if="report" class="stack-list">
               <div v-for="section in report.sections" :key="section.title" class="info-card compact section-card">
                 <strong>{{ section.title }}</strong>
@@ -133,58 +164,67 @@
         </div>
 
         <div class="analysis-side-stack">
-          <div class="sub-panel">
-            <h3>风险判断</h3>
-            <div v-if="riskLoading" class="empty-state">正在生成风险预测...</div>
+          <div class="sub-panel side-panel">
+            <div class="sub-panel-header">
+              <h3>风险判断</h3>
+            </div>
+            <div v-if="riskLoading" class="empty-state">
+              <div class="spinner-placeholder"></div>
+              <p>正在校准风险信号...</p>
+            </div>
             <div v-else-if="risk" class="stack-list">
-              <div class="info-card compact">
+              <div class="info-card compact" :class="risk.risk_level === '高' ? 'danger-glow' : ''">
                 <strong>{{ risk.summary }}</strong>
-                <p>规则引擎 {{ risk.heuristic_score.toFixed(1) }} 分</p>
+                <p>规则评分 {{ risk.heuristic_score.toFixed(1) }} 分</p>
               </div>
               <div class="info-card compact" v-if="risk.model_prediction">
-                <strong>AI 风险模型</strong>
-                <p>高风险概率 {{ formatPercent(risk.model_prediction.high_risk_probability) }} · AUC {{ formatMetric(risk.model_prediction.model_summary.metrics.roc_auc) }}</p>
+                <strong>风险模型</strong>
+                <p>高风险概率 {{ formatPercent(risk.model_prediction.high_risk_probability) }} · 参考值 {{ formatMetric(risk.model_prediction.model_summary.metrics.roc_auc) }}</p>
               </div>
               <div class="info-card compact">
-                <strong>主要驱动</strong>
-                <p>{{ risk.drivers.join('；') }}</p>
+                <strong>主要风险驱动因素</strong>
+                <ul class="bullet-list">
+                   <li v-for="d in risk.drivers" :key="d">{{ d }}</li>
+                </ul>
               </div>
               <div class="info-card compact" v-if="risk.monitoring_items?.length">
-                <strong>持续监测</strong>
-                <p>{{ risk.monitoring_items.join('；') }}</p>
+                <strong>持续监测事项清单</strong>
+                <ul class="bullet-list">
+                   <li v-for="m in risk.monitoring_items" :key="m" class="text-danger">{{ m }}</li>
+                </ul>
               </div>
             </div>
           </div>
 
-          <div class="sub-panel">
+          <div class="sub-panel side-panel">
             <div class="sub-panel-header">
               <h3>证据回链</h3>
-              <span class="badge-subtle">{{ stockEvidenceCount + industryEvidenceCount }} 条</span>
+              <span class="badge-subtle">{{ stockEvidenceCount + industryEvidenceCount }} 条关联</span>
             </div>
             <div class="stack-list evidence-dual-stack">
               <div class="info-card compact">
                 <div class="trace-title-row">
-                  <strong>个股研报证据</strong>
-                  <span>{{ stockEvidenceCount }}</span>
+                  <strong>相关个股研报</strong>
+                  <span class="badge-subtle">{{ stockEvidenceCount }}</span>
                 </div>
                 <EvidenceList :items="stockEvidence" />
               </div>
               <div class="info-card compact">
                 <div class="trace-title-row">
-                  <strong>行业研报证据</strong>
-                  <span>{{ industryEvidenceCount }}</span>
+                  <strong>宏观与行业研报</strong>
+                  <span class="badge-subtle">{{ industryEvidenceCount }}</span>
                 </div>
                 <EvidenceList :items="industryEvidence" />
               </div>
               <div class="info-card compact multimodal-evidence-card">
                 <div class="trace-title-row">
-                  <strong>多模态财报锚点</strong>
-                  <span>{{ multimodalDigest?.filled_field_count || 0 }} 项</span>
+                  <strong>多模态图表锚点</strong>
+                  <span class="badge-subtle">{{ multimodalDigest?.filled_field_count || 0 }} 项识别</span>
                 </div>
-                <p>{{ multimodalDigest?.summary || '当前企业尚未补齐多模态财报锚点，暂以结构化财务与研报证据为主。' }}</p>
+                <p class="workbench-inline-note">{{ multimodalDigest?.summary || '暂未识别到可用的财报页锚点。' }}</p>
                 <div v-if="multimodalMetrics.length" class="selected-pill-group evidence-pill-cloud top-gap">
                   <span v-for="item in multimodalMetrics" :key="item.field" class="selected-pill">
-                    {{ item.label }} {{ item.display_value }}
+                    {{ item.label }} <span class="text-brand">{{ item.display_value }}</span>
                   </span>
                 </div>
                 <div v-if="multimodalAssetLinks.length" class="page-anchor-row top-gap">
@@ -196,15 +236,16 @@
                     target="_blank"
                     rel="noreferrer"
                   >
-                    {{ item.label }}
+                    查看 {{ item.label }}
                   </a>
                 </div>
-                <p v-if="multimodalDigest?.notes?.length" class="page-anchor-hint">{{ multimodalDigest.notes[0] }}</p>
               </div>
               <div class="info-card compact">
-                <strong>证据关键词</strong>
-                <p>{{ queryTermsText }}</p>
-                <a v-if="financialSourceUrl" :href="financialSourceUrl" target="_blank" rel="noreferrer">查看财报原文</a>
+                <strong>本轮分析焦点</strong>
+                <p class="workbench-inline-note">{{ queryTermsText }}</p>
+                <div class="action-row" style="margin-top: 12px;">
+                   <a v-if="financialSourceUrl" :href="financialSourceUrl" target="_blank" rel="noreferrer" class="text-link-button">打开财报源文件</a>
+                </div>
               </div>
             </div>
           </div>
@@ -213,6 +254,100 @@
     </PagePanel>
   </div>
 </template>
+
+<style scoped>
+.text-danger {
+  color: var(--status-error) !important;
+}
+.text-primary {
+  color: var(--text-primary) !important;
+}
+.text-brand {
+  color: var(--brand-primary) !important;
+}
+.bullet-list {
+  margin: 8px 0 0 16px;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.bullet-list li {
+  margin-bottom: 4px;
+}
+.emphasis-card p {
+  line-height: 1.6;
+}
+.brand-glow {
+  border-left: 3px solid var(--brand-primary);
+  background: linear-gradient(to right, rgba(59, 130, 246, 0.05), transparent);
+}
+.danger-glow {
+  border-left: 3px solid var(--status-error);
+  background: linear-gradient(to right, rgba(239, 68, 68, 0.05), transparent);
+}
+.content-panel {
+  background: var(--bg-surface-raised);
+}
+.side-panel {
+  background: var(--bg-surface);
+}
+.spinner-placeholder {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--brand-primary);
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.workbench-loading-shell {
+  display: grid;
+  gap: 18px;
+}
+.workbench-loading-copy {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.workbench-loading-copy strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.workbench-loading-copy p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+.workbench-loading-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.workbench-loading-card {
+  min-height: 132px;
+  border-radius: 18px;
+  background: linear-gradient(90deg, rgba(12, 27, 51, 0.04), rgba(12, 27, 51, 0.1), rgba(12, 27, 51, 0.04));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.workbench-inline-note {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (max-width: 900px) {
+  .workbench-loading-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
@@ -244,6 +379,7 @@ const risk = ref<RiskForecastResponse | null>(null);
 const reportLoading = ref(false);
 const briefLoading = ref(false);
 const riskLoading = ref(false);
+const hasLoadedOnce = ref(false);
 
 const targets = computed(() => store.targets);
 const stockEvidence = computed(() => brief.value?.evidence?.semantic_stock_reports || []);
@@ -257,7 +393,7 @@ const financialSourceUrl = computed(() => {
 });
 const queryTermsText = computed(() => {
   const queryTerms = brief.value?.evidence?.query_terms || [];
-  return queryTerms.length ? queryTerms.join('、') : '当前问题还没有明确证据关键词。';
+  return queryTerms.length ? queryTerms.join('、') : '财报、研报、风险';
 });
 const trendYearsText = computed(() => {
   const trend = (report.value?.evidence?.trend_digest || {}) as Record<string, unknown>;
@@ -291,6 +427,11 @@ const closureSummaryText = computed(() => {
   const disclosure = multimodalDigest.value?.published_at || '披露时间待补齐';
   return `${reportYear} 已进入当前企业闭环，当前判断为 ${riskLevel} 风险，最新财报锚点 ${disclosure}。`;
 });
+const isBootstrapping = computed(() => (
+  !loadError.value &&
+  !hasLoadedOnce.value &&
+  (reportLoading.value || briefLoading.value || riskLoading.value || store.loading)
+));
 const reasoningCards = computed(() => {
   const cards: Array<{ title: string; badge: string; summary: string; points: string[] }> = [];
   if (report.value) {
@@ -391,6 +532,7 @@ async function loadAll() {
     reportLoading.value = false;
     briefLoading.value = false;
     riskLoading.value = false;
+    hasLoadedOnce.value = true;
   }
 }
 

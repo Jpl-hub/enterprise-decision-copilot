@@ -10,7 +10,7 @@
       <a v-if="item.source_url" :href="item.source_url" target="_blank" rel="noreferrer">查看来源</a>
     </div>
   </div>
-  <p v-else class="empty-state">暂无证据。</p>
+  <p v-else class="evidence-empty">暂无相关研报</p>
 </template>
 
 <script setup lang="ts">
@@ -20,3 +20,14 @@ defineProps<{
   items?: EvidenceItem[];
 }>();
 </script>
+
+<style scoped>
+.evidence-empty {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(12, 27, 51, 0.04);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+</style>
