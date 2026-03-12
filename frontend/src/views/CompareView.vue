@@ -27,7 +27,8 @@
             </div>
           </div>
 
-          <div v-if="selectedCodes.length < 2" class="empty-state">至少选择两家企业。</div>
+          <div v-if="bootstrapping" class="empty-state">正在加载企业池与默认组合...</div>
+          <div v-else-if="selectedCodes.length < 2" class="empty-state">至少选择两家企业。</div>
           <div v-else-if="loading" class="empty-state">正在生成对比结论...</div>
           <div v-else-if="error" class="error-box">{{ error }}</div>
           <template v-else-if="result">
@@ -74,6 +75,36 @@
               </div>
             </div>
 
+            <div class="compare-closure-strip">
+              <RouterLink :to="`/workbench/${result.winner_company_code}`" class="compare-closure-link primary">
+                查看赢家工作台
+              </RouterLink>
+              <RouterLink :to="`/competition/${result.winner_company_code}`" class="compare-closure-link">
+                导出赢家材料
+              </RouterLink>
+              <a
+                v-if="winnerEvidenceCompany?.financial_source_url"
+                class="compare-closure-link"
+                :href="winnerEvidenceCompany.financial_source_url"
+                target="_blank"
+                rel="noreferrer"
+              >
+                打开财报原文
+              </a>
+              <button type="button" class="compare-closure-link" @click="resetSelection">回到默认组合</button>
+            </div>
+
+            <div class="compare-reasoning-grid">
+              <article v-for="item in reasoningCards" :key="item.title" class="compare-reasoning-card">
+                <div class="trace-title-row">
+                  <strong>{{ item.title }}</strong>
+                  <span class="badge-subtle">{{ item.tag }}</span>
+                </div>
+                <p class="compare-reasoning-highlight">{{ item.highlight }}</p>
+                <p>{{ item.detail }}</p>
+              </article>
+            </div>
+
             <div class="compare-chart-panel compare-story-panel">
               <div class="sub-panel-header">
                 <h3>决策分野</h3>
@@ -103,16 +134,18 @@
         </div>
 
         <div v-if="result" class="compare-command-side">
-          <div class="compare-action-card">
+          <div class="compare-action-card compare-closure-card">
             <div class="trace-title-row">
-              <strong>下一步建议</strong>
-              <RouterLink :to="`/workbench/${result.winner_company_code}`">查看赢家</RouterLink>
+              <strong>对比闭环</strong>
+              <span class="badge-subtle">{{ result.winner_company_name }}</span>
             </div>
-            <div class="stack-list">
-              <div v-for="item in result.highlights.slice(0, 4)" :key="item" class="action-line-card">
-                <p>{{ item }}</p>
-              </div>
+            <div class="compare-action-grid">
+              <RouterLink :to="`/workbench/${result.winner_company_code}`" class="compare-action-link primary">查看赢家</RouterLink>
+              <RouterLink :to="`/competition/${result.winner_company_code}`" class="compare-action-link">导出材料</RouterLink>
+              <RouterLink :to="{ path: '/', query: { companies: selectedCodes.join(',') } }" class="compare-action-link">回到分析中枢</RouterLink>
+              <button type="button" class="compare-action-link" @click="resetSelection">默认组合</button>
             </div>
+            <p class="compare-side-note">{{ closureSummary }}</p>
           </div>
           <div class="compare-action-card">
             <div class="trace-title-row">
@@ -122,10 +155,11 @@
             <div class="selected-pill-group">
               <span v-for="name in selectedCompanyNames" :key="name" class="selected-pill">{{ name }}</span>
             </div>
+            <p class="compare-side-note">{{ comboSummary }}</p>
           </div>
           <div class="compare-action-card">
             <div class="trace-title-row">
-              <strong>数据时效</strong>
+              <strong>判断基线</strong>
               <span class="badge-subtle">真实披露</span>
             </div>
             <div class="stack-list">
@@ -277,6 +311,7 @@ const router = useRouter();
 const store = useDashboardStore();
 const selectedCodes = ref<string[]>([]);
 const loading = ref(false);
+const bootstrapping = ref(true);
 const error = ref<string | null>(null);
 const result = ref<CompanyCompareResponse | null>(null);
 
@@ -296,6 +331,11 @@ const scoreSpread = computed(() => {
 });
 const totalResearchCount = computed(() => comparisonRows.value.reduce((sum, item) => sum + item.research_report_count, 0));
 const totalIndustryCount = computed(() => comparisonRows.value.reduce((sum, item) => sum + item.industry_report_count, 0));
+const winnerEvidenceCompany = computed(() => {
+  if (!result.value) return null;
+  return compareEvidenceCompanies.value.find((item) => item.company_code === result.value?.winner_company_code) || compareEvidenceCompanies.value[0] || null;
+});
+const totalMultimodalFieldCount = computed(() => compareEvidenceCompanies.value.reduce((sum, item) => sum + getMultimodalFieldCount(item), 0));
 const spotlightCards = computed(() => {
   if (!result.value) return [];
   return result.value.dimensions
@@ -328,6 +368,49 @@ const freshnessSummary = computed<CompareCompanyFreshnessDigest | null>(() => {
     latest_stock_report: provided.latest_stock_report || getLatestSortedValue(latestStockDates),
     latest_industry_report: provided.latest_industry_report || getLatestSortedValue(latestIndustryDates),
   };
+});
+const closureSummary = computed(() => {
+  if (!result.value) return '';
+  const runnerUpName = runnerUpRow.value?.company_name || '次席企业';
+  return `${result.value.winner_company_name} 当前领先 ${runnerUpName} ${formatMetric(scoreSpread.value)} 分，已具备继续深挖、导出和回看原文的完整闭环。`;
+});
+const comboSummary = computed(() => {
+  if (!result.value) return '';
+  return `本轮组合覆盖 ${selectedCompanyNames.value.join('、')}，总共调用个股研报 ${totalResearchCount.value} 篇、行业研报 ${totalIndustryCount.value} 篇。`;
+});
+const reasoningCards = computed(() => {
+  if (!result.value || !leaderRow.value) return [];
+  const growthDimension = result.value.dimensions.find((item) => item.dimension === '成长性');
+  const innovationDimension = result.value.dimensions.find((item) => item.dimension === '创新投入');
+  const resilienceDimension = result.value.dimensions.find((item) => item.dimension === '经营韧性');
+  const winnerRisk = leaderRow.value.risk_level || '待补';
+  const challengerRisk = runnerUpRow.value?.risk_level || '待补';
+  return [
+    {
+      title: '胜负判断链',
+      tag: result.value.winner_company_name,
+      highlight: `${result.value.winner_company_name} 领先 ${formatMetric(scoreSpread.value)} 分，拿下 ${winnerDimensionCount.value} 个维度。`,
+      detail: result.value.summary,
+    },
+    {
+      title: '增长与盈利链',
+      tag: growthDimension?.winner_company_name || leaderRow.value.company_name,
+      highlight: `${formatMetric(leaderRow.value.net_margin_pct, '%')} 净利率 · ${formatMetric(leaderRow.value.revenue_cagr_pct, '%')} 营收 CAGR`,
+      detail: growthDimension?.conclusion || spotlightCards.value[0]?.detail || '增长与盈利结论待补充。',
+    },
+    {
+      title: '风险与时效链',
+      tag: freshnessSummary.value?.latest_periodic_label || '真实披露',
+      highlight: `${leaderRow.value.company_name} 风险 ${winnerRisk}，${runnerUpRow.value?.company_name || '对手'} 风险 ${challengerRisk}。`,
+      detail: `当前最新定期披露为 ${freshnessSummary.value?.latest_periodic_label || '年报'} ${freshnessSummary.value?.latest_official_disclosure || '暂无'}，个股研报最新 ${freshnessSummary.value?.latest_stock_report || '暂无'}。`,
+    },
+    {
+      title: '证据回链',
+      tag: `${compareEvidenceCompanies.value.length} 家企业`,
+      highlight: `总计 ${totalResearchCount.value + totalIndustryCount.value} 条研报证据，图表抽取 ${totalMultimodalFieldCount.value} 项字段。`,
+      detail: innovationDimension?.conclusion || resilienceDimension?.conclusion || '证据回链已接入财报原文、研报标题和多模态页锚点。',
+    },
+  ];
 });
 
 function defaultCodes() {
@@ -437,6 +520,26 @@ function dimensionWidth(values: Array<{ value: number }>, value: number) {
   return `${Math.max(14, (value / max) * 100)}%`;
 }
 
+function getQueryCodes() {
+  const queryValue = typeof route.query.companies === 'string' ? route.query.companies : '';
+  return queryValue.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function getResolvedCodes(queryCodes: string[]) {
+  const validCodes = new Set(targets.value.map((item) => item.company_code));
+  const filtered = queryCodes.filter((item) => validCodes.has(item));
+  if (filtered.length >= 2) {
+    return filtered.slice(0, MAX_SELECTION);
+  }
+  return defaultCodes().slice(0, MAX_SELECTION);
+}
+
+async function waitForStoreLoad() {
+  while (store.loading && !store.payload && !store.error) {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
+}
+
 function syncQuery() {
   router.replace({
     query: selectedCodes.value.length ? { companies: selectedCodes.value.join(',') } : {},
@@ -466,10 +569,10 @@ function toggleCompany(companyCode: string) {
 async function ensureTargets() {
   if (!store.payload && !store.loading) {
     await store.load();
+  } else if (store.loading && !store.payload) {
+    await waitForStoreLoad();
   }
-  const queryValue = typeof route.query.companies === 'string' ? route.query.companies : '';
-  const queryCodes = queryValue.split(',').map((item) => item.trim()).filter(Boolean);
-  selectedCodes.value = (queryCodes.length >= 2 ? queryCodes : defaultCodes()).slice(0, MAX_SELECTION);
+  selectedCodes.value = getResolvedCodes(getQueryCodes());
 }
 
 async function loadComparison() {
@@ -486,9 +589,14 @@ async function loadComparison() {
 }
 
 onMounted(async () => {
-  await ensureTargets();
-  if (selectedCodes.value.length >= 2) {
-    await loadComparison();
+  bootstrapping.value = true;
+  try {
+    await ensureTargets();
+    if (selectedCodes.value.length >= 2) {
+      await loadComparison();
+    }
+  } finally {
+    bootstrapping.value = false;
   }
 });
 </script>

@@ -1701,6 +1701,87 @@ select {
   gap: 14px;
 }
 
+.compare-closure-strip,
+.compare-action-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compare-closure-strip {
+  margin-top: 16px;
+}
+
+.compare-closure-link,
+.compare-action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(21, 62, 117, 0.12);
+  background: rgba(246, 248, 252, 0.96);
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.compare-closure-link:hover,
+.compare-action-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(21, 62, 117, 0.26);
+  box-shadow: 0 12px 28px rgba(12, 33, 60, 0.12);
+}
+
+.compare-closure-link.primary,
+.compare-action-link.primary {
+  background: linear-gradient(135deg, rgba(21, 62, 117, 0.96), rgba(44, 108, 176, 0.92));
+  color: #fff;
+  border-color: transparent;
+}
+
+.compare-closure-link.primary:hover,
+.compare-action-link.primary:hover {
+  box-shadow: 0 16px 32px rgba(21, 62, 117, 0.24);
+}
+
+.compare-reasoning-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.compare-reasoning-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(21, 62, 117, 0.08);
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.compare-reasoning-card p,
+.compare-side-note {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.compare-reasoning-highlight {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.compare-closure-card {
+  align-content: start;
+}
+
+.compare-side-note {
+  line-height: 1.6;
+}
+
 .action-line-card {
   padding: 14px 16px;
   border-radius: 18px;
@@ -2029,7 +2110,8 @@ select {
   .foundation-stat-grid,
   .foundation-layer-grid,
   .compare-signal-grid,
-  .compare-spotlight-grid {
+  .compare-spotlight-grid,
+  .compare-reasoning-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2040,7 +2122,9 @@ select {
 
 @media (max-width: 820px) {
   .refined-target-grid,
-  .compare-verdict-card {
+  .compare-verdict-card,
+  .compare-closure-strip,
+  .compare-action-grid {
     grid-template-columns: 1fr;
   }
 }
