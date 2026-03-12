@@ -3,6 +3,8 @@ import { createPinia } from 'pinia';
 
 import App from './App.vue';
 import { router } from './router';
+import '@fontsource-variable/geist';
+import '@fontsource/dm-mono';
 import './styles.css';
 
 const app = createApp(App);

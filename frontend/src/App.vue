@@ -9,7 +9,7 @@
       <div class="brand-block compact-brand-block">
         <div class="brand-title-row">
           <h1>企智策源</h1>
-          <span class="brand-pill">Agent + Data + AI</span>
+          <span class="brand-pill">智能体·数据·模型</span>
         </div>
       </div>
 
