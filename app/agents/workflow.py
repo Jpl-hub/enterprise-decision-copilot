@@ -133,10 +133,12 @@ class AgentWorkflow:
         question: str,
         preferred_task_mode: str | None = None,
         context_task_mode: str | None = None,
+        routing_question: str | None = None,
     ) -> dict:
-        cleaned_question = question.strip()
+        cleaned_question = (routing_question or question).strip()
+        execution_question = question.strip()
         matches = self.analytics_service.find_company_matches(cleaned_question) if cleaned_question else []
-        context = WorkflowContext(question=cleaned_question, matches=matches)
+        context = WorkflowContext(question=execution_question, matches=matches)
         preferred_intent = self._resolve_preferred_task_mode(preferred_task_mode)
         context.add_plan('接收问题', '接收用户问题并准备识别企业对象。')
         if matches:
@@ -223,3 +225,5 @@ class AgentWorkflow:
         payload['stage_label'] = stage_label
         payload['deliverables'] = deliverables
         return payload
+
+

@@ -40,6 +40,7 @@ class AgentThreadSummary(BaseModel):
     thread_id: str
     title: str
     focus: AgentFocus | None = None
+    thread_summary: str | None = None
     last_message: str | None = None
     message_count: int
     created_at: str
@@ -55,6 +56,7 @@ class AgentThreadDetailResponse(BaseModel):
     thread_id: str
     title: str
     focus: AgentFocus | None = None
+    thread_summary: str | None = None
     created_at: str
     updated_at: str
     messages: list[AgentThreadMessage] = Field(default_factory=list)
@@ -78,3 +80,4 @@ class AgentResponse(BaseModel):
     thread_title: str
     focus: AgentFocus | None = None
     thread_messages: list[AgentThreadMessage] = Field(default_factory=list)
+

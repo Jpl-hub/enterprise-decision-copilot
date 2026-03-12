@@ -103,6 +103,7 @@ SCHEMA = {
             focus_company_name TEXT,
             last_task_mode TEXT,
             last_task_label TEXT,
+            thread_summary TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -145,6 +146,7 @@ INDEXES = [
 THREAD_COLUMN_MIGRATIONS = {
     'last_task_mode': 'TEXT',
     'last_task_label': 'TEXT',
+    'thread_summary': 'TEXT',
 }
 
 
@@ -189,3 +191,4 @@ def table_has_rows(table_name: str) -> bool:
             return row is not None
         except sqlite3.Error:
             return False
+

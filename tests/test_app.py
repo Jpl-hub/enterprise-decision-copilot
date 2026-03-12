@@ -331,8 +331,76 @@ def test_company_report_tool_can_use_narrative_service() -> None:
     assert result.payload['highlights'][0] == '重写首段：经营概况更适合答辩口径。'
     assert result.payload['evidence']['narrative_mode'] == 'stub'
 
+def test_agent_response_exposes_thread_summary() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer('分析迈瑞医疗')
+
+    assert payload['thread_summary']
+    assert '企业诊断' in payload['thread_summary']
 
 
+def test_agent_thread_history_and_detail_expose_thread_summary() -> None:
+    db_dir = Path('data') / 'test_agent_threads' / uuid.uuid4().hex
+    db_path = db_dir / 'app.db'
+    db_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        analytics = AnalyticsService()
+        retrieval = RetrievalService(analytics)
+        decision = DecisionService(analytics, retrieval)
+        risk_model = RiskModelService()
+        risk = RiskService(analytics, risk_model)
+        workflow = AgentWorkflow(
+            analytics_service=analytics,
+            intent_router=IntentRouter(),
+            tools=build_agent_tools(decision, risk, DataQualityService()),
+        )
+        service = AgentService(workflow, audit_service=AuditService(db_path), db_path=db_path)
+        first = service.answer('分析迈瑞医疗', user_id='tester')
+        history = service.list_threads(user_id='tester', role='analyst')
+        detail = service.get_thread_detail(first['thread_id'], user_id='tester', role='analyst')
+    finally:
+        shutil.rmtree(db_dir, ignore_errors=True)
+
+    assert history['items'][0]['thread_summary']
+    assert detail['thread_summary']
+    assert detail['thread_summary'] == history['items'][0]['thread_summary']
 
 
+def test_agent_augments_short_follow_up_with_thread_summary() -> None:
+    class StubAnalytics:
+        def find_company_matches(self, question: str) -> list[dict]:
+            if '迈瑞医疗' in question:
+                return [{'company_code': '300760', 'company_name': '迈瑞医疗'}]
+            return []
 
+    class CapturingWorkflow:
+        def __init__(self) -> None:
+            self.analytics_service = StubAnalytics()
+            self.captured_questions: list[str] = []
+
+        def execute(self, question: str, preferred_task_mode: str | None = None, context_task_mode: str | None = None) -> dict:
+            self.captured_questions.append(question)
+            return {
+                'title': '模拟结果',
+                'summary': '已承接上一轮结论。',
+                'highlights': ['继续围绕上一轮话题展开。'],
+                'suggested_questions': [],
+                'evidence': {},
+                'trace': [],
+                'plan': [],
+                'task_mode': context_task_mode or 'company_diagnosis',
+                'task_label': '企业诊断',
+                'stage_label': '已完成',
+                'deliverables': ['结论摘要'],
+                'matched_companies': [{'company_code': '300760', 'company_name': '迈瑞医疗'}],
+            }
+
+    workflow = CapturingWorkflow()
+    service = AgentService(workflow)
+    first = service.answer('分析迈瑞医疗')
+    second = service.answer('展开讲讲', thread_id=first['thread_id'])
+
+    assert second['thread_summary']
+    assert len(workflow.captured_questions) == 2
+    assert '上一轮结论：' in workflow.captured_questions[1]
+    assert '继续问题：迈瑞医疗展开讲讲' in workflow.captured_questions[1]

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import inspect
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -22,6 +24,8 @@ class AgentService:
         self.audit_service = audit_service
         self.db_path = db_path
         init_db(db_path)
+        self.follow_up_keywords = ('展开', '详细', '具体', '继续', '补充', '细说', '往下', '再说', '怎么看', '怎么做')
+        self.supports_routing_question = 'routing_question' in inspect.signature(workflow.execute).parameters
 
     def _now(self) -> str:
         return datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z')
@@ -30,7 +34,7 @@ class AgentService:
         with get_connection(self.db_path) as conn:
             row = conn.execute(
                 '''
-                SELECT thread_id, user_id, title, focus_company_code, focus_company_name, last_task_mode, last_task_label, created_at, updated_at
+                SELECT thread_id, user_id, title, focus_company_code, focus_company_name, last_task_mode, last_task_label, thread_summary, created_at, updated_at
                 FROM agent_threads
                 WHERE thread_id = ?
                 ''',
@@ -48,6 +52,7 @@ class AgentService:
             'focus_company_name': company_name,
             'last_task_mode': None,
             'last_task_label': None,
+            'thread_summary': None,
             'created_at': now,
             'updated_at': now,
         }
@@ -62,6 +67,7 @@ class AgentService:
                     focus_company_name,
                     last_task_mode,
                     last_task_label,
+                    thread_summary,
                     created_at,
                     updated_at
                 )
@@ -73,6 +79,7 @@ class AgentService:
                     :focus_company_name,
                     :last_task_mode,
                     :last_task_label,
+                    :thread_summary,
                     :created_at,
                     :updated_at
                 )
@@ -131,6 +138,12 @@ class AgentService:
             ).fetchall()
         return [ThreadMessage(role=row['role'], content=row['content'], created_at=row['created_at']) for row in reversed(rows)]
 
+    def _is_short_follow_up(self, question: str) -> bool:
+        stripped = question.strip()
+        if not stripped:
+            return False
+        return len(stripped) <= 16 or any(keyword in stripped for keyword in self.follow_up_keywords)
+
     def _normalize_question(self, question: str, thread: dict) -> str:
         normalized = question.strip()
         focus_name = thread.get('focus_company_name')
@@ -141,10 +154,24 @@ class AgentService:
             if placeholder in normalized:
                 normalized = normalized.replace(placeholder, str(focus_name))
         matches = self.workflow.analytics_service.find_company_matches(normalized) if normalized else []
-        short_follow_up_keywords = ('展开', '详细', '具体', '继续', '补充', '细说', '往下', '再说', '怎么看', '怎么做')
-        if not matches and (len(normalized) <= 16 or any(keyword in normalized for keyword in short_follow_up_keywords)):
+        if not matches and self._is_short_follow_up(normalized):
             normalized = f'{focus_name}{normalized}'
         return normalized
+
+    def _augment_question_with_thread_memory(self, question: str, thread: dict) -> str:
+        summary = str(thread.get('thread_summary') or '').strip()
+        if not summary or not self._is_short_follow_up(question):
+            return question
+        focus_name = str(thread.get('focus_company_name') or '').strip()
+        last_task_label = str(thread.get('last_task_label') or '').strip()
+        context_bits: list[str] = []
+        if focus_name and focus_name not in question:
+            context_bits.append(f'企业：{focus_name}')
+        if last_task_label:
+            context_bits.append(f'上一轮任务：{last_task_label}')
+        context_bits.append(f'上一轮结论：{summary[:220]}')
+        context_bits.append(f'继续问题：{question}')
+        return '；'.join(context_bits)
 
     def _resolve_context_task_mode(self, thread: dict, explicit_task_mode: str | None) -> str | None:
         if explicit_task_mode:
@@ -153,6 +180,27 @@ class AgentService:
         if isinstance(last_task_mode, str) and last_task_mode.strip():
             return last_task_mode.strip()
         return None
+
+    def _build_thread_summary(self, payload: dict[str, Any], thread: dict) -> str | None:
+        if payload.get('stage_label') == '需要重试':
+            return thread.get('thread_summary')
+        task_label = str(payload.get('task_label') or thread.get('last_task_label') or '').strip()
+        title = str(payload.get('title') or '').strip()
+        summary = str(payload.get('summary') or '').strip()
+        highlights = [str(item).strip() for item in list(payload.get('highlights') or [])[:2] if str(item).strip()]
+        segments: list[str] = []
+        if task_label:
+            segments.append(task_label)
+        if title:
+            segments.append(title)
+        if summary:
+            segments.append(summary)
+        if highlights:
+            segments.append('；'.join(highlights))
+        compact = re.sub(r'\s+', ' ', '。'.join(segment for segment in segments if segment)).strip('。 ')
+        if not compact:
+            return thread.get('thread_summary')
+        return compact[:260]
 
     def _update_focus(self, thread: dict, payload: dict[str, Any]) -> dict:
         matches = payload.get('matched_companies') or []
@@ -165,11 +213,12 @@ class AgentService:
                 updated['title'] = updated['focus_company_name']
         updated['last_task_mode'] = str(payload.get('task_mode') or updated.get('last_task_mode') or '') or None
         updated['last_task_label'] = str(payload.get('task_label') or updated.get('last_task_label') or '') or None
+        updated['thread_summary'] = self._build_thread_summary(payload, updated)
         with get_connection(self.db_path) as conn:
             conn.execute(
                 '''
                 UPDATE agent_threads
-                SET title = ?, focus_company_code = ?, focus_company_name = ?, last_task_mode = ?, last_task_label = ?, updated_at = ?
+                SET title = ?, focus_company_code = ?, focus_company_name = ?, last_task_mode = ?, last_task_label = ?, thread_summary = ?, updated_at = ?
                 WHERE thread_id = ?
                 ''',
                 (
@@ -178,6 +227,7 @@ class AgentService:
                     updated.get('focus_company_name'),
                     updated.get('last_task_mode'),
                     updated.get('last_task_label'),
+                    updated.get('thread_summary'),
                     self._now(),
                     updated['thread_id'],
                 ),
@@ -250,6 +300,7 @@ class AgentService:
                 t.focus_company_name,
                 t.last_task_mode,
                 t.last_task_label,
+                t.thread_summary,
                 t.created_at,
                 t.updated_at,
                 COUNT(m.message_id) AS message_count,
@@ -280,6 +331,7 @@ class AgentService:
                     'company_code': row['focus_company_code'],
                     'company_name': row['focus_company_name'],
                 },
+                'thread_summary': row['thread_summary'],
                 'last_task_mode': row['last_task_mode'],
                 'last_task_label': row['last_task_label'],
                 'last_message': row['last_message'],
@@ -301,6 +353,7 @@ class AgentService:
                 'company_code': thread.get('focus_company_code'),
                 'company_name': thread.get('focus_company_name'),
             },
+            'thread_summary': thread.get('thread_summary'),
             'last_task_mode': thread.get('last_task_mode'),
             'last_task_label': thread.get('last_task_label'),
             'created_at': thread['created_at'],
@@ -319,17 +372,20 @@ class AgentService:
     ) -> dict:
         thread = self._get_or_create_thread(thread_id, user_id, company_code, company_name, question)
         normalized_question = self._normalize_question(question, thread)
+        workflow_question = self._augment_question_with_thread_memory(normalized_question, thread)
         user_message = ThreadMessage(role='user', content=normalized_question)
         self._append_message(thread['thread_id'], user_message)
 
         failed = False
         context_task_mode = self._resolve_context_task_mode(thread, task_mode)
         try:
-            payload = self.workflow.execute(
-                normalized_question,
-                preferred_task_mode=task_mode,
-                context_task_mode=context_task_mode,
-            )
+            execute_kwargs: dict[str, Any] = {
+                'preferred_task_mode': task_mode,
+                'context_task_mode': context_task_mode,
+            }
+            if self.supports_routing_question:
+                execute_kwargs['routing_question'] = normalized_question
+            payload = self.workflow.execute(workflow_question, **execute_kwargs)
             thread = self._update_focus(thread, payload)
         except Exception as error:
             failed = True
@@ -348,10 +404,12 @@ class AgentService:
                 target_id=thread['thread_id'],
                 detail={
                     'question': normalized_question,
+                    'workflow_question': workflow_question,
                     'title': payload.get('title'),
                     'focus_company_code': thread.get('focus_company_code'),
                     'task_mode': payload.get('task_mode'),
                     'context_task_mode': context_task_mode,
+                    'thread_summary': thread.get('thread_summary'),
                     'status': 'failed' if failed else 'completed',
                 },
             )
@@ -364,6 +422,7 @@ class AgentService:
             'company_code': thread.get('focus_company_code'),
             'company_name': thread.get('focus_company_name'),
         }
+        payload['thread_summary'] = thread.get('thread_summary')
         payload['thread_messages'] = [item.as_dict() for item in self._list_messages(thread['thread_id'], limit=8)]
         return payload
 
