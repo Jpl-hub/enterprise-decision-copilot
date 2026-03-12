@@ -78,6 +78,21 @@
         </div>
       </section>
 
+      <section v-if="reasoningCards.length" class="workbench-reasoning-grid">
+        <article v-for="item in reasoningCards" :key="item.title" class="sub-panel compact-data-panel">
+          <div class="trace-title-row">
+            <strong>{{ item.title }}</strong>
+            <span class="badge-subtle">{{ item.badge }}</span>
+          </div>
+          <p class="workbench-reasoning-text">{{ item.summary }}</p>
+          <div v-if="item.points.length" class="stack-list top-gap">
+            <div v-for="point in item.points" :key="`${item.title}-${point}`" class="action-line-card">
+              <p>{{ point }}</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
       <div class="analysis-grid two-main-one-side">
         <div class="analysis-main-stack">
           <div class="sub-panel">
@@ -275,6 +290,62 @@ const closureSummaryText = computed(() => {
   const reportYear = report.value?.report_year ? `${report.value.report_year} 年报` : '财报待补齐';
   const disclosure = multimodalDigest.value?.published_at || '披露时间待补齐';
   return `${reportYear} 已进入当前企业闭环，当前判断为 ${riskLevel} 风险，最新财报锚点 ${disclosure}。`;
+});
+const reasoningCards = computed(() => {
+  const cards: Array<{ title: string; badge: string; summary: string; points: string[] }> = [];
+  if (report.value) {
+    cards.push({
+      title: '财报基线',
+      badge: report.value.report_year ? `${report.value.report_year} 年报` : '官方财报',
+      summary: report.value.summary,
+      points: [
+        `趋势区间 ${trendYearsText.value}`,
+        `财报来源 ${financialSourceUrl.value ? '已回链' : '待补齐'}`,
+        `多模态锚点 ${multimodalDigest.value?.available ? '已接入' : '待补齐'}`,
+      ],
+    });
+  }
+  if (brief.value) {
+    cards.push({
+      title: '管理判断链',
+      badge: brief.value.verdict,
+      summary: brief.value.summary,
+      points: [
+        `问题 ${brief.value.question}`,
+        `关键词 ${queryTermsText.value}`,
+        ...(brief.value.evidence_highlights?.slice(0, 2) || []),
+      ],
+    });
+  }
+  if (risk.value) {
+    cards.push({
+      title: '风险判断链',
+      badge: risk.value.risk_level,
+      summary: risk.value.summary,
+      points: [
+        `规则分 ${risk.value.heuristic_score.toFixed(1)}`,
+        risk.value.model_prediction
+          ? `模型概率 ${formatPercent(risk.value.model_prediction.high_risk_probability)}`
+          : '模型概率 暂无',
+        `监测项 ${monitoringCount.value} 项`,
+      ],
+    });
+  }
+  if (stockEvidenceCount.value || industryEvidenceCount.value || multimodalDigest.value?.available) {
+    cards.push({
+      title: '证据回链',
+      badge: closureEvidenceText.value,
+      summary: `个股研报 ${stockEvidenceCount.value} 条，行业研报 ${industryEvidenceCount.value} 条，多模态财报 ${multimodalDigest.value?.filled_field_count || 0} 项。`,
+      points: [
+        stockEvidence.value[0]?.title ? `最新个股研报 ${stockEvidence.value[0].title}` : '最新个股研报 暂无',
+        industryEvidence.value[0]?.title ? `最新行业研报 ${industryEvidence.value[0].title}` : '最新行业研报 暂无',
+        multimodalDigest.value?.page_refs?.length
+          ? `图表页锚点 ${multimodalDigest.value.page_refs.slice(0, 3).join(' / ')}`
+          : '图表页锚点 暂无',
+      ],
+    });
+  }
+  return cards;
 });
 const compareRoute = computed(() => {
   const rankingRows = (store.payload?.ranking || []) as Array<Record<string, unknown>>;

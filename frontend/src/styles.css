@@ -1314,6 +1314,18 @@ select {
   line-height: 1.65;
 }
 
+.workbench-reasoning-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.workbench-reasoning-text {
+  margin: 10px 0 0;
+  color: #3f5878;
+  line-height: 1.7;
+}
+
 .workbench-mission-card {
   padding: 18px;
   text-align: left;
@@ -4572,6 +4584,7 @@ select {
   .overview-signal-deck,
   .overview-command-grid,
   .overview-intel-grid,
+  .workbench-reasoning-grid,
   .cockpit-intel-layout {
     grid-template-columns: 1fr;
   }
