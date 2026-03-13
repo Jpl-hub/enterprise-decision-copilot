@@ -70,3 +70,40 @@ def test_runtime_cache_dir_is_created_for_clean_environment() -> None:
 
         assert cache_dir.exists() is True
         assert cache_dir.is_dir() is True
+
+
+def test_agent_route_returns_boardroom_payload_fields() -> None:
+    db_path = create_temp_db()
+    app = create_app()
+
+    async def exercise_routes() -> None:
+        async with app.router.lifespan_context(app):
+            auth_service = AuthService(db_path)
+            app.state.container.auth_service = auth_service
+            auth_service.register_user('boardroom-user', 'password123', 'Boardroom 用户')
+
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url='http://testserver') as client:
+                login = await client.post(
+                    '/api/auth/login',
+                    json={'username': 'boardroom-user', 'password': 'password123'},
+                )
+                assert login.status_code == 200
+
+                response = await client.post(
+                    '/api/agent/query',
+                    json={'question': '给迈瑞医疗开一个管理层决策会议室，让财务市场风险多个agent一起会诊'},
+                )
+
+                assert response.status_code == 200
+                payload = response.json()
+                assert payload['task_mode'] == 'executive_boardroom'
+                assert payload['panelists']
+                assert payload['debate_rounds']
+                assert payload['synthesis']['action_board']
+                assert payload['sql_playbook']['queries']
+
+    try:
+        asyncio.run(exercise_routes())
+    finally:
+        shutil.rmtree(db_path.parent, ignore_errors=True)

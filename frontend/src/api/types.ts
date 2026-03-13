@@ -604,6 +604,62 @@ export interface AgentRouteCandidate {
   reasons: string[];
 }
 
+export interface AgentBoardroomPanelist {
+  agent_id: string;
+  role_label: string;
+  stance: string;
+  confidence: number;
+  evidence_focus: string[];
+  challenge: string;
+  sql_focus?: string | null;
+}
+
+export interface AgentBoardroomSpeakerNote {
+  agent_id: string;
+  statement: string;
+}
+
+export interface AgentBoardroomDebateRound {
+  round: number;
+  topic: string;
+  speaker_notes: AgentBoardroomSpeakerNote[];
+  consensus_delta: string;
+}
+
+export interface AgentBoardroomSynthesis {
+  meeting_mode: string;
+  primary_call: string;
+  confidence: number;
+  consensus_summary: string;
+  action_board: string[];
+  red_lines: string[];
+}
+
+export interface AgentSQLQuerySpec {
+  query_id: string;
+  title: string;
+  sql: string;
+  params: string[];
+}
+
+export interface AgentSQLMission {
+  mission_id: string;
+  label: string;
+  goal: string;
+}
+
+export interface AgentSQLPlaybook {
+  warehouse_ready: boolean;
+  current_engine?: string | null;
+  warehouse_db?: string | null;
+  company_code?: string | null;
+  company_name?: string | null;
+  queries: AgentSQLQuerySpec[];
+  missions: AgentSQLMission[];
+  company_overview_rows: Array<Record<string, unknown>>;
+  research_heat_rows: Array<Record<string, unknown>>;
+}
+
 export interface AgentThreadSummary {
   thread_id: string;
   title: string;
@@ -657,6 +713,10 @@ export interface AgentResponse {
   thread_summary?: string | null;
   thread_memory?: AgentThreadMemory | null;
   execution_digest?: AgentExecutionDigest | null;
+  panelists?: AgentBoardroomPanelist[];
+  debate_rounds?: AgentBoardroomDebateRound[];
+  synthesis?: AgentBoardroomSynthesis | null;
+  sql_playbook?: AgentSQLPlaybook | null;
   data_authenticity?: Record<string, unknown>;
   thread_messages: AgentThreadMessage[];
 }

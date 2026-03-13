@@ -112,6 +112,66 @@
                 </button>
               </div>
             </div>
+
+            <div v-else-if="panel.key === 'boardroom' && boardroomReady" class="floating-panel-body">
+              <div class="boardroom-hero-card">
+                <div class="agent-mode-strip">
+                  <span class="agent-mode-pill accent">会议模式</span>
+                  <span class="agent-mode-pill subtle">{{ boardroomSynthesis?.primary_call || '继续跟踪' }}</span>
+                  <span class="agent-mode-pill subtle">可信度 {{ boardroomSynthesis?.confidence?.toFixed(2) || '0.00' }}</span>
+                </div>
+                <strong>{{ boardroomSynthesis?.consensus_summary }}</strong>
+                <p v-if="boardroomPlaybook?.current_engine">计算底座：{{ boardroomPlaybook.current_engine }}</p>
+              </div>
+
+              <div class="boardroom-panelist-grid">
+                <article v-for="item in boardroomPanelists" :key="item.agent_id" class="boardroom-panelist-card">
+                  <div class="boardroom-panelist-top">
+                    <strong>{{ item.role_label }}</strong>
+                    <span>{{ item.confidence.toFixed(2) }}</span>
+                  </div>
+                  <p>{{ item.stance }}</p>
+                  <p v-if="item.evidence_focus.length" class="boardroom-subline">证据焦点：{{ item.evidence_focus.join('；') }}</p>
+                  <p v-if="item.sql_focus" class="boardroom-subline">SQL 焦点：{{ item.sql_focus }}</p>
+                  <p class="boardroom-subline danger">挑战：{{ item.challenge }}</p>
+                </article>
+              </div>
+
+              <div class="boardroom-round-stack" v-if="boardroomRounds.length">
+                <article v-for="round in boardroomRounds" :key="round.round" class="answer-line-card boardroom-round-card">
+                  <strong>第 {{ round.round }} 轮 · {{ round.topic }}</strong>
+                  <p v-for="note in round.speaker_notes" :key="`${round.round}-${note.agent_id}`">
+                    {{ note.agent_id }}：{{ note.statement }}
+                  </p>
+                  <p class="boardroom-subline">收敛结果：{{ round.consensus_delta }}</p>
+                </article>
+              </div>
+
+              <div class="boardroom-action-grid" v-if="boardroomSynthesis?.action_board?.length">
+                <div class="answer-line-card">
+                  <strong>管理层动作板</strong>
+                  <p v-for="item in boardroomSynthesis.action_board" :key="item">{{ item }}</p>
+                </div>
+                <div class="answer-line-card" v-if="boardroomSynthesis.red_lines?.length">
+                  <strong>红线约束</strong>
+                  <p v-for="item in boardroomSynthesis.red_lines" :key="item">{{ item }}</p>
+                </div>
+              </div>
+
+              <div class="answer-line-card" v-if="boardroomPlaybook?.missions?.length">
+                <strong>SQL 动作板</strong>
+                <p v-for="item in boardroomPlaybook.missions" :key="item.mission_id">
+                  {{ item.label }}：{{ item.goal }}
+                </p>
+              </div>
+
+              <div class="answer-line-card" v-if="boardroomPlaybook?.queries?.length">
+                <strong>查询模板</strong>
+                <p v-for="item in boardroomPlaybook.queries" :key="item.query_id">
+                  {{ item.title }}：<code>{{ item.sql }}</code>
+                </p>
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -125,6 +185,7 @@ import { computed, ref, watch } from 'vue';
 import AgentThreadPanel from './AgentThreadPanel.vue';
 import TracePanel from './TracePanel.vue';
 import { useAgentThreadStore } from '../stores/agentThread';
+import type { AgentBoardroomDebateRound, AgentBoardroomPanelist, AgentBoardroomSynthesis, AgentSQLPlaybook } from '../api/types';
 
 const props = withDefaults(defineProps<{
   companyCode?: string | null;
@@ -146,6 +207,7 @@ const taskModes = [
   { value: 'company_diagnosis', label: '经营分析' },
   { value: 'company_risk_forecast', label: '风险判断' },
   { value: 'company_decision_brief', label: '决策建议' },
+  { value: 'executive_boardroom', label: '决策会议室' },
   { value: 'industry_trend', label: '行业趋势' },
   { value: 'data_quality', label: '数据治理' },
 ];
@@ -153,7 +215,7 @@ const taskModes = [
 const agentStore = useAgentThreadStore();
 const draft = ref(props.seedQuestion);
 const manualTaskMode = ref<string | null>(null);
-const activeFloatingPanel = ref<'summary' | 'plan' | 'route' | 'followup' | null>(null);
+const activeFloatingPanel = ref<'summary' | 'plan' | 'route' | 'followup' | 'boardroom' | null>(null);
 const activeTaskMode = computed(() => manualTaskMode.value || agentStore.taskMode || 'company_diagnosis');
 
 const basePrompts = computed(() => {
@@ -174,6 +236,11 @@ const basePrompts = computed(() => {
       `${companyName}未来两年的主要机会与投入重点是什么？`,
       `如果管理层现在开会，${companyName}最该讨论什么？`,
     ],
+    executive_boardroom: [
+      `给${companyName}开一个管理层决策会议室`,
+      `让财务、市场、风险和数据治理多个agent一起会诊${companyName}`,
+      `把${companyName}做成一个适合答辩展示的多智能体协同场景`,
+    ],
     industry_trend: [
       `${companyName}所在行业当前的趋势和主题变化是什么？`,
       `结合行业研报判断${companyName}面临的景气变化`,
@@ -193,10 +260,16 @@ const followUpQuestions = computed(() => agentStore.latest?.suggested_questions?
 const routeCandidates = computed(() => agentStore.latest?.route_candidates?.slice(0, props.compact ? 2 : 3) || []);
 const hasConversation = computed(() => agentStore.messages.length > 0);
 const messagePreview = computed(() => props.compact ? agentStore.messages.slice(-4) : agentStore.messages);
+const boardroomPanelists = computed(() => (agentStore.latest?.panelists || []) as AgentBoardroomPanelist[]);
+const boardroomRounds = computed(() => (agentStore.latest?.debate_rounds || []) as AgentBoardroomDebateRound[]);
+const boardroomSynthesis = computed(() => (agentStore.latest?.synthesis || null) as AgentBoardroomSynthesis | null);
+const boardroomPlaybook = computed(() => (agentStore.latest?.sql_playbook || null) as AgentSQLPlaybook | null);
+const boardroomReady = computed(() => boardroomPanelists.value.length > 0 || boardroomRounds.value.length > 0 || !!boardroomSynthesis.value);
 
 const floatingPanels = computed(() => {
-  const panels: Array<{ key: 'summary' | 'plan' | 'route' | 'followup'; label: string }> = [];
+  const panels: Array<{ key: 'summary' | 'plan' | 'route' | 'followup' | 'boardroom'; label: string }> = [];
   if (agentStore.latest) panels.push({ key: 'summary', label: '本轮结论' });
+  if (boardroomReady.value) panels.push({ key: 'boardroom', label: '会议室' });
   if (agentStore.latest?.plan?.length) panels.push({ key: 'plan', label: '执行步骤' });
   if (routeCandidates.value.length) panels.push({ key: 'route', label: '分析路径' });
   if (followUpQuestions.value.length) panels.push({ key: 'followup', label: '推荐追问' });
@@ -218,6 +291,9 @@ const outputCards = computed(() => {
   } else if (latest.task_mode === 'company_compare') {
     const companies = (evidence.companies as unknown[] | undefined)?.length || 0;
     cards.push({ label: '对比企业', value: `${companies} 家` });
+  } else if (latest.task_mode === 'executive_boardroom') {
+    cards.push({ label: '与会角色', value: `${boardroomPanelists.value.length} 个` });
+    cards.push({ label: '辩论轮次', value: `${boardroomRounds.value.length} 轮` });
   } else if (latest.task_mode === 'data_quality') {
     const anomalies = (evidence.top_anomalies as unknown[] | undefined)?.length || 0;
     cards.push({ label: '异常条目', value: `${anomalies} 条` });
@@ -265,7 +341,7 @@ function applyPrompt(text: string) {
   void submit();
 }
 
-function toggleFloatingPanel(key: 'summary' | 'plan' | 'route' | 'followup') {
+function toggleFloatingPanel(key: 'summary' | 'plan' | 'route' | 'followup' | 'boardroom') {
   activeFloatingPanel.value = activeFloatingPanel.value === key ? null : key;
 }
 
@@ -299,3 +375,79 @@ watch(floatingPanels, (panels) => {
   }
 }, { immediate: true });
 </script>
+
+<style scoped>
+.boardroom-hero-card {
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(8, 21, 47, 0.95), rgba(28, 57, 108, 0.9));
+  color: #f4f7fb;
+}
+
+.boardroom-hero-card p,
+.boardroom-hero-card strong {
+  margin: 0;
+}
+
+.boardroom-hero-card p {
+  margin-top: 8px;
+  color: rgba(244, 247, 251, 0.78);
+}
+
+.boardroom-panelist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.boardroom-panelist-card {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(9, 26, 58, 0.04);
+  border: 1px solid rgba(10, 31, 68, 0.08);
+}
+
+.boardroom-panelist-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.boardroom-panelist-top span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.boardroom-subline {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.boardroom-subline.danger {
+  color: #8c4d13;
+}
+
+.boardroom-round-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.boardroom-round-card strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.boardroom-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+</style>

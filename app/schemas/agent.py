@@ -60,6 +60,62 @@ class AgentExecutionDigest(BaseModel):
     trust_status: str = 'limited'
 
 
+class AgentBoardroomPanelist(BaseModel):
+    agent_id: str
+    role_label: str
+    stance: str
+    confidence: float
+    evidence_focus: list[str] = Field(default_factory=list)
+    challenge: str
+    sql_focus: str | None = None
+
+
+class AgentBoardroomSpeakerNote(BaseModel):
+    agent_id: str
+    statement: str
+
+
+class AgentBoardroomDebateRound(BaseModel):
+    round: int
+    topic: str
+    speaker_notes: list[AgentBoardroomSpeakerNote] = Field(default_factory=list)
+    consensus_delta: str
+
+
+class AgentBoardroomSynthesis(BaseModel):
+    meeting_mode: str
+    primary_call: str
+    confidence: float
+    consensus_summary: str
+    action_board: list[str] = Field(default_factory=list)
+    red_lines: list[str] = Field(default_factory=list)
+
+
+class AgentSQLQuerySpec(BaseModel):
+    query_id: str
+    title: str
+    sql: str
+    params: list[str] = Field(default_factory=list)
+
+
+class AgentSQLMission(BaseModel):
+    mission_id: str
+    label: str
+    goal: str
+
+
+class AgentSQLPlaybook(BaseModel):
+    warehouse_ready: bool = False
+    current_engine: str | None = None
+    warehouse_db: str | None = None
+    company_code: str | None = None
+    company_name: str | None = None
+    queries: list[AgentSQLQuerySpec] = Field(default_factory=list)
+    missions: list[AgentSQLMission] = Field(default_factory=list)
+    company_overview_rows: list[dict[str, Any]] = Field(default_factory=list)
+    research_heat_rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class AgentThreadSummary(BaseModel):
     thread_id: str
     title: str
@@ -108,5 +164,9 @@ class AgentResponse(BaseModel):
     thread_summary: str | None = None
     thread_memory: AgentThreadMemory | None = None
     execution_digest: AgentExecutionDigest | None = None
+    panelists: list[AgentBoardroomPanelist] = Field(default_factory=list)
+    debate_rounds: list[AgentBoardroomDebateRound] = Field(default_factory=list)
+    synthesis: AgentBoardroomSynthesis | None = None
+    sql_playbook: AgentSQLPlaybook | None = None
     data_authenticity: dict[str, Any] = Field(default_factory=dict)
     thread_messages: list[AgentThreadMessage] = Field(default_factory=list)
