@@ -78,7 +78,10 @@ def test_company_compare_has_dimensions_and_evidence() -> None:
     assert comparison is not None
     assert comparison["winner_company_name"]
     assert len(comparison["comparison_rows"]) == 2
+    assert len(comparison["scorecards"]) == 2
     assert any(item["dimension"] == "综合表现" for item in comparison["dimensions"])
+    assert comparison["battlecards"]
+    assert comparison["battlecards"][0]["decisive_metrics"]
     assert len(comparison["evidence"]["companies"]) == 2
     assert comparison["evidence"]["freshness"]["latest_official_disclosure"]
     assert comparison["evidence"]["companies"][0]["freshness_digest"]["annual_report_year"]
@@ -167,6 +170,8 @@ def test_compare_api_returns_structured_payload() -> None:
     )
     assert payload["summary"]
     assert payload["comparison_rows"]
+    assert payload["scorecards"]
+    assert payload["battlecards"]
     assert any(item["dimension"] == "风险水平" for item in payload["dimensions"])
     assert payload["evidence"]["freshness"]["latest_stock_report"]
 

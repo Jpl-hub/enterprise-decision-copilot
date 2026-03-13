@@ -204,9 +204,62 @@
           </div>
         </section>
 
+        <section class="v-doc-section" v-if="scorecards.length">
+          <h2 class="v-section-title">05 / 能力拆解</h2>
+          <div class="v-scorecard-grid">
+            <article v-for="card in scorecards" :key="card.company_code" class="v-scorecard">
+              <div class="v-scorecard-head">
+                <strong>{{ card.company_name }}</strong>
+                <span class="v-badge">{{ card.company_code }}</span>
+              </div>
+              <div class="v-scorecard-list">
+                <div v-for="metric in card.metrics" :key="metric.metric" class="v-scorecard-row">
+                  <span>{{ metric.label }}</span>
+                  <strong :class="scoreToneClass(metric.tone)">{{ formatNumber(metric.value, 1) }}</strong>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="v-doc-section" v-if="battlecards.length">
+          <h2 class="v-section-title">06 / 对抗战术卡</h2>
+          <div class="v-battlecard-grid">
+            <article v-for="card in battlecards" :key="card.company_code" class="v-battlecard">
+              <div class="v-battlecard-head">
+                <div>
+                  <strong>{{ card.company_name }}</strong>
+                  <p>{{ card.role }}</p>
+                </div>
+                <span class="v-badge" v-if="card.won_dimensions.length">
+                  {{ card.won_dimensions.slice(0, 2).join(' / ') }}
+                </span>
+              </div>
+              <div class="v-battlecard-block">
+                <span class="v-stat-label">优势抓手</span>
+                <p v-for="item in card.strengths" :key="item" class="v-battlecard-line">{{ item }}</p>
+              </div>
+              <div class="v-battlecard-block">
+                <span class="v-stat-label">风险提醒</span>
+                <p v-for="item in card.watchouts" :key="item" class="v-battlecard-line v-battlecard-line-warning">{{ item }}</p>
+              </div>
+              <div class="v-battlecard-block">
+                <span class="v-stat-label">下一步动作</span>
+                <p v-for="item in card.action_focus" :key="item" class="v-battlecard-line">{{ item }}</p>
+              </div>
+              <div class="v-battlecard-block" v-if="card.decisive_metrics.length">
+                <span class="v-stat-label">决胜因子</span>
+                <p v-for="metric in card.decisive_metrics" :key="metric.metric" class="v-battlecard-line">
+                  {{ metric.label }}: {{ metric.conclusion }}
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
+
         <!-- Sector Detail -->
         <section class="v-doc-section" v-if="result.dimensions && result.dimensions.length">
-          <h2 class="v-section-title">05 / 维度判断</h2>
+          <h2 class="v-section-title">07 / 维度判断</h2>
           <div class="v-dimension-grid">
             <div v-for="dim in result.dimensions" :key="dim.dimension" class="v-dimension-card">
               <h3 class="v-dimension-title">{{ dim.dimension }}</h3>
@@ -219,7 +272,7 @@
         </section>
 
         <section class="v-doc-section v-action-section">
-          <h2 class="v-section-title">06 / 后续动作</h2>
+          <h2 class="v-section-title">08 / 后续动作</h2>
           <div class="v-nav-actions bottom-actions">
             <span class="v-nav-actions-label">继续推进</span>
             <div class="v-nav-action-cluster">
@@ -239,7 +292,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { api } from '../api/client';
-import type { CompanyCompareResponse, CompanyComparisonRow } from '../api/types';
+import type { CompanyCompareResponse, CompanyComparisonRow, ComparisonBattlecard, ComparisonScorecard } from '../api/types';
 import { useDashboardStore } from '../stores/dashboard';
 
 const route = useRoute();
@@ -259,6 +312,12 @@ const companies = computed<CompanyComparisonRow[]>(() => {
 const evidenceCompanies = computed(() => {
   return result.value?.evidence?.companies?.slice(0, 2) || [];
 });
+const scorecards = computed<ComparisonScorecard[]>(() => {
+  return result.value?.scorecards?.slice(0, 2) || [];
+});
+const battlecards = computed<ComparisonBattlecard[]>(() => {
+  return result.value?.battlecards?.slice(0, 2) || [];
+});
 const fromOverview = computed(() => route.query.entry === 'overview');
 
 const exchangeLabels: Record<string, string> = { SSE: '上交所', SZSE: '深交所', BSE: '北交所' };
@@ -275,6 +334,12 @@ function formatNumber(val: number | null | undefined, fixed = 2) {
 function formatPercent(val: number | null | undefined) {
   if (val == null || !Number.isFinite(val)) return '-';
   return `${(Number(val)).toFixed(1)}%`;
+}
+
+function scoreToneClass(tone?: string | null) {
+  if (tone === 'positive') return 'v-tone-positive';
+  if (tone === 'warning') return 'v-tone-warning';
+  return '';
 }
 
 function formatDate(val?: string | null) {
@@ -820,6 +885,101 @@ watch(() => route.query.companies, () => {
   font-weight: 700;
 }
 
+.v-scorecard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.v-scorecard {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,248,251,0.98) 100%);
+}
+
+.v-scorecard-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.v-scorecard-list {
+  display: grid;
+  gap: 10px;
+}
+
+.v-scorecard-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.v-scorecard-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.v-battlecard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.v-battlecard {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,249,251,0.98) 100%);
+}
+
+.v-battlecard-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.v-battlecard-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.v-battlecard-block {
+  display: grid;
+  gap: 8px;
+}
+
+.v-battlecard-line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.v-battlecard-line-warning {
+  color: #b45309;
+}
+
+.v-tone-positive {
+  color: #0f6f28;
+}
+
+.v-tone-warning {
+  color: #b45309;
+}
+
 /* Dimensions grids */
 .v-dimension-grid {
   display: grid;
@@ -866,6 +1026,8 @@ watch(() => route.query.companies, () => {
   .v-doc-nav,
   .v-target-grid,
   .v-company-brief-grid,
+  .v-scorecard-grid,
+  .v-battlecard-grid,
   .v-dimension-grid {
     grid-template-columns: 1fr;
   }

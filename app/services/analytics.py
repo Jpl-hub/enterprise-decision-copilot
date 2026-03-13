@@ -1014,6 +1014,14 @@ class AnalyticsService:
         company_rows.sort(key=lambda item: float(item["row"].get("total_score") or 0), reverse=True)
         leader = company_rows[0]
         report_year = int(leader["row"]["report_year"])
+        score_metric_specs = [
+            ("profitability_score", "盈利能力", True),
+            ("growth_score", "成长性", True),
+            ("innovation_score", "创新投入", True),
+            ("resilience_score", "经营韧性", True),
+            ("efficiency_score", "运营效率", True),
+            ("risk_penalty", "风险压力", False),
+        ]
 
         def _build_dimension(*, dimension: str, metric_key: str, higher_is_better: bool, conclusion_builder) -> dict:
             ranked = sorted(
@@ -1035,6 +1043,57 @@ class AnalyticsService:
                     }
                     for item in ranked
                 ],
+            }
+
+        def _peer_average(metric_key: str, current_code: str) -> float:
+            peer_values = [
+                float(item["row"].get(metric_key) or 0.0)
+                for item in company_rows
+                if str(item["row"]["company_code"]) != current_code
+            ]
+            if not peer_values:
+                return 0.0
+            return sum(peer_values) / len(peer_values)
+
+        def _tone_for_metric(metric_key: str, value: float) -> str:
+            values = [float(item["row"].get(metric_key) or 0.0) for item in company_rows]
+            if not values:
+                return "neutral"
+            metric_spec = next((spec for spec in score_metric_specs if spec[0] == metric_key), None)
+            higher_is_better = metric_spec[2] if metric_spec is not None else True
+            best_value = max(values) if higher_is_better else min(values)
+            worst_value = min(values) if higher_is_better else max(values)
+            if abs(value - best_value) < 1e-6:
+                return "positive"
+            if abs(value - worst_value) < 1e-6:
+                return "warning"
+            return "neutral"
+
+        def _decisive_metric(metric_key: str, label: str, higher_is_better: bool, item: dict) -> dict:
+            current_code = str(item["row"]["company_code"])
+            company_value = round(float(item["row"].get(metric_key) or 0.0), 2)
+            peer_value = round(_peer_average(metric_key, current_code), 2)
+            delta = round(company_value - peer_value, 2)
+            effective_delta = delta if higher_is_better else round(peer_value - company_value, 2)
+            if metric_key == "risk_penalty":
+                conclusion = (
+                    f"风险惩罚比对手均值低 {effective_delta:.2f} 分。"
+                    if effective_delta >= 0
+                    else f"风险惩罚比对手均值高 {abs(effective_delta):.2f} 分。"
+                )
+            else:
+                conclusion = (
+                    f"{label}较对手均值高 {effective_delta:.2f} 分。"
+                    if effective_delta >= 0
+                    else f"{label}较对手均值低 {abs(effective_delta):.2f} 分。"
+                )
+            return {
+                "metric": metric_key,
+                "label": label,
+                "company_value": company_value,
+                "peer_value": peer_value,
+                "delta": round(effective_delta, 2),
+                "conclusion": conclusion,
             }
 
         dimensions = [
@@ -1096,8 +1155,13 @@ class AnalyticsService:
                 ),
             ),
         ]
+        dimension_winners: dict[str, list[str]] = {}
+        for dimension in dimensions:
+            dimension_winners.setdefault(str(dimension["winner_company_code"]), []).append(str(dimension["dimension"]))
 
         comparison_rows = []
+        scorecards = []
+        battlecards = []
         evidence_rows = []
         freshness_rows = []
         for item in company_rows:
@@ -1125,6 +1189,21 @@ class AnalyticsService:
                     "multimodal_field_count": int(multimodal.get("filled_field_count", 0)),
                 }
             )
+            scorecards.append(
+                {
+                    "company_code": str(row["company_code"]),
+                    "company_name": row["company_name"],
+                    "metrics": [
+                        {
+                            "metric": metric_key,
+                            "label": label,
+                            "value": round(float(row.get(metric_key) or 0.0), 2),
+                            "tone": _tone_for_metric(metric_key, float(row.get(metric_key) or 0.0)),
+                        }
+                        for metric_key, label, _higher_is_better in score_metric_specs
+                    ],
+                }
+            )
             evidence_rows.append(
                 {
                     "company_code": str(row["company_code"]),
@@ -1140,6 +1219,66 @@ class AnalyticsService:
                 }
             )
             freshness_rows.append(freshness)
+
+        for item in company_rows:
+            row = item["row"]
+            current_code = str(row["company_code"])
+            won_dimensions = dimension_winners.get(current_code, [])
+            lost_dimensions = [
+                str(dimension["dimension"])
+                for dimension in dimensions
+                if str(dimension["winner_company_code"]) != current_code
+            ]
+            strengths: list[str] = []
+            if won_dimensions:
+                strengths.append(f"当前在 {('、'.join(won_dimensions[:3]))} 维度占优。")
+            if item["research"].get("positive", 0) > item["research"].get("negative", 0):
+                strengths.append("机构观点整体偏正向，外部认知支持度较高。")
+            if item["multimodal"].get("available"):
+                strengths.append("已具备财报图表锚点，可直接回链到原始披露。")
+            if not strengths:
+                strengths.append("当前没有明显短板扩散，整体处于可跟踪状态。")
+
+            watchouts = [str(flag) for flag in list(row.get("risk_flags") or [])[:2] if str(flag).strip()]
+            if lost_dimensions:
+                watchouts.append(f"在 {('、'.join(lost_dimensions[:2]))} 维度落后，需要补强。")
+            if item["research"].get("negative", 0) >= 2:
+                watchouts.append("近期存在一定数量的谨慎研报，需要复核预期差。")
+            if not watchouts:
+                watchouts.append("当前未出现显著弱项，但仍需继续跟踪季度变化。")
+
+            action_focus = []
+            if current_code == str(leader["row"]["company_code"]):
+                action_focus.append("适合作为当前答辩中的主案例，承载系统综合判断。")
+            else:
+                action_focus.append(f"适合作为与 {leader['row']['company_name']} 对照的样本，强化横向差异。")
+            if str(row.get("risk_level") or "") != "低":
+                action_focus.append("优先复核现金流、偿债和风险惩罚相关指标。")
+            if item["multimodal"].get("available"):
+                action_focus.append("可继续追到财报原页，增强证据可解释性。")
+            else:
+                action_focus.append("建议补齐财报图表抽取，提升证据链完整度。")
+
+            decisive_metrics = sorted(
+                [
+                    _decisive_metric(metric_key, label, higher_is_better, item)
+                    for metric_key, label, higher_is_better in score_metric_specs
+                ],
+                key=lambda metric: metric["delta"],
+                reverse=True,
+            )[:3]
+            battlecards.append(
+                {
+                    "company_code": current_code,
+                    "company_name": row["company_name"],
+                    "role": "当前优势方" if current_code == str(leader["row"]["company_code"]) else "对照样本",
+                    "won_dimensions": won_dimensions,
+                    "strengths": strengths[:3],
+                    "watchouts": watchouts[:3],
+                    "action_focus": action_focus[:3],
+                    "decisive_metrics": decisive_metrics,
+                }
+            )
 
         latest_freshness = max(
             freshness_rows,
@@ -1190,7 +1329,9 @@ class AnalyticsService:
             "summary": summary,
             "highlights": highlights,
             "comparison_rows": comparison_rows,
+            "scorecards": scorecards,
             "dimensions": dimensions,
+            "battlecards": battlecards,
             "evidence": {"companies": evidence_rows, "freshness": freshness_summary},
         }
 

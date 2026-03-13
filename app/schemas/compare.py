@@ -21,6 +21,19 @@ class CompanyComparisonRow(BaseModel):
     industry_report_count: int
 
 
+class ComparisonScoreMetric(BaseModel):
+    metric: str
+    label: str
+    value: float
+    tone: str = "neutral"
+
+
+class ComparisonScorecard(BaseModel):
+    company_code: str
+    company_name: str
+    metrics: list[ComparisonScoreMetric] = Field(default_factory=list)
+
+
 class ComparisonDimensionValue(BaseModel):
     company_code: str
     company_name: str
@@ -35,6 +48,26 @@ class ComparisonDimension(BaseModel):
     values: list[ComparisonDimensionValue] = Field(default_factory=list)
 
 
+class ComparisonBattleMetric(BaseModel):
+    metric: str
+    label: str
+    company_value: float
+    peer_value: float
+    delta: float
+    conclusion: str
+
+
+class ComparisonBattlecard(BaseModel):
+    company_code: str
+    company_name: str
+    role: str
+    won_dimensions: list[str] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
+    watchouts: list[str] = Field(default_factory=list)
+    action_focus: list[str] = Field(default_factory=list)
+    decisive_metrics: list[ComparisonBattleMetric] = Field(default_factory=list)
+
+
 class CompanyCompareResponse(BaseModel):
     report_year: int
     winner_company_code: str
@@ -42,5 +75,7 @@ class CompanyCompareResponse(BaseModel):
     summary: str
     highlights: list[str] = Field(default_factory=list)
     comparison_rows: list[CompanyComparisonRow] = Field(default_factory=list)
+    scorecards: list[ComparisonScorecard] = Field(default_factory=list)
     dimensions: list[ComparisonDimension] = Field(default_factory=list)
+    battlecards: list[ComparisonBattlecard] = Field(default_factory=list)
     evidence: dict[str, Any] = Field(default_factory=dict)

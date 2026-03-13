@@ -356,6 +356,19 @@ export interface CompanyComparisonRow {
   multimodal_field_count?: number | null;
 }
 
+export interface ComparisonScoreMetric {
+  metric: string;
+  label: string;
+  value: number;
+  tone: string;
+}
+
+export interface ComparisonScorecard {
+  company_code: string;
+  company_name: string;
+  metrics: ComparisonScoreMetric[];
+}
+
 export interface ComparisonDimensionValue {
   company_code: string;
   company_name: string;
@@ -368,6 +381,26 @@ export interface ComparisonDimension {
   winner_company_name: string;
   conclusion: string;
   values: ComparisonDimensionValue[];
+}
+
+export interface ComparisonBattleMetric {
+  metric: string;
+  label: string;
+  company_value: number;
+  peer_value: number;
+  delta: number;
+  conclusion: string;
+}
+
+export interface ComparisonBattlecard {
+  company_code: string;
+  company_name: string;
+  role: string;
+  won_dimensions: string[];
+  strengths: string[];
+  watchouts: string[];
+  action_focus: string[];
+  decisive_metrics: ComparisonBattleMetric[];
 }
 
 export interface CompareCompanyFreshnessDigest {
@@ -413,7 +446,9 @@ export interface CompanyCompareResponse {
   summary: string;
   highlights: string[];
   comparison_rows: CompanyComparisonRow[];
+  scorecards: ComparisonScorecard[];
   dimensions: ComparisonDimension[];
+  battlecards: ComparisonBattlecard[];
   evidence: {
     companies?: CompareEvidenceCompany[];
     freshness?: CompareCompanyFreshnessDigest;
