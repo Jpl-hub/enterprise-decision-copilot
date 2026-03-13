@@ -325,8 +325,16 @@ class ExecutiveBoardroomTool:
         )
 
     def run(self, context: WorkflowContext, analytics_service: AnalyticsService) -> ToolResult:
-        company_code = str(context.matches[0]['company_code'])
-        payload = self.boardroom_service.build_company_boardroom(company_code, context.question)
+        if len(context.matches) >= 2:
+            payload = self.boardroom_service.build_compare_boardroom(
+                [str(match['company_code']) for match in context.matches[:2]],
+                context.question,
+            )
+        elif len(context.matches) == 1:
+            company_code = str(context.matches[0]['company_code'])
+            payload = self.boardroom_service.build_company_boardroom(company_code, context.question)
+        else:
+            payload = self.boardroom_service.build_industry_boardroom(context.question)
         if payload is None:
             return FallbackTool().run(context, analytics_service)
         synthesis = dict(payload.get('synthesis') or {})

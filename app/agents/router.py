@@ -110,6 +110,9 @@ class IntentRouter:
         if matched_count >= 2:
             scores[AgentIntent.COMPANY_COMPARE] += 8.0
             reasons[AgentIntent.COMPANY_COMPARE].append(f"命中 {matched_count} 家企业")
+            if boardroom_hits:
+                scores[AgentIntent.EXECUTIVE_BOARDROOM] += 8.6
+                reasons[AgentIntent.EXECUTIVE_BOARDROOM].append(f"命中 {matched_count} 家企业且要求协同会议")
         elif matched_count == 1:
             for intent in (
                 AgentIntent.COMPANY_DIAGNOSIS,
@@ -160,6 +163,9 @@ class IntentRouter:
 
         if matched_count == 0 and industry_hits:
             scores[AgentIntent.INDUSTRY_TREND] += 2.0
+            if boardroom_hits:
+                scores[AgentIntent.EXECUTIVE_BOARDROOM] += 4.4
+                reasons[AgentIntent.EXECUTIVE_BOARDROOM].append("未锁定企业但要求协同会议，进入行业专题会")
         if matched_count == 0 and risk_hits:
             scores[AgentIntent.OVERVIEW] += 1.5
             reasons[AgentIntent.OVERVIEW].append("未锁定企业，转为全局风险扫描")

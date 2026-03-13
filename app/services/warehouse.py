@@ -213,3 +213,73 @@ class WarehouseService:
             'company_overview_rows': company_overview_rows,
             'research_heat_rows': research_heat_rows,
         }
+
+    def build_compare_sql_playbook(self, company_codes: list[str]) -> dict:
+        normalized_codes = [str(code) for code in company_codes if str(code).strip()]
+        return {
+            'warehouse_ready': bool(self.get_summary().get('warehouse_ready')),
+            'current_engine': 'python + duckdb',
+            'company_code': ','.join(normalized_codes) if normalized_codes else None,
+            'company_name': None,
+            'queries': [
+                {
+                    'query_id': 'compare-overview',
+                    'title': '双企业财务对比',
+                    'sql': (
+                        "SELECT company_code, company_name, report_year, revenue_million, net_profit_million, "
+                        "positive_reports, negative_reports "
+                        "FROM mart.company_overview WHERE company_code IN (?, ?) ORDER BY report_year DESC"
+                    ),
+                    'params': normalized_codes[:2],
+                },
+                {
+                    'query_id': 'compare-research-heat',
+                    'title': '双企业研报热度对比',
+                    'sql': (
+                        "SELECT company_code, company_name, report_count, positive_count, negative_count, latest_report_date "
+                        "FROM mart.company_research_heat WHERE company_code IN (?, ?)"
+                    ),
+                    'params': normalized_codes[:2],
+                },
+            ],
+            'missions': [
+                {'mission_id': 'compare-finance', 'label': '财务对抗', 'goal': '拉齐营收、利润、现金流和风险指标，形成双企业对抗视图。'},
+                {'mission_id': 'compare-sentiment', 'label': '观点对抗', 'goal': '比较机构观点与行业主题的支持度差异。'},
+                {'mission_id': 'compare-boardroom', 'label': '会议对抗', 'goal': '把双企业对比转成管理层对抗会议可复用模板。'},
+            ],
+            'company_overview_rows': [],
+            'research_heat_rows': [],
+        }
+
+    def build_industry_sql_playbook(self, topic: str) -> dict:
+        normalized_topic = str(topic or '').strip() or '医药赛道'
+        return {
+            'warehouse_ready': bool(self.get_summary().get('warehouse_ready')),
+            'current_engine': 'python + duckdb',
+            'company_code': None,
+            'company_name': normalized_topic,
+            'queries': [
+                {
+                    'query_id': 'industry-heat',
+                    'title': '行业热度总览',
+                    'sql': (
+                        "SELECT industry_name, report_count, positive_count, negative_count, latest_report_date "
+                        "FROM mart.industry_heat ORDER BY report_count DESC LIMIT 8"
+                    ),
+                    'params': [],
+                },
+                {
+                    'query_id': 'macro-linkage',
+                    'title': '行业与宏观联动',
+                    'sql': "SELECT period, indicator_name, indicator_value, unit FROM macro_indicators ORDER BY period DESC LIMIT 12",
+                    'params': [],
+                },
+            ],
+            'missions': [
+                {'mission_id': 'industry-theme-scan', 'label': '主题扫描', 'goal': '识别行业主题、机构正负观点和赛道热度变化。'},
+                {'mission_id': 'industry-macro-link', 'label': '宏观联动', 'goal': '把行业判断和宏观脉冲放进同一会议画布。'},
+                {'mission_id': 'industry-boardroom', 'label': '专题会议', 'goal': '形成赛道专题会议纪要和后续追问脚本。'},
+            ],
+            'company_overview_rows': [],
+            'research_heat_rows': [],
+        }

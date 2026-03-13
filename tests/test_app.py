@@ -152,6 +152,29 @@ def test_agent_can_generate_executive_boardroom() -> None:
     assert payload["sql_playbook"]["queries"]
 
 
+def test_agent_can_generate_compare_boardroom() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer("给迈瑞医疗和联影医疗开一个对抗会议室，多智能体一起辩论谁更值得重点跟踪")
+
+    assert payload["task_mode"] == "executive_boardroom"
+    assert payload["synthesis"]["meeting_mode"] == "compare_boardroom"
+    assert "领先" in payload["synthesis"]["primary_call"]
+    assert payload["panelists"]
+    assert payload["sql_playbook"]["missions"]
+    assert payload["evidence"]["comparison"]["comparison_rows"]
+
+
+def test_agent_can_generate_industry_boardroom() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer("做一个医药行业专题会议室，让多个agent一起会诊赛道机会")
+
+    assert payload["task_mode"] == "executive_boardroom"
+    assert payload["synthesis"]["meeting_mode"] == "industry_boardroom"
+    assert payload["panelists"]
+    assert payload["evidence"]["industry_overview"]["latest_rows"]
+    assert payload["sql_playbook"]["queries"]
+
+
 def test_decision_brief_contains_evidence_highlights() -> None:
     container = build_service_container()
     brief = container.decision_service.build_company_decision_brief("300760", "结合海外增长和风险看迈瑞医疗")
