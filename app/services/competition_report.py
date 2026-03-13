@@ -7,6 +7,7 @@ from typing import Any
 
 from app.config import settings
 from app.services.analytics import AnalyticsService
+from app.services.data_authenticity import DataAuthenticityService
 from app.services.decision import DecisionService
 from app.services.quality import DataQualityService
 from app.services.risk import RiskService
@@ -26,6 +27,7 @@ class CompetitionReportService:
         self.risk_service = risk_service
         self.quality_service = quality_service
         self.export_root = export_root or (settings.data_dir / "exports" / "competition_packages")
+        self.data_authenticity_service = DataAuthenticityService()
 
     def _build_citations(self, report: dict, brief: dict) -> list[dict]:
         citations: list[dict] = []
@@ -117,6 +119,69 @@ class CompetitionReportService:
             ),
         }
 
+    def _build_data_authenticity(self, report: dict, brief: dict, risk: dict, citations: list[dict]) -> dict[str, Any]:
+        evidence_payload = {
+            "financial_source_url": report.get("evidence", {}).get("financial_source_url"),
+            "research_reports": report.get("evidence", {}).get("research_reports", []),
+            "industry_reports": report.get("evidence", {}).get("industry_reports", []),
+            "semantic_stock_reports": brief.get("evidence", {}).get("semantic_stock_reports", []),
+            "semantic_industry_reports": brief.get("evidence", {}).get("semantic_industry_reports", []),
+            "macro_items": report.get("evidence", {}).get("macro_items", []),
+            "risk_evidences": risk.get("evidence", {}).get("evidences", []),
+            "citations": citations,
+        }
+        return self.data_authenticity_service.summarize_evidence(
+            evidence_payload,
+            required_source_types=["financial", "research", "macro"],
+            scope_label="企业运营分析材料",
+        )
+
+    def _build_publication_gate(self, data_authenticity: dict, quality_snapshot: dict, trust_center: dict) -> dict[str, Any]:
+        package_trust_status = str(data_authenticity.get("trust_status") or "limited")
+        system_trust_status = str(trust_center.get("trust_status") or "at_risk")
+        blocking_reasons: list[str] = []
+        warnings: list[str] = []
+
+        if package_trust_status != "trusted":
+            blocking_reasons.append(str(data_authenticity.get("statement") or "当前材料真实性校验未达到 trusted。"))
+        if system_trust_status != "trusted":
+            blocking_reasons.append(
+                f"系统数据底座当前信任状态为 {system_trust_status}，不应生成企业级正式对外材料。"
+            )
+        for item in list(trust_center.get("findings") or []):
+            if str(item.get("level") or "").lower() == "critical":
+                blocking_reasons.append(str(item.get("detail") or item.get("title") or "存在关键数据治理风险。"))
+
+        company_anomalies = list(quality_snapshot.get("company_anomalies") or [])
+        company_review_queue = list(quality_snapshot.get("company_review_queue") or [])
+        if company_anomalies:
+            warnings.append(f"该企业仍有 {len(company_anomalies)} 条异常记录待复核。")
+        if company_review_queue:
+            warnings.append(f"该企业仍有 {len(company_review_queue)} 条人工复核任务未关闭。")
+
+        if blocking_reasons:
+            gate_status = "blocked"
+            statement = "当前材料未通过正式发布门禁，只能继续补数或复核，不能作为企业级正式输出。"
+        elif warnings:
+            gate_status = "review_required"
+            statement = "当前材料已通过真实性门禁，但仍带有质量复核提示，适合内部评审版本。"
+        else:
+            gate_status = "approved"
+            statement = "当前材料已通过真实性与系统信任门禁，可作为企业级正式输出。"
+
+        return {
+            "gate_status": gate_status,
+            "export_allowed": gate_status != "blocked",
+            "enterprise_ready": gate_status == "approved",
+            "package_trust_status": package_trust_status,
+            "system_trust_status": system_trust_status,
+            "system_trust_score": int(trust_center.get("trust_score") or 0),
+            "review_required": bool(warnings),
+            "blocking_reasons": blocking_reasons,
+            "warnings": warnings,
+            "statement": statement,
+        }
+
     def _refs(self, citations: list[dict], start: int = 0, limit: int = 2) -> str:
         selected = citations[start : start + limit]
         if not selected:
@@ -188,6 +253,8 @@ class CompetitionReportService:
         return sections
 
     def _render_markdown(self, package: dict) -> str:
+        data_authenticity = package.get("data_authenticity", {}) or {}
+        publication_gate = package.get("publication_gate", {}) or {}
         lines = [
             f"# {package['company_name']} 企业运营分析材料",
             "",
@@ -202,6 +269,18 @@ class CompetitionReportService:
         ]
         for section in package["sections"]:
             lines.extend([f"## {section['title']}", section["content"], ""])
+        lines.extend(
+            [
+                "## 真实性声明",
+                f"- 材料真实性：{data_authenticity.get('statement') or '暂无'}",
+                f"- 系统发布门禁：{publication_gate.get('statement') or '暂无'}",
+            ]
+        )
+        for item in list(publication_gate.get("blocking_reasons") or []):
+            lines.append(f"- 阻断原因：{item}")
+        for item in list(publication_gate.get("warnings") or []):
+            lines.append(f"- 复核提示：{item}")
+        lines.append("")
         lines.append("## 证据清单")
         for citation in package["citations"]:
             source = " ".join(part for part in [citation.get("report_date"), citation.get("institution")] if part)
@@ -234,6 +313,9 @@ class CompetitionReportService:
         citations = self._build_citations(report, brief)
         quality_snapshot = self._company_quality_snapshot(company_code)
         evidence_digest = self._build_evidence_digest(report, brief, risk, quality_snapshot)
+        data_authenticity = self._build_data_authenticity(report, brief, risk, citations)
+        trust_center = self.quality_service.get_trust_center_summary()
+        publication_gate = self._build_publication_gate(data_authenticity, quality_snapshot, trust_center)
         exported_at = datetime.now().isoformat(timespec="seconds")
         package = {
             "company_code": str(company_code),
@@ -246,6 +328,8 @@ class CompetitionReportService:
             "risk_level": risk.get("risk_level"),
             "sections": self._build_sections(report, brief, risk, quality_snapshot, citations),
             "citations": citations,
+            "data_authenticity": data_authenticity,
+            "publication_gate": publication_gate,
             "evidence_digest": evidence_digest,
             "quality_snapshot": quality_snapshot,
             "report": report,
@@ -276,6 +360,8 @@ class CompetitionReportService:
                         "exported_at": package["exported_at"],
                         "brief_verdict": package.get("brief_verdict"),
                         "risk_level": package.get("risk_level"),
+                        "data_authenticity": data_authenticity,
+                        "publication_gate": publication_gate,
                         "evidence_digest": evidence_digest,
                         "quality_snapshot": quality_snapshot,
                         "citations": citations,

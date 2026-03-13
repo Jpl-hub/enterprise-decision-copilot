@@ -969,6 +969,8 @@ export interface CompetitionPackageResponse {
     institution?: string | null;
     excerpt?: string | null;
   }>;
+  data_authenticity?: Record<string, unknown>;
+  publication_gate?: Record<string, unknown>;
   quality_snapshot: Record<string, unknown>;
   markdown_content: string;
 }

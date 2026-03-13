@@ -144,8 +144,38 @@
             </div>
           </section>
 
+          <section v-if="result.publication_gate || result.data_authenticity" class="v-doc-section">
+            <h2 class="v-section-title">03 / 发布门禁</h2>
+            <div class="v-gate-panel">
+              <div class="v-gate-summary">
+                <span class="v-signal-detail-label">门禁状态</span>
+                <strong>{{ result.publication_gate?.gate_status || 'pending' }}</strong>
+                <p>{{ String(result.publication_gate?.statement || result.data_authenticity?.statement || '系统正在生成真实性说明。') }}</p>
+              </div>
+              <div class="v-gate-meta">
+                <div class="v-gate-chip" :class="`is-${result.publication_gate?.system_trust_status || 'unknown'}`">
+                  系统信任：{{ result.publication_gate?.system_trust_status || 'unknown' }}
+                </div>
+                <div class="v-gate-chip" :class="`is-${result.publication_gate?.package_trust_status || 'unknown'}`">
+                  材料信任：{{ result.publication_gate?.package_trust_status || 'unknown' }}
+                </div>
+                <div class="v-gate-chip" :class="{ 'is-approved': result.publication_gate?.enterprise_ready }">
+                  正式输出：{{ result.publication_gate?.enterprise_ready ? '允许' : '需复核/阻断' }}
+                </div>
+              </div>
+              <div v-if="Array.isArray(result.publication_gate?.blocking_reasons) && result.publication_gate?.blocking_reasons?.length" class="v-gate-list">
+                <strong>阻断原因</strong>
+                <p v-for="item in result.publication_gate.blocking_reasons" :key="String(item)">{{ item }}</p>
+              </div>
+              <div v-if="Array.isArray(result.publication_gate?.warnings) && result.publication_gate?.warnings?.length" class="v-gate-list">
+                <strong>复核提示</strong>
+                <p v-for="item in result.publication_gate.warnings" :key="String(item)">{{ item }}</p>
+              </div>
+            </div>
+          </section>
+
           <section class="v-doc-section">
-            <h2 class="v-section-title">03 / 导出文件</h2>
+            <h2 class="v-section-title">04 / 导出文件</h2>
             <div class="v-download-grid">
               <div class="v-download-card">
                 <div class="v-dl-icon">M⬇</div>
@@ -167,7 +197,7 @@
           <section class="v-doc-section v-export-split">
 
             <div class="v-split-left">
-              <h2 class="v-section-title">04 / 材料结构</h2>
+              <h2 class="v-section-title">05 / 材料结构</h2>
               <div class="v-outline-list">
                 <div v-for="(section, idx) in result.sections" :key="section.title" class="v-outline-item">
                   <div class="v-outline-id">{{ String(idx + 1).padStart(2, '0') }}</div>
@@ -180,7 +210,7 @@
             </div>
 
             <div class="v-split-right">
-              <h2 id="citation-section" class="v-section-title">05 / 证据清单</h2>
+              <h2 id="citation-section" class="v-section-title">06 / 证据清单</h2>
               <div class="v-citation-list">
                 <div v-for="item in result.citations" :key="item.citation_id" class="v-citation-item">
                   <div class="v-cite-head">
@@ -200,7 +230,7 @@
           </section>
 
           <section class="v-doc-section">
-            <h2 class="v-section-title">06 / Markdown 成稿预览</h2>
+            <h2 class="v-section-title">07 / Markdown 成稿预览</h2>
             <div class="v-markdown-box">
               <pre>{{ result.markdown_content }}</pre>
             </div>
@@ -712,6 +742,96 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
+}
+
+.v-gate-panel {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,249,251,0.96) 100%);
+}
+
+.v-gate-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.v-gate-summary strong {
+  font-size: 22px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.v-gate-summary p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.v-gate-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.v-gate-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.v-gate-chip.is-trusted,
+.v-gate-chip.is-approved {
+  background: rgba(21, 128, 61, 0.1);
+  border-color: rgba(21, 128, 61, 0.24);
+  color: #166534;
+}
+
+.v-gate-chip.is-watch,
+.v-gate-chip.is-review_required {
+  background: rgba(217, 119, 6, 0.12);
+  border-color: rgba(217, 119, 6, 0.26);
+  color: #b45309;
+}
+
+.v-gate-chip.is-blocked,
+.v-gate-chip.is-limited,
+.v-gate-chip.is-at_risk {
+  background: rgba(185, 28, 28, 0.1);
+  border-color: rgba(185, 28, 28, 0.24);
+  color: #b91c1c;
+}
+
+.v-gate-list {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.v-gate-list strong {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-gate-list p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }
 
 .v-download-card {

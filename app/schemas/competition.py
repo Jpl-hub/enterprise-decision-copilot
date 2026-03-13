@@ -36,5 +36,7 @@ class CompetitionPackageResponse(BaseModel):
     evidence_digest: dict[str, Any] = Field(default_factory=dict)
     sections: list[CompetitionPackageSection] = Field(default_factory=list)
     citations: list[CompetitionCitation] = Field(default_factory=list)
+    data_authenticity: dict[str, Any] = Field(default_factory=dict)
+    publication_gate: dict[str, Any] = Field(default_factory=dict)
     quality_snapshot: dict[str, Any] = Field(default_factory=dict)
     markdown_content: str

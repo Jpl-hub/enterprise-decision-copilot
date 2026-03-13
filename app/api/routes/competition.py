@@ -23,11 +23,26 @@ async def get_company_competition_package(
     package = competition_report_service.build_company_competition_package(company_code, question=question, persist=persist)
     if package is None:
         raise HTTPException(status_code=404, detail="company not found")
+    publication_gate = package.get("publication_gate") or {}
+    if persist and not bool(publication_gate.get("export_allowed")):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "当前材料未通过真实性发布门禁，禁止生成正式导出文件。",
+                "publication_gate": publication_gate,
+            },
+        )
     audit_service.log_event(
         event_type='competition.package.export',
         user_id=current_user['user_id'],
         target_type='company',
         target_id=company_code,
-        detail={'question': question, 'persist': persist, 'citation_count': package['citation_count']},
+        detail={
+            'question': question,
+            'persist': persist,
+            'citation_count': package['citation_count'],
+            'gate_status': publication_gate.get('gate_status'),
+            'enterprise_ready': publication_gate.get('enterprise_ready'),
+        },
     )
     return package
