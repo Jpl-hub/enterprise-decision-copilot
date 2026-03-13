@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.agents.models import AgentIntent, WorkflowContext
 from app.agents.router import IntentRouter
 from app.agents.tools import AgentSkillRegistry, AgentTool, build_agent_skill_registry
+from app.agents.validator import AgentResultValidator
 from app.services.analytics import AnalyticsService
 
 
@@ -12,10 +13,12 @@ class AgentWorkflow:
         analytics_service: AnalyticsService,
         intent_router: IntentRouter,
         tools: list[AgentTool],
+        result_validator: AgentResultValidator | None = None,
     ) -> None:
         self.analytics_service = analytics_service
         self.intent_router = intent_router
         self.skill_registry: AgentSkillRegistry = build_agent_skill_registry(tools)
+        self.result_validator = result_validator or AgentResultValidator()
         self.tools = {skill.tool_name: skill.tool for skill in self.skill_registry.skills}
         self.intent_labels = {
             AgentIntent.FALLBACK: '问题引导',
@@ -140,6 +143,48 @@ class AgentWorkflow:
         else:
             context.add_plan('问题引导', '回退到默认引导，帮助用户锁定企业与任务。')
 
+    def _validation_trace_detail(self, validation: dict[str, object]) -> str:
+        status = str(validation.get('status') or 'warning')
+        check_count = int(validation.get('check_count') or 0)
+        warning_count = int(validation.get('warning_count') or 0)
+        failed_count = int(validation.get('failed_count') or 0)
+        if status == 'passed':
+            return f'已完成 {check_count} 项合同校验，当前输出满足 skill 要求。'
+        segments = [f'已完成 {check_count} 项合同校验']
+        if warning_count:
+            segments.append(f'存在 {warning_count} 项提示')
+        if failed_count:
+            segments.append(f'存在 {failed_count} 项失败')
+        return '，'.join(segments) + '。'
+
+    def _finalize_payload(
+        self,
+        *,
+        context: WorkflowContext,
+        payload: dict,
+        route_candidates: list[dict],
+    ) -> dict:
+        skill = self.skill_registry.by_intent.get(context.intent)
+        validation = self.result_validator.validate(skill=skill, context=context, payload=payload)
+        validation_status = str(validation.get('status') or 'warning')
+        context.add_plan('校验交付结果', '按领域 skill 合同检查字段完整性、对象锁定和关键证据。')
+        context.add_trace(
+            '结果校验',
+            self._validation_trace_detail(validation),
+            status='completed' if validation_status == 'passed' else validation_status,
+        )
+        payload['trace'] = [step.as_dict() for step in context.trace]
+        payload['plan'] = [step.as_dict() for step in context.plan]
+        payload['matched_companies'] = context.matches
+        payload['intent'] = context.intent.value
+        payload['task_mode'] = context.intent.value
+        payload['task_label'] = self._intent_label(context.intent)
+        payload['skill_id'] = skill.skill_id if skill is not None else None
+        payload['skill_label'] = skill.label if skill is not None else None
+        payload['validation'] = validation
+        payload['route_candidates'] = route_candidates
+        return payload
+
     def execute(
         self,
         question: str,
@@ -173,6 +218,16 @@ class AgentWorkflow:
                     'reasons': ['问题为空，进入默认引导'],
                 }
             ]
+            stage_label, deliverables = self._task_meta(AgentIntent.FALLBACK)
+            payload = {
+                'title': '问题已接收',
+                'summary': '当前未输入具体问题，可以先输入企业名称、股票代码或分析方向。',
+                'highlights': ['例如：分析恒瑞医药、比较迈瑞医疗和联影医疗。'],
+                'suggested_questions': ['分析恒瑞医药', '比较迈瑞医疗和联影医疗'],
+                'stage_label': stage_label,
+                'deliverables': deliverables,
+            }
+            return self._finalize_payload(context=context, payload=payload, route_candidates=route_candidates)
         elif not self.analytics_service.has_ready_data():
             status = self.analytics_service.get_pipeline_status()
             context.add_trace(
@@ -200,10 +255,8 @@ class AgentWorkflow:
                 'task_label': self._intent_label(AgentIntent.FALLBACK),
                 'stage_label': stage_label,
                 'deliverables': deliverables,
-                'plan': [step.as_dict() for step in context.plan],
             }
-            payload['trace'] = [step.as_dict() for step in context.trace]
-            return payload
+            return self._finalize_payload(context=context, payload=payload, route_candidates=route_candidates)
         else:
             if preferred_intent is not None:
                 context.intent = preferred_intent
@@ -257,19 +310,9 @@ class AgentWorkflow:
         context.add_trace('生成结果', result.detail)
         context.add_plan('输出结果', '已汇总分析结果、建议动作与证据。')
         stage_label, deliverables = self._task_meta(context.intent)
-        skill = self.skill_registry.by_intent.get(context.intent)
         payload = dict(result.payload)
-        payload['trace'] = [step.as_dict() for step in context.trace]
-        payload['plan'] = [step.as_dict() for step in context.plan]
-        payload['matched_companies'] = matches
-        payload['intent'] = context.intent.value
-        payload['task_mode'] = context.intent.value
-        payload['task_label'] = self._intent_label(context.intent)
-        payload['skill_id'] = skill.skill_id if skill is not None else None
-        payload['skill_label'] = skill.label if skill is not None else None
         payload['stage_label'] = stage_label
         payload['deliverables'] = deliverables
-        payload['route_candidates'] = route_candidates
-        return payload
+        return self._finalize_payload(context=context, payload=payload, route_candidates=route_candidates)
 
 

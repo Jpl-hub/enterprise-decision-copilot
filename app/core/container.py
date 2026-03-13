@@ -47,7 +47,6 @@ def build_service_container() -> ServiceContainer:
     risk_model_service = RiskModelService()
     risk_service = RiskService(analytics_service, risk_model_service)
     quality_service = DataQualityService()
-    ai_stack_service = AIStackService(risk_model_service, quality_service)
     competition_report_service = CompetitionReportService(analytics_service, decision_service, risk_service, quality_service)
     warehouse_service = WarehouseService()
     industry_universe_service = IndustryUniverseService()
@@ -61,6 +60,11 @@ def build_service_container() -> ServiceContainer:
             narrative_service=narrative_service,
             warehouse_service=warehouse_service,
         ),
+    )
+    ai_stack_service = AIStackService(
+        risk_model_service,
+        quality_service,
+        agent_skill_count=len(workflow.skill_registry.skills),
     )
     agent_service = AgentService(workflow, audit_service=audit_service)
     return ServiceContainer(

@@ -103,6 +103,17 @@ def test_agent_can_generate_company_report() -> None:
     assert result["thread_id"]
 
 
+def test_agent_company_diagnosis_exposes_evidence_digest() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer("恒瑞医药当前最值得关注的经营问题是什么？")
+
+    assert "企业诊断" in payload["title"]
+    assert payload["validation"]["status"] == "passed"
+    assert payload["evidence"]["multimodal_digest"]["available"] is True
+    assert payload["evidence"]["evidences"]
+    assert payload["execution_digest"]["evidence_count"] >= 1
+
+
 def test_agent_api_returns_execution_trace() -> None:
     container = build_service_container()
     payload = container.agent_service.answer("比较迈瑞医疗和联影医疗")

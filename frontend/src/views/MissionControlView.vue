@@ -3,11 +3,16 @@
     <div class="mission-shell">
       <header class="mission-hero">
         <div class="mission-hero-copy">
-          <span class="mission-kicker">项目总控台</span>
-          <h1>把数据、Agent、模型、计算和交付拉到同一个指挥面</h1>
+          <span class="mission-kicker">系统控制面</span>
+          <h1>把数据、Agent、模型、计算和交付拉到同一个 control plane</h1>
           <p>
-            这不是再加一个页面，而是把项目五条主线摆上台面。老师、评委和企业方进来之后，能直接看到现在在做什么、卡在哪里、下一步是什么。
+            这不是普通用户的主功能页，而是系统侧控制面。老师、评委、项目负责人和管理员进来之后，能快速看清系统五条主线现在跑到哪、卡在哪里、下一步推什么。
           </p>
+          <div class="mission-audience-row">
+            <span>评委视角</span>
+            <span>项目负责人</span>
+            <span>系统管理员</span>
+          </div>
         </div>
         <div class="mission-hero-side" v-if="payload">
           <div class="mission-gate-badge" :class="payload.release_gate.gate_status">
@@ -17,6 +22,28 @@
           <p>{{ payload.release_gate.release_note }}</p>
         </div>
       </header>
+
+      <section class="mission-control-frame">
+        <article class="mission-panel">
+          <div class="mission-panel-head">
+            <span>控制面定位</span>
+            <strong>不是用户问答页</strong>
+          </div>
+          <p class="mission-line-item">面向展示：解释系统规模、工程架构和当前推进状态。</p>
+          <p class="mission-line-item">面向控制：观察数据、模型、Agent、计算和交付五条主线是否正常。</p>
+          <p class="mission-line-item">面向治理：承接发布门禁、阻塞项、下一步动作和可交付物。</p>
+        </article>
+
+        <article class="mission-panel">
+          <div class="mission-panel-head">
+            <span>三层结构</span>
+            <strong>用户层 / 智能层 / 工程层</strong>
+          </div>
+          <p class="mission-line-item"><strong>用户层：</strong>企业问答、数字人聊天室、报告与导出。</p>
+          <p class="mission-line-item"><strong>智能层：</strong>Agent 编排、领域 skills、检索增强、验证与记忆。</p>
+          <p class="mission-line-item"><strong>工程层：</strong>数据采集、分布式存储、计算引擎、中间件与治理。</p>
+        </article>
+      </section>
 
       <section class="mission-metric-strip" v-if="payload?.headline_metrics?.length">
         <article
@@ -124,7 +151,7 @@
         </article>
       </section>
 
-      <div v-if="loading" class="mission-empty">正在加载项目总控台...</div>
+      <div v-if="loading" class="mission-empty">正在加载系统控制面...</div>
       <div v-else-if="error" class="mission-empty danger">{{ error }}</div>
     </div>
   </div>

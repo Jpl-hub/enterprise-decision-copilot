@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.agents.models import AgentIntent, ToolResult, WorkflowContext
 from app.services.analytics import AnalyticsService
@@ -30,6 +30,7 @@ class AgentSkillSpec:
     label: str
     description: str
     supported_intents: tuple[AgentIntent, ...]
+    contract: 'SkillContract'
     tool: AgentTool
 
 
@@ -38,6 +39,26 @@ class AgentSkillRegistry:
     skills: list[AgentSkillSpec]
     by_intent: dict[AgentIntent, AgentSkillSpec]
     by_tool_name: dict[str, AgentSkillSpec]
+
+
+@dataclass(frozen=True, slots=True)
+class SkillContract:
+    domain: str
+    output_kind: str
+    required_payload_fields: tuple[str, ...] = ('title', 'summary', 'highlights')
+    required_evidence_keys: tuple[str, ...] = ()
+    minimum_match_count: int = 0
+    min_highlight_count: int = 1
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            'domain': self.domain,
+            'output_kind': self.output_kind,
+            'required_payload_fields': list(self.required_payload_fields),
+            'required_evidence_keys': list(self.required_evidence_keys),
+            'minimum_match_count': self.minimum_match_count,
+            'min_highlight_count': self.min_highlight_count,
+        }
 
 
 class FallbackTool:
@@ -197,6 +218,13 @@ class CompanyDiagnosisTool:
             return FallbackTool().run(context, analytics_service)
         research = analytics_service.get_company_research_digest(company_code)
         industry = analytics_service.get_company_industry_digest(company_code)
+        multimodal = analytics_service.get_company_multimodal_digest(company_code, report_year=int(row['report_year']))
+        evidences = analytics_service._build_unified_evidences(
+            financial_source_url=row.get('source_url'),
+            multimodal=multimodal,
+            stock_reports=research.get('latest_rows', []),
+            industry_reports=industry.get('latest_rows', []),
+        )
         return ToolResult(
             payload={
                 'title': f"{row['company_name']} 企业诊断",
@@ -230,6 +258,13 @@ class CompanyDiagnosisTool:
                     '它的增长和盈利谁更强',
                     '基于当前数据生成一段投资研究摘要',
                 ],
+                'evidence': {
+                    'financial_source_url': row.get('source_url'),
+                    'research_digest': research,
+                    'industry_digest': industry,
+                    'multimodal_digest': multimodal,
+                    'evidences': evidences,
+                },
             },
             detail=(
                 f"已完成 {row['company_name']} 单企业诊断，使用 1 份年度快照、"
@@ -492,6 +527,7 @@ def build_agent_skill_registry(tools: list[AgentTool]) -> AgentSkillRegistry:
             label=tool.label,
             description=tool.description,
             supported_intents=tool.supported_intents,
+            contract=_skill_contract_for_tool(tool),
             tool=tool,
         )
         skills.append(skill)
@@ -500,5 +536,80 @@ def build_agent_skill_registry(tools: list[AgentTool]) -> AgentSkillRegistry:
             by_intent[intent] = skill
 
     return AgentSkillRegistry(skills=skills, by_intent=by_intent, by_tool_name=by_tool_name)
+
+
+def _skill_contract_for_tool(tool: AgentTool) -> SkillContract:
+    contracts: dict[str, SkillContract] = {
+        'fallback_tool': SkillContract(
+            domain='navigation',
+            output_kind='guidance',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions'),
+        ),
+        'industry_overview_tool': SkillContract(
+            domain='portfolio_scan',
+            output_kind='overview',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions'),
+        ),
+        'data_quality_tool': SkillContract(
+            domain='data_governance',
+            output_kind='quality_snapshot',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions'),
+        ),
+        'company_diagnosis_tool': SkillContract(
+            domain='enterprise_analysis',
+            output_kind='diagnosis',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions', 'evidence'),
+            required_evidence_keys=('multimodal_digest', 'evidences'),
+            minimum_match_count=1,
+            min_highlight_count=3,
+        ),
+        'company_report_tool': SkillContract(
+            domain='enterprise_analysis',
+            output_kind='formal_report',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions', 'evidence'),
+            required_evidence_keys=('multimodal_digest', 'evidences'),
+            minimum_match_count=1,
+            min_highlight_count=3,
+        ),
+        'company_decision_brief_tool': SkillContract(
+            domain='enterprise_decision',
+            output_kind='decision_brief',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions', 'evidence'),
+            required_evidence_keys=('query_profile', 'semantic_stock_reports', 'semantic_industry_reports', 'evidences'),
+            minimum_match_count=1,
+            min_highlight_count=3,
+        ),
+        'executive_boardroom_tool': SkillContract(
+            domain='boardroom',
+            output_kind='boardroom_consensus',
+            required_payload_fields=('title', 'summary', 'highlights', 'panelists', 'debate_rounds', 'synthesis', 'sql_playbook', 'evidence'),
+            required_evidence_keys=('evidences',),
+            min_highlight_count=2,
+        ),
+        'company_risk_forecast_tool': SkillContract(
+            domain='risk_control',
+            output_kind='risk_forecast',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions', 'evidence'),
+            required_evidence_keys=('model_prediction', 'evidences'),
+            minimum_match_count=1,
+            min_highlight_count=2,
+        ),
+        'company_compare_tool': SkillContract(
+            domain='comparison',
+            output_kind='comparison_report',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions', 'evidence'),
+            required_evidence_keys=('companies',),
+            minimum_match_count=2,
+            min_highlight_count=2,
+        ),
+        'industry_trend_tool': SkillContract(
+            domain='industry_research',
+            output_kind='trend_scan',
+            required_payload_fields=('title', 'summary', 'highlights', 'suggested_questions', 'evidence'),
+            required_evidence_keys=('industry_overview', 'macro_items'),
+            min_highlight_count=2,
+        ),
+    }
+    return contracts.get(tool.name, SkillContract(domain='general', output_kind='analysis'))
 
 
