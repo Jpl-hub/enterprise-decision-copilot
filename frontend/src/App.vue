@@ -16,6 +16,7 @@
 
       <nav class="top-nav refined-top-nav">
         <RouterLink to="/" class="nav-chip" exact-active-class="nav-chip-exact-active">开始分析</RouterLink>
+        <RouterLink to="/mission-control" class="nav-chip">项目总控台</RouterLink>
         <RouterLink to="/board" class="nav-chip">态势总览</RouterLink>
         <RouterLink to="/workbench" class="nav-chip">企业分析</RouterLink>
         <RouterLink to="/compare" class="nav-chip">企业对比</RouterLink>

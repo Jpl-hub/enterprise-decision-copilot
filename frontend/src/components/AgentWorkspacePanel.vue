@@ -23,34 +23,100 @@
       <button class="button-ghost compact-action task-mode-toolbar-action" @click="resetThread">新建线程</button>
     </div>
 
-    <div class="agent-thread-shell">
-      <div class="notebook-thread-block">
-        <AgentThreadPanel :messages="messagePreview" />
-      </div>
+    <div class="agent-workspace-grid" :class="{ 'boardroom-open': boardroomReady }">
+      <div class="agent-thread-column">
+        <div class="notebook-thread-block">
+          <AgentThreadPanel :messages="messagePreview" />
+        </div>
 
-      <div v-if="agentStore.error" class="error-banner">
-        {{ agentStore.error }}
-      </div>
+        <div v-if="agentStore.error" class="error-banner">
+          {{ agentStore.error }}
+        </div>
 
-      <div v-if="agentStore.loading" class="answer-line-card pending-answer-card pending-chat-bubble">
-        <p>正在整理分析结果，稍等片刻...</p>
-      </div>
+        <div v-if="agentStore.loading" class="answer-line-card pending-answer-card pending-chat-bubble">
+          <p>正在整理分析结果，稍等片刻...</p>
+        </div>
 
-      <div class="agent-input-shell bottom-input-shell compact-bottom-input">
-        <input v-model="draft" class="text-input hero-input" :placeholder="placeholder" @keydown.enter="submit" />
-        <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading">发送</button>
-      </div>
+        <div class="agent-input-shell bottom-input-shell compact-bottom-input">
+          <input v-model="draft" class="text-input hero-input" :placeholder="placeholder" @keydown.enter="submit" />
+          <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading">发送</button>
+        </div>
 
-      <div class="notebook-starter-card compact-floating-starter" v-if="!hasConversation">
-        <div class="quick-prompt-row left-align compact-prompt-row">
-          <button v-for="item in starterPrompts" :key="item" class="button-ghost chip-button" @click="applyPrompt(item)">
-            {{ item }}
-          </button>
+        <div class="notebook-starter-card compact-floating-starter" v-if="!hasConversation">
+          <div class="quick-prompt-row left-align compact-prompt-row">
+            <button v-for="item in starterPrompts" :key="item" class="button-ghost chip-button" @click="applyPrompt(item)">
+              {{ item }}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div v-if="floatingPanels.length" class="agent-insight-stack">
-        <section v-for="panel in floatingPanels" :key="panel.key" class="agent-insight-card" :class="{ active: activeFloatingPanel === panel.key }">
+      <div v-if="boardroomReady || floatingPanels.length" class="agent-side-column">
+        <section v-if="boardroomReady" class="boardroom-stage-card">
+          <div class="boardroom-stage-head">
+            <div>
+              <span class="boardroom-stage-kicker">决策会议室</span>
+              <strong>{{ boardroomSynthesis?.primary_call || '继续跟踪' }}</strong>
+            </div>
+            <span class="boardroom-stage-score">可信度 {{ boardroomSynthesis?.confidence?.toFixed(2) || '0.00' }}</span>
+          </div>
+
+          <div class="boardroom-hero-card">
+            <strong>{{ boardroomSynthesis?.consensus_summary }}</strong>
+            <p v-if="boardroomPlaybook?.current_engine">计算底座：{{ boardroomPlaybook.current_engine }}</p>
+          </div>
+
+          <div class="boardroom-panelist-grid">
+            <article v-for="item in boardroomPanelists" :key="item.agent_id" class="boardroom-panelist-card">
+              <div class="boardroom-panelist-top">
+                <strong>{{ item.role_label }}</strong>
+                <span>{{ item.confidence.toFixed(2) }}</span>
+              </div>
+              <p>{{ item.stance }}</p>
+              <p v-if="item.evidence_focus.length" class="boardroom-subline">证据焦点：{{ item.evidence_focus.join('；') }}</p>
+              <p v-if="item.sql_focus" class="boardroom-subline">SQL 焦点：{{ item.sql_focus }}</p>
+              <p class="boardroom-subline danger">挑战：{{ item.challenge }}</p>
+            </article>
+          </div>
+
+          <div class="boardroom-round-stack" v-if="boardroomRounds.length">
+            <article v-for="round in boardroomRounds" :key="round.round" class="answer-line-card boardroom-round-card">
+              <strong>第 {{ round.round }} 轮 · {{ round.topic }}</strong>
+              <p v-for="note in round.speaker_notes" :key="`${round.round}-${note.agent_id}`">
+                {{ note.agent_id }}：{{ note.statement }}
+              </p>
+              <p class="boardroom-subline">收敛结果：{{ round.consensus_delta }}</p>
+            </article>
+          </div>
+
+          <div class="boardroom-action-grid" v-if="boardroomSynthesis?.action_board?.length">
+            <div class="answer-line-card">
+              <strong>管理层动作板</strong>
+              <p v-for="item in boardroomSynthesis.action_board" :key="item">{{ item }}</p>
+            </div>
+            <div class="answer-line-card" v-if="boardroomSynthesis.red_lines?.length">
+              <strong>红线约束</strong>
+              <p v-for="item in boardroomSynthesis.red_lines" :key="item">{{ item }}</p>
+            </div>
+          </div>
+
+          <div class="answer-line-card" v-if="boardroomPlaybook?.missions?.length">
+            <strong>SQL 动作板</strong>
+            <p v-for="item in boardroomPlaybook.missions" :key="item.mission_id">
+              {{ item.label }}：{{ item.goal }}
+            </p>
+          </div>
+
+          <div class="answer-line-card" v-if="boardroomPlaybook?.queries?.length">
+            <strong>查询模板</strong>
+            <p v-for="item in boardroomPlaybook.queries" :key="item.query_id">
+              {{ item.title }}：<code>{{ item.sql }}</code>
+            </p>
+          </div>
+        </section>
+
+        <div v-if="secondaryPanels.length" class="agent-insight-stack">
+          <section v-for="panel in secondaryPanels" :key="panel.key" class="agent-insight-card" :class="{ active: activeFloatingPanel === panel.key }">
           <button type="button" class="agent-insight-toggle" @click="toggleFloatingPanel(panel.key)">
             <strong>{{ panel.label }}</strong>
             <span>{{ activeFloatingPanel === panel.key ? '收起' : '展开' }}</span>
@@ -113,67 +179,9 @@
               </div>
             </div>
 
-            <div v-else-if="panel.key === 'boardroom' && boardroomReady" class="floating-panel-body">
-              <div class="boardroom-hero-card">
-                <div class="agent-mode-strip">
-                  <span class="agent-mode-pill accent">会议模式</span>
-                  <span class="agent-mode-pill subtle">{{ boardroomSynthesis?.primary_call || '继续跟踪' }}</span>
-                  <span class="agent-mode-pill subtle">可信度 {{ boardroomSynthesis?.confidence?.toFixed(2) || '0.00' }}</span>
-                </div>
-                <strong>{{ boardroomSynthesis?.consensus_summary }}</strong>
-                <p v-if="boardroomPlaybook?.current_engine">计算底座：{{ boardroomPlaybook.current_engine }}</p>
-              </div>
-
-              <div class="boardroom-panelist-grid">
-                <article v-for="item in boardroomPanelists" :key="item.agent_id" class="boardroom-panelist-card">
-                  <div class="boardroom-panelist-top">
-                    <strong>{{ item.role_label }}</strong>
-                    <span>{{ item.confidence.toFixed(2) }}</span>
-                  </div>
-                  <p>{{ item.stance }}</p>
-                  <p v-if="item.evidence_focus.length" class="boardroom-subline">证据焦点：{{ item.evidence_focus.join('；') }}</p>
-                  <p v-if="item.sql_focus" class="boardroom-subline">SQL 焦点：{{ item.sql_focus }}</p>
-                  <p class="boardroom-subline danger">挑战：{{ item.challenge }}</p>
-                </article>
-              </div>
-
-              <div class="boardroom-round-stack" v-if="boardroomRounds.length">
-                <article v-for="round in boardroomRounds" :key="round.round" class="answer-line-card boardroom-round-card">
-                  <strong>第 {{ round.round }} 轮 · {{ round.topic }}</strong>
-                  <p v-for="note in round.speaker_notes" :key="`${round.round}-${note.agent_id}`">
-                    {{ note.agent_id }}：{{ note.statement }}
-                  </p>
-                  <p class="boardroom-subline">收敛结果：{{ round.consensus_delta }}</p>
-                </article>
-              </div>
-
-              <div class="boardroom-action-grid" v-if="boardroomSynthesis?.action_board?.length">
-                <div class="answer-line-card">
-                  <strong>管理层动作板</strong>
-                  <p v-for="item in boardroomSynthesis.action_board" :key="item">{{ item }}</p>
-                </div>
-                <div class="answer-line-card" v-if="boardroomSynthesis.red_lines?.length">
-                  <strong>红线约束</strong>
-                  <p v-for="item in boardroomSynthesis.red_lines" :key="item">{{ item }}</p>
-                </div>
-              </div>
-
-              <div class="answer-line-card" v-if="boardroomPlaybook?.missions?.length">
-                <strong>SQL 动作板</strong>
-                <p v-for="item in boardroomPlaybook.missions" :key="item.mission_id">
-                  {{ item.label }}：{{ item.goal }}
-                </p>
-              </div>
-
-              <div class="answer-line-card" v-if="boardroomPlaybook?.queries?.length">
-                <strong>查询模板</strong>
-                <p v-for="item in boardroomPlaybook.queries" :key="item.query_id">
-                  {{ item.title }}：<code>{{ item.sql }}</code>
-                </p>
-              </div>
-            </div>
           </div>
         </section>
+        </div>
       </div>
     </div>
   </section>
@@ -275,6 +283,7 @@ const floatingPanels = computed(() => {
   if (followUpQuestions.value.length) panels.push({ key: 'followup', label: '推荐追问' });
   return panels;
 });
+const secondaryPanels = computed(() => floatingPanels.value.filter((item) => item.key !== 'boardroom'));
 
 const outputCards = computed(() => {
   const latest = agentStore.latest;
@@ -372,11 +381,73 @@ watch(() => [props.companyCode, props.companyName], ([companyCode, companyName])
 watch(floatingPanels, (panels) => {
   if (!panels.length || !panels.some((item) => item.key === activeFloatingPanel.value)) {
     activeFloatingPanel.value = null;
+  } else if (activeFloatingPanel.value === 'boardroom') {
+    activeFloatingPanel.value = secondaryPanels.value[0]?.key || null;
   }
 }, { immediate: true });
 </script>
 
 <style scoped>
+.agent-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.92fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.agent-thread-column,
+.agent-side-column,
+.boardroom-stage-card {
+  display: grid;
+  gap: 12px;
+}
+
+.boardroom-stage-card {
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(214, 227, 241, 0.26);
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.boardroom-stage-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.boardroom-stage-kicker {
+  display: inline-flex;
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(231, 238, 248, 0.78);
+  font-weight: 700;
+}
+
+.boardroom-stage-head strong,
+.boardroom-stage-score {
+  color: #f7fbff;
+}
+
+.boardroom-stage-head strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1.12;
+}
+
+.boardroom-stage-score {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(8, 21, 47, 0.44);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .boardroom-hero-card {
   padding: 18px 20px;
   border-radius: 20px;
@@ -449,5 +520,11 @@ watch(floatingPanels, (panels) => {
 code {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+@media (max-width: 1180px) {
+  .agent-workspace-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
