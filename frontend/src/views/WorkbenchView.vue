@@ -1,369 +1,198 @@
 <template>
-  <div class="page-stack workbench-page refined-workbench">
-    <PagePanel title="企业分析" eyebrow="单企业判断">
-      <template #actions>
-        <div class="toolbar-cluster">
-          <label class="console-field">
-            <select v-model="selectedCode" class="select-input toolbar-select">
-              <option v-for="item in targets" :key="item.company_code" :value="item.company_code">{{ item.company_name }}</option>
-            </select>
-          </label>
-          <button class="button-primary" @click="loadAll">刷新</button>
+  <div class="page-stack v-document-page">
+    <div class="v-doc-container">
+      
+      <!-- Top Nav / Back Action -->
+      <nav class="v-doc-nav">
+        <RouterLink to="/" class="v-back-link">
+          <span class="v-arrow">←</span> <span>返回中枢</span>
+        </RouterLink>
+        <div class="v-nav-actions">
+          <span class="v-nav-actions-label">页面动作</span>
+          <div class="v-nav-action-cluster">
+          <button v-if="allEvidence.length" class="v-btn-outline" @click="scrollToSection('evidence-section')">查看关键证据</button>
+          <button class="v-btn-outline" @click="loadAll" :disabled="isLoading">刷新分析</button>
+          <a
+            v-if="primarySourceUrl"
+            class="v-btn-outline"
+            :href="primarySourceUrl"
+            target="_blank"
+            rel="noreferrer"
+          >
+            查看财报原件
+          </a>
+          <RouterLink v-if="selectedCode" :to="`/competition/${selectedCode}`" class="v-btn-solid">导出报告</RouterLink>
+          </div>
         </div>
-      </template>
+      </nav>
 
-      <div v-if="loadError" class="error-box">
-        {{ loadError }}
+      <!-- Loading State -->
+      <div v-if="isLoading" class="v-loading-block">
+        <div class="v-spinner"></div>
+        <p>正在整理企业判断、证据与风险信号...</p>
       </div>
 
-      <section v-if="isBootstrapping" class="sub-panel workbench-loading-shell">
-        <div class="workbench-loading-copy">
-          <div class="spinner-placeholder"></div>
-          <div>
-            <strong>正在整理企业判断</strong>
-            <p>系统正在汇总财报、研报、风险信号与图表锚点。</p>
-          </div>
-        </div>
-        <div class="workbench-loading-grid">
-          <div class="workbench-loading-card"></div>
-          <div class="workbench-loading-card"></div>
-          <div class="workbench-loading-card"></div>
-        </div>
-      </section>
-
-      <div class="analysis-hero compact-analysis-hero" v-if="report">
-        <div class="analysis-hero-main">
-          <h3>{{ report.company_name }}</h3>
-          <p class="panel-description strong-copy">{{ report.summary }}</p>
-        </div>
-        <div class="analysis-hero-metrics" v-if="risk">
-          <div class="mini-metric-card">
-            <span>风险等级</span>
-            <strong :class="risk.risk_level === '高' ? 'text-danger' : 'text-primary'">{{ risk.risk_level }}</strong>
-          </div>
-          <div class="mini-metric-card">
-            <span>风险分</span>
-            <strong class="text-brand">{{ risk.risk_score }}</strong>
-          </div>
-          <div class="mini-metric-card" v-if="risk.model_prediction">
-            <span>AI 模型概率</span>
-            <strong class="text-brand">{{ formatPercent(risk.model_prediction.high_risk_probability) }}</strong>
-          </div>
-        </div>
+      <!-- Error State -->
+      <div v-if="loadError" class="v-error-block">
+        <p><strong>企业分析暂时未能完成</strong></p>
+        <p>{{ loadError }}</p>
       </div>
 
-      <div v-if="report || brief || risk" class="company-metrics-grid analysis-signal-grid">
-        <div class="company-metric-card">
-          <span>财报基准口径</span>
-          <strong>{{ report ? `${report.report_year} 年报` : '加载中' }}</strong>
-        </div>
-        <div class="company-metric-card">
-          <span>历史趋势区间</span>
-          <strong>{{ trendYearsText }}</strong>
-        </div>
-        <div class="company-metric-card">
-          <span>个股研报证据</span>
-          <strong>{{ stockEvidenceCount }} 条</strong>
-        </div>
-        <div class="company-metric-card">
-          <span>行业对比证据</span>
-          <strong>{{ industryEvidenceCount }} 条</strong>
-        </div>
-        <div class="company-metric-card">
-          <span>宏观信号窗口</span>
-          <strong>{{ macroWindowText }}</strong>
-        </div>
-        <div class="company-metric-card">
-          <span>风险监测事项</span>
-          <strong :class="monitoringCount > 0 ? 'text-danger' : ''">{{ monitoringCount }} 项</strong>
-        </div>
-      </div>
-
-      <section v-if="report || brief || risk" class="sub-panel workbench-closure-strip">
-        <div class="workbench-closure-main">
-          <div class="trace-title-row">
-            <strong>业务分析闭环</strong>
-            <span class="badge-subtle">{{ closureEvidenceText }}</span>
+      <!-- Document Body -->
+      <article v-if="!isLoading && brief" class="v-doc-body">
+        
+        <!-- Header: Target Identity -->
+        <header class="v-doc-header">
+          <div class="v-doc-meta">
+            <span class="v-badge">{{ currentCompanyName }}</span>
+            <span class="v-badge" v-if="companyIndustry">{{ companyIndustry }}</span>
+            <span class="v-badge" v-if="brief?.verdict">{{ brief.verdict }}</span>
+            <span class="v-badge v-badge-risk" v-if="risk?.risk_level === '高'">高风险</span>
+            <span class="v-badge v-badge-warning" v-if="isStaleData">需复核时效</span>
           </div>
-          <p>{{ closureSummaryText }}</p>
-        </div>
-        <div class="workbench-action-strip">
-          <RouterLink to="/" class="button-primary">继续追问</RouterLink>
-          <RouterLink :to="compareRoute" class="button-ghost">发起核心企业对比</RouterLink>
-          <RouterLink :to="`/competition/${selectedCode}`" class="button-ghost">导出分析材料</RouterLink>
-          <a v-if="financialSourceUrl" :href="financialSourceUrl" target="_blank" rel="noreferrer" class="button-ghost">查看财报原文</a>
-        </div>
-      </section>
+          <h1 class="v-doc-title">企业深度诊断报告</h1>
+          <p class="v-doc-subtitle">针对 {{ currentCompanyName }} 的经营、风险及财务分析与判断。</p>
+        </header>
 
-      <section v-if="reasoningCards.length" class="workbench-reasoning-grid">
-        <article v-for="item in reasoningCards" :key="item.title" class="sub-panel compact-data-panel">
-          <div class="trace-title-row">
-            <strong>{{ item.title }}</strong>
-            <span class="badge-subtle">{{ item.badge }}</span>
+        <div v-if="fromOverview" class="v-entry-note">
+          <span class="v-entry-note-label">来自分析中枢</span>
+          <p>已承接 {{ entryCompanyName || currentCompanyName }} 的首页上下文，可直接查看判断、证据与原始财报。</p>
+        </div>
+
+        <!-- Freshness / Stale Warning -->
+        <div v-if="isStaleData" class="v-warning-banner">
+          <strong>数据断档警示</strong>
+          <p>{{ staleReasonText }}</p>
+        </div>
+
+        <!-- Section 1: Executive Summary -->
+        <section class="v-doc-section">
+          <h2 class="v-section-title">01 / 核心判断</h2>
+          <div class="v-executive-summary">
+            <p>{{ brief.executive_summary || brief.summary || brief.verdict }}</p>
           </div>
-          <p class="workbench-reasoning-text">{{ item.summary }}</p>
-          <div v-if="item.points.length" class="stack-list top-gap">
-            <div v-for="point in item.points" :key="`${item.title}-${point}`" class="action-line-card">
-              <p>{{ point }}</p>
+
+          <div class="v-signal-grid" v-if="brief">
+            <div class="v-signal-card">
+              <span>当前判断</span>
+              <strong>{{ brief.verdict || '待形成判断' }}</strong>
+              <p>作为当前企业的一阶管理建议，用于承接后续对比与导出。</p>
+            </div>
+            <div class="v-signal-card" v-if="risk">
+              <span>风险等级</span>
+              <strong>{{ risk.risk_level }}风险</strong>
+              <p>基于经营指标、机构观点与模型推演综合判断。</p>
+            </div>
+            <div class="v-signal-card">
+              <span>证据锚点</span>
+              <strong>{{ allEvidence.length }} 条</strong>
+              <p>已汇总财报原件、图表页锚点和研报片段。</p>
+            </div>
+            <div class="v-signal-card">
+              <span>最新披露</span>
+              <strong>{{ latestDisclosureLabel }}</strong>
+              <p>{{ latestDisclosureDate || '披露日期同步中' }}</p>
             </div>
           </div>
-        </article>
-      </section>
-
-      <div v-if="!isBootstrapping" class="analysis-grid two-main-one-side">
-        <div class="analysis-main-stack">
-          <div class="sub-panel content-panel">
-            <div class="sub-panel-header">
-              <h3>经营判断</h3>
+          
+          <div class="v-judgement-grid">
+            <div class="v-judgement-col">
+              <h3>关键论点</h3>
+              <ul class="v-bullet-list">
+                <li v-for="j in brief.key_judgements" :key="j">{{ j }}</li>
+              </ul>
             </div>
-            <div v-if="briefLoading" class="empty-state">
-              <div class="spinner-placeholder"></div>
-              <p>正在整理判断依据...</p>
-            </div>
-            <div v-else-if="brief" class="stack-list">
-              <div class="info-card compact emphasis-card brand-glow">
-                <strong>{{ brief.verdict }}</strong>
-                <p>{{ brief.summary }}</p>
-              </div>
-              <div class="info-card compact">
-                <strong>核心判断依据</strong>
-                <ul class="bullet-list">
-                   <li v-for="j in brief.key_judgements" :key="j">{{ j }}</li>
-                </ul>
-              </div>
-              <div class="info-card compact">
-                <strong>建议执行动作</strong>
-                <ul class="bullet-list">
-                   <li v-for="a in brief.action_recommendations" :key="a">{{ a }}</li>
-                </ul>
-              </div>
-              <div v-if="brief.evidence_highlights?.length" class="info-card compact">
-                <strong>核心证据摘要</strong>
-                <ul class="bullet-list">
-                   <li v-for="e in brief.evidence_highlights.slice(0, 3)" :key="e">{{ e }}</li>
-                </ul>
-              </div>
+            <div class="v-judgement-col">
+              <h3>策略与动作建议</h3>
+              <ul class="v-bullet-list">
+                <li v-for="a in brief.action_recommendations" :key="a">{{ a }}</li>
+              </ul>
             </div>
           </div>
 
-          <div class="sub-panel content-panel">
-            <div class="sub-panel-header">
-              <h3>经营拆解</h3>
-            </div>
-            <div v-if="reportLoading" class="empty-state">
-              <div class="spinner-placeholder"></div>
-              <p>正在汇总经营数据...</p>
-            </div>
-            <div v-else-if="report" class="stack-list">
-              <div v-for="section in report.sections" :key="section.title" class="info-card compact section-card">
-                <strong>{{ section.title }}</strong>
-                <p>{{ section.content }}</p>
-              </div>
-            </div>
+          <div v-if="brief.evidence_highlights?.length" class="v-evidence-highlight-grid">
+            <article v-for="item in brief.evidence_highlights" :key="item" class="v-evidence-highlight-card">
+              <span>证据摘记</span>
+              <p>{{ item }}</p>
+            </article>
           </div>
-        </div>
+        </section>
 
-        <div class="analysis-side-stack">
-          <div class="sub-panel side-panel">
-            <div class="sub-panel-header">
-              <h3>风险判断</h3>
+        <!-- Section 2: Evidence Trail -->
+        <section id="evidence-section" class="v-doc-section v-evidence-section" v-if="allEvidence.length">
+          <div class="v-section-heading-row">
+            <h2 class="v-section-title">02 / 关键证据锚点</h2>
+            <span class="v-section-count">{{ allEvidence.length }} 条直接证据</span>
+          </div>
+          <p class="v-section-desc">优先展示可直接回链的财报原件、图表页锚点与研报片段，避免判断与证据脱节。</p>
+          
+          <div class="v-evidence-grid">
+            <div v-for="(ev, idx) in allEvidence" :key="`${ev.evidence_type}-${ev.source_url || ev.image_url || ev.page_label || idx}`" class="v-evidence-card">
+              <div class="v-evidence-meta">
+                <span class="v-ev-type">{{ formatEvidenceType(ev.evidence_type) }}</span>
+                <span class="v-ev-source" v-if="ev.institution">{{ ev.institution }}</span>
+                <span class="v-ev-date" v-if="ev.report_date">{{ formatDate(ev.report_date) }}</span>
+              </div>
+              
+              <div v-if="ev.evidence_type === 'image' && ev.image_url" class="v-ev-image-box">
+                <img :src="ev.image_url" :alt="ev.page_label || '证据截图'" loading="lazy" />
+              </div>
+              
+              <div class="v-ev-content">
+                <p v-if="ev.title" class="v-ev-title">{{ ev.title }}</p>
+                <p v-if="ev.summary" class="v-ev-summary">{{ ev.summary }}</p>
+                <p v-if="ev.page_label" class="v-ev-page-label">引用位置: {{ ev.page_label }}</p>
+                <a class="v-ev-link" v-if="ev.source_url" :href="ev.source_url" target="_blank" rel="noreferrer">
+                  查看原始文档 ↗
+                </a>
+              </div>
             </div>
-            <div v-if="riskLoading" class="empty-state">
-              <div class="spinner-placeholder"></div>
-              <p>正在校准风险信号...</p>
-            </div>
-            <div v-else-if="risk" class="stack-list">
-              <div class="info-card compact" :class="risk.risk_level === '高' ? 'danger-glow' : ''">
-                <strong>{{ risk.summary }}</strong>
-                <p>规则评分 {{ risk.heuristic_score.toFixed(1) }} 分</p>
-              </div>
-              <div class="info-card compact" v-if="risk.model_prediction">
-                <strong>风险模型</strong>
-                <p>高风险概率 {{ formatPercent(risk.model_prediction.high_risk_probability) }} · 参考值 {{ formatMetric(risk.model_prediction.model_summary.metrics.roc_auc) }}</p>
-              </div>
-              <div class="info-card compact">
-                <strong>主要风险驱动因素</strong>
-                <ul class="bullet-list">
-                   <li v-for="d in risk.drivers" :key="d">{{ d }}</li>
-                </ul>
-              </div>
-              <div class="info-card compact" v-if="risk.monitoring_items?.length">
-                <strong>持续监测事项清单</strong>
-                <ul class="bullet-list">
-                   <li v-for="m in risk.monitoring_items" :key="m" class="text-danger">{{ m }}</li>
-                </ul>
-              </div>
+          </div>
+        </section>
+
+        <!-- Section 3: Financial Baseline & Risk -->
+        <section class="v-doc-section" v-if="report || risk">
+          <h2 class="v-section-title">03 / 经营与风险拆解</h2>
+
+          <div v-if="risk" class="v-text-block">
+            <h3>风险穿透 (系统预估: {{ risk.risk_level }}风险)</h3>
+            <p>{{ risk.summary }}</p>
+            <ul class="v-bullet-list" v-if="risk.drivers && risk.drivers.length">
+              <li v-for="d in risk.drivers" :key="d">{{ d }}</li>
+            </ul>
+            <div v-if="risk.monitoring_items?.length" class="v-monitoring-box">
+              <strong>持续监测事项：</strong>
+              <span>{{ risk.monitoring_items.join('；') }}</span>
             </div>
           </div>
 
-          <div class="sub-panel side-panel">
-            <div class="sub-panel-header">
-              <h3>证据回链</h3>
-              <span class="badge-subtle">{{ stockEvidenceCount + industryEvidenceCount }} 条关联</span>
-            </div>
-            <div class="stack-list evidence-dual-stack">
-              <div class="info-card compact">
-                <div class="trace-title-row">
-                  <strong>相关个股研报</strong>
-                  <span class="badge-subtle">{{ stockEvidenceCount }}</span>
-                </div>
-                <EvidenceList :items="stockEvidence" />
+          <div v-if="report" class="v-analysis-section-grid">
+            <div v-for="sec in report.sections" :key="sec.title" class="v-text-block">
+              <div class="v-report-card-head">
+                <span>分析模块</span>
+                <h3>{{ sec.title }}</h3>
               </div>
-              <div class="info-card compact">
-                <div class="trace-title-row">
-                  <strong>宏观与行业研报</strong>
-                  <span class="badge-subtle">{{ industryEvidenceCount }}</span>
-                </div>
-                <EvidenceList :items="industryEvidence" />
-              </div>
-              <div class="info-card compact multimodal-evidence-card">
-                <div class="trace-title-row">
-                  <strong>多模态图表锚点</strong>
-                  <span class="badge-subtle">{{ multimodalDigest?.filled_field_count || 0 }} 项识别</span>
-                </div>
-                <p class="workbench-inline-note">{{ multimodalDigest?.summary || '暂未识别到可用的财报页锚点。' }}</p>
-                <div v-if="multimodalMetrics.length" class="selected-pill-group evidence-pill-cloud top-gap">
-                  <span v-for="item in multimodalMetrics" :key="item.field" class="selected-pill">
-                    {{ item.label }} <span class="text-brand">{{ item.display_value }}</span>
-                  </span>
-                </div>
-                <div v-if="multimodalAssetLinks.length" class="page-anchor-row top-gap">
-                  <a
-                    v-for="item in multimodalAssetLinks"
-                    :key="`${item.label}-${item.url || 'missing'}`"
-                    class="page-anchor-link"
-                    :href="item.url || financialSourceUrl"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    查看 {{ item.label }}
-                  </a>
-                </div>
-              </div>
-              <div class="info-card compact">
-                <strong>本轮分析焦点</strong>
-                <p class="workbench-inline-note">{{ queryTermsText }}</p>
-                <div class="action-row" style="margin-top: 12px;">
-                   <a v-if="financialSourceUrl" :href="financialSourceUrl" target="_blank" rel="noreferrer" class="text-link-button">打开财报源文件</a>
-                </div>
-              </div>
+              <p>{{ sec.content }}</p>
             </div>
           </div>
-        </div>
-      </div>
-    </PagePanel>
+        </section>
+
+      </article>
+
+    </div>
   </div>
 </template>
-
-<style scoped>
-.text-danger {
-  color: var(--status-error) !important;
-}
-.text-primary {
-  color: var(--text-primary) !important;
-}
-.text-brand {
-  color: var(--brand-primary) !important;
-}
-.bullet-list {
-  margin: 8px 0 0 16px;
-  padding: 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.bullet-list li {
-  margin-bottom: 4px;
-}
-.emphasis-card p {
-  line-height: 1.6;
-}
-.brand-glow {
-  border-left: 3px solid var(--brand-primary);
-  background: linear-gradient(to right, rgba(59, 130, 246, 0.05), transparent);
-}
-.danger-glow {
-  border-left: 3px solid var(--status-error);
-  background: linear-gradient(to right, rgba(239, 68, 68, 0.05), transparent);
-}
-.content-panel {
-  background: var(--bg-surface-raised);
-}
-.side-panel {
-  background: var(--bg-surface);
-}
-.spinner-placeholder {
-  width: 32px;
-  height: 32px;
-  margin: 0 auto 16px;
-  border-radius: 50%;
-  border: 3px solid var(--border-subtle);
-  border-top-color: var(--brand-primary);
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-.workbench-loading-shell {
-  display: grid;
-  gap: 18px;
-}
-.workbench-loading-copy {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.workbench-loading-copy strong {
-  display: block;
-  margin-bottom: 4px;
-}
-.workbench-loading-copy p {
-  margin: 0;
-  color: var(--text-secondary);
-}
-.workbench-loading-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-.workbench-loading-card {
-  min-height: 132px;
-  border-radius: 18px;
-  background: linear-gradient(90deg, rgba(12, 27, 51, 0.04), rgba(12, 27, 51, 0.1), rgba(12, 27, 51, 0.04));
-  background-size: 200% 100%;
-  animation: shimmer 1.2s linear infinite;
-}
-.workbench-inline-note {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-@media (max-width: 900px) {
-  .workbench-loading-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
-
 import { api } from '../api/client';
 import type {
   CompanyReportResponse,
   DecisionBriefResponse,
-  MultimodalAssetLink,
-  MultimodalEvidenceDigest,
-  MultimodalMetricItem,
   RiskForecastResponse,
+  UnifiedEvidence
 } from '../api/types';
-import EvidenceList from '../components/EvidenceList.vue';
-import PagePanel from '../components/PagePanel.vue';
 import { useAgentThreadStore } from '../stores/agentThread';
 import { useDashboardStore } from '../stores/dashboard';
 
@@ -371,204 +200,144 @@ const props = defineProps<{ companyCode?: string }>();
 const route = useRoute();
 const store = useDashboardStore();
 const agentStore = useAgentThreadStore();
+
 const selectedCode = ref(props.companyCode || String(route.params.companyCode || ''));
 const loadError = ref('');
+
 const report = ref<CompanyReportResponse | null>(null);
 const brief = ref<DecisionBriefResponse | null>(null);
 const risk = ref<RiskForecastResponse | null>(null);
-const reportLoading = ref(false);
-const briefLoading = ref(false);
-const riskLoading = ref(false);
-const hasLoadedOnce = ref(false);
 
-const targets = computed(() => store.targets);
-const stockEvidence = computed(() => brief.value?.evidence?.semantic_stock_reports || []);
-const industryEvidence = computed(() => brief.value?.evidence?.semantic_industry_reports || []);
-const stockEvidenceCount = computed(() => stockEvidence.value.length);
-const industryEvidenceCount = computed(() => industryEvidence.value.length);
-const monitoringCount = computed(() => risk.value?.monitoring_items?.length || 0);
-const financialSourceUrl = computed(() => {
-  const source = brief.value?.evidence?.financial_source_url;
-  return typeof source === 'string' ? source : '';
-});
-const queryTermsText = computed(() => {
-  const queryTerms = brief.value?.evidence?.query_terms || [];
-  return queryTerms.length ? queryTerms.join('、') : '财报、研报、风险';
-});
-const trendYearsText = computed(() => {
-  const trend = (report.value?.evidence?.trend_digest || {}) as Record<string, unknown>;
-  const start = trend.start_year;
-  const end = trend.end_year;
-  return typeof start === 'number' && typeof end === 'number' ? `${start}-${end}` : '待补齐';
-});
-const macroWindowText = computed(() => {
-  const macroItems = (report.value?.evidence?.macro_items || []) as Array<Record<string, unknown>>;
-  if (!macroItems.length) return '待补齐';
-  const first = macroItems[0];
-  const name = typeof first.indicator_name === 'string' ? first.indicator_name : '宏观指标';
-  const value = first.indicator_value;
-  const unit = typeof first.unit === 'string' ? first.unit : '';
-  return `${name}${value ?? ''}${unit}`;
-});
-const multimodalDigest = computed<MultimodalEvidenceDigest | null>(() => {
-  const digest = report.value?.evidence?.multimodal_digest as MultimodalEvidenceDigest | undefined;
-  return digest && typeof digest === 'object' ? digest : null;
-});
-const multimodalMetrics = computed<MultimodalMetricItem[]>(() => multimodalDigest.value?.metrics?.slice(0, 6) || []);
-const multimodalAssetLinks = computed<MultimodalAssetLink[]>(() => multimodalDigest.value?.page_asset_links?.slice(0, 4) || []);
-const closureEvidenceText = computed(() => {
-  const evidenceCount = stockEvidenceCount.value + industryEvidenceCount.value;
-  const multimodalCount = multimodalDigest.value?.filled_field_count || 0;
-  return `研报 ${evidenceCount} 条 · 图表 ${multimodalCount} 项`;
-});
-const closureSummaryText = computed(() => {
-  const riskLevel = risk.value?.risk_level || '待判断';
-  const reportYear = report.value?.report_year ? `${report.value.report_year} 年报` : '财报待补齐';
-  const disclosure = multimodalDigest.value?.published_at || '披露时间待补齐';
-  return `${reportYear} 已进入当前企业闭环，当前判断为 ${riskLevel} 风险，最新财报锚点 ${disclosure}。`;
-});
-const isBootstrapping = computed(() => (
-  !loadError.value &&
-  !hasLoadedOnce.value &&
-  (reportLoading.value || briefLoading.value || riskLoading.value || store.loading)
-));
-const reasoningCards = computed(() => {
-  const cards: Array<{ title: string; badge: string; summary: string; points: string[] }> = [];
-  if (report.value) {
-    cards.push({
-      title: '财报基线',
-      badge: report.value.report_year ? `${report.value.report_year} 年报` : '官方财报',
-      summary: report.value.summary,
-      points: [
-        `趋势区间 ${trendYearsText.value}`,
-        `财报来源 ${financialSourceUrl.value ? '已回链' : '待补齐'}`,
-        `多模态锚点 ${multimodalDigest.value?.available ? '已接入' : '待补齐'}`,
-      ],
-    });
-  }
-  if (brief.value) {
-    cards.push({
-      title: '管理判断链',
-      badge: brief.value.verdict,
-      summary: brief.value.summary,
-      points: [
-        `问题 ${brief.value.question}`,
-        `关键词 ${queryTermsText.value}`,
-        ...(brief.value.evidence_highlights?.slice(0, 2) || []),
-      ],
-    });
-  }
-  if (risk.value) {
-    cards.push({
-      title: '风险判断链',
-      badge: risk.value.risk_level,
-      summary: risk.value.summary,
-      points: [
-        `规则分 ${risk.value.heuristic_score.toFixed(1)}`,
-        risk.value.model_prediction
-          ? `模型概率 ${formatPercent(risk.value.model_prediction.high_risk_probability)}`
-          : '模型概率 暂无',
-        `监测项 ${monitoringCount.value} 项`,
-      ],
-    });
-  }
-  if (stockEvidenceCount.value || industryEvidenceCount.value || multimodalDigest.value?.available) {
-    cards.push({
-      title: '证据回链',
-      badge: closureEvidenceText.value,
-      summary: `个股研报 ${stockEvidenceCount.value} 条，行业研报 ${industryEvidenceCount.value} 条，多模态财报 ${multimodalDigest.value?.filled_field_count || 0} 项。`,
-      points: [
-        stockEvidence.value[0]?.title ? `最新个股研报 ${stockEvidence.value[0].title}` : '最新个股研报 暂无',
-        industryEvidence.value[0]?.title ? `最新行业研报 ${industryEvidence.value[0].title}` : '最新行业研报 暂无',
-        multimodalDigest.value?.page_refs?.length
-          ? `图表页锚点 ${multimodalDigest.value.page_refs.slice(0, 3).join(' / ')}`
-          : '图表页锚点 暂无',
-      ],
-    });
-  }
-  return cards;
-});
-const compareRoute = computed(() => {
-  const rankingRows = (store.payload?.ranking || []) as Array<Record<string, unknown>>;
-  const peerCode = rankingRows
-    .map((item) => String(item.company_code || ''))
-    .find((code) => code && code !== selectedCode.value);
-  const companies = [selectedCode.value, peerCode || ''].filter(Boolean);
-  return { path: '/compare', query: companies.length >= 2 ? { companies: companies.join(',') } : {} };
+const isLoading = ref(false);
+
+const currentCompanyName = computed(() => {
+  return store.targets.find(t => String(t.company_code) === selectedCode.value)?.company_name || 
+         brief.value?.company_name || 
+         report.value?.company_name || 
+         '当前企业';
 });
 
-async function ensureTargets() {
-  if (!store.payload && !store.loading) {
-    await store.load();
+const fromOverview = computed(() => route.query.entry === 'overview');
+const entryCompanyName = computed(() => {
+  const value = route.query.company;
+  return typeof value === 'string' ? value : '';
+});
+
+const companyIndustry = computed(() => {
+  return store.targets.find(t => String(t.company_code) === selectedCode.value)?.industry || '';
+});
+
+const primarySourceUrl = computed(() => {
+  return (
+    String(report.value?.evidence?.financial_source_url || brief.value?.evidence?.financial_source_url || risk.value?.evidence?.financial_source_url || '').trim() ||
+    undefined
+  );
+});
+
+// Stale & Freshness Logic
+// Fallback to checking missing_expected_full_year_report or missing_annual_report if backend sends it in the response context.
+// Assuming we extract it from `report.evidence.missing_expected_full_year_report` as agreed in the API spec wrapper.
+const isStaleData = computed(() => {
+  return Boolean(
+    report.value?.evidence?.is_stale_data || 
+    risk.value?.evidence?.is_stale_data || 
+    brief.value?.evidence?.is_stale_data ||
+    report.value?.evidence?.missing_expected_full_year_report
+  );
+});
+
+const staleReasonText = computed(() => {
+  const reason = report.value?.evidence?.stale_reason || '当前企业最近一期完整财报可能存在缺失或延迟披露，模型推演可能存在时效性折损。';
+  return String(reason);
+});
+
+const latestDisclosureLabel = computed(() => {
+  return String(
+    report.value?.evidence?.latest_periodic_label ||
+    brief.value?.evidence?.latest_periodic_label ||
+    risk.value?.evidence?.latest_periodic_label ||
+    '年报口径'
+  );
+});
+
+const latestDisclosureDate = computed(() => {
+  const value =
+    report.value?.evidence?.latest_official_disclosure ||
+    brief.value?.evidence?.latest_official_disclosure ||
+    risk.value?.evidence?.latest_official_disclosure ||
+    report.value?.evidence?.annual_report_published_at;
+  return value ? formatDate(String(value)) : '';
+});
+
+// Unify all evidence from the three APIs
+const allEvidence = computed<UnifiedEvidence[]>(() => {
+  const evs: UnifiedEvidence[] = [];
+  
+  if (brief.value?.evidence?.evidences && Array.isArray(brief.value.evidence.evidences)) {
+    evs.push(...(brief.value.evidence.evidences as UnifiedEvidence[]));
   }
-  if (!selectedCode.value && store.targets.length) {
-    selectedCode.value = props.companyCode || String(route.params.companyCode || store.targets[0].company_code);
+  if (report.value?.evidence?.evidences && Array.isArray(report.value.evidence.evidences)) {
+    evs.push(...(report.value.evidence.evidences as UnifiedEvidence[]));
   }
+  if (risk.value?.evidence?.evidences && Array.isArray(risk.value.evidence.evidences)) {
+    evs.push(...(risk.value.evidence.evidences as UnifiedEvidence[]));
+  }
+  
+  // Dedup by source_url or image_url
+  const seen = new Set<string>();
+  return evs.filter((item) => {
+    const key = String(item.source_url || item.image_url || item.page_label || item.title || `${item.evidence_type}-fallback`);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+});
+
+function formatEvidenceType(type: string) {
+  switch (type) {
+    case 'image': return '多模态图表';
+    case 'pdf_anchor': return '原件定位';
+    case 'link': return '外部链接';
+    case 'text': return '研报片段';
+    default: return '事实证据';
+  }
+}
+
+function formatDate(val?: string | null) {
+  if (!val) return '';
+  return String(val).replace('T', ' ').slice(0, 10);
+}
+
+function scrollToSection(sectionId: string) {
+  if (typeof document === 'undefined') return;
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function loadAll() {
   if (!selectedCode.value) return;
-  reportLoading.value = true;
-  briefLoading.value = true;
-  riskLoading.value = true;
+  isLoading.value = true;
   loadError.value = '';
   try {
-    const companyName = currentCompanyName();
-    agentStore.setFocus(selectedCode.value, companyName);
     const [reportResult, briefResult, riskResult] = await Promise.all([
       api.getCompanyReport(selectedCode.value),
-      api.getDecisionBrief(selectedCode.value, `结合财报、研报和风险模型，给出${companyName}的经营判断和动作建议`),
+      api.getDecisionBrief(selectedCode.value, `结合财报、研报和风险模型，给出${currentCompanyName.value}的经营判断和动作建议`),
       api.getRiskForecast(selectedCode.value),
     ]);
     report.value = reportResult;
     brief.value = briefResult;
     risk.value = riskResult;
+    agentStore.setFocus(selectedCode.value, currentCompanyName.value);
   } catch (error) {
-    report.value = null;
-    brief.value = null;
-    risk.value = null;
-    loadError.value = error instanceof Error ? error.message : '企业工作台加载失败';
+    loadError.value = error instanceof Error ? error.message : '企业分析暂时未能完成，请稍后重试';
   } finally {
-    reportLoading.value = false;
-    briefLoading.value = false;
-    riskLoading.value = false;
-    hasLoadedOnce.value = true;
-  }
-}
-
-function currentCompanyName() {
-  return (
-    targets.value.find((item) => item.company_code === selectedCode.value)?.company_name ||
-    report.value?.company_name ||
-    brief.value?.company_name ||
-    risk.value?.company_name ||
-    agentStore.focusCompanyName ||
-    '该企业'
-  );
-}
-
-function formatPercent(value: number | null | undefined) {
-  return value == null ? '暂无' : `${(value * 100).toFixed(1)}%`;
-}
-
-function formatMetric(value: number | null | undefined) {
-  return value == null ? '暂无' : value.toFixed(3);
-}
-
-async function initializeWorkbench() {
-  try {
-    await ensureTargets();
-    if (selectedCode.value) {
-      await loadAll();
-    }
-  } catch (error) {
-    loadError.value = error instanceof Error ? error.message : '企业工作台初始化失败';
+    isLoading.value = false;
   }
 }
 
 watch(() => props.companyCode, (value) => {
   if (value) selectedCode.value = value;
 });
+
 watch(selectedCode, () => {
   if (selectedCode.value) {
     void loadAll();
@@ -576,6 +345,556 @@ watch(selectedCode, () => {
 });
 
 onMounted(() => {
-  void initializeWorkbench();
+  if (!store.payload && !store.loading) {
+    void store.load();
+  }
+  if (!selectedCode.value && store.targets.length) {
+    selectedCode.value = String(store.targets[0].company_code);
+  }
+  if (selectedCode.value) {
+    void loadAll();
+  }
 });
 </script>
+
+<style scoped>
+.v-document-page {
+  background: var(--bg-base);
+  min-height: 100vh;
+  padding: 40px 20px 100px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', -apple-system, sans-serif;
+}
+
+.v-doc-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.v-entry-note {
+  display: grid;
+  gap: 6px;
+  margin: -8px 0 28px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  background: var(--bg-surface-soft);
+}
+
+.v-entry-note-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-entry-note p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.v-doc-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 60px;
+}
+
+.v-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.v-back-link:hover {
+  color: var(--text-primary);
+}
+
+.v-arrow {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+}
+
+.v-nav-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.v-nav-actions-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-nav-action-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.v-btn-outline {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 42px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.v-btn-outline:hover:not(:disabled) {
+  background: var(--bg-surface-highlight);
+}
+
+.v-btn-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.v-btn-solid {
+  background: var(--text-primary);
+  color: var(--bg-base);
+  border: 1px solid transparent;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+}
+
+.v-btn-solid:hover {
+  background: #333;
+}
+
+.v-loading-block, .v-error-block {
+  padding: 60px 0;
+  text-align: center;
+}
+
+.v-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--text-primary);
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: v-spin 1s linear infinite;
+}
+
+@keyframes v-spin {
+  to { transform: rotate(360deg); }
+}
+
+.v-error-block p {
+  color: var(--status-error);
+}
+
+.v-doc-body {
+  display: grid;
+  gap: 80px;
+  animation: v-fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes v-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.v-doc-header {
+  border-bottom: 2px solid var(--text-primary);
+  padding-bottom: 30px;
+}
+
+.v-doc-meta {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.v-badge {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+}
+
+.v-badge-risk {
+  color: var(--status-error);
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.v-badge-warning {
+  color: #b45309;
+  border-color: rgba(217, 119, 6, 0.24);
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.v-doc-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  color: var(--text-primary);
+}
+
+.v-doc-subtitle {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.v-warning-banner {
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 16px 20px;
+  border-radius: 6px;
+  margin-bottom: -40px;
+}
+
+.v-warning-banner strong {
+  display: block;
+  color: #d97706;
+  font-size: 14px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v-warning-banner p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.v-section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  margin: 0 0 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v-section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.v-section-count {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-executive-summary {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin-bottom: 40px;
+}
+
+.v-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 32px;
+}
+
+.v-signal-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(247,248,250,0.96) 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.v-signal-card span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-signal-card strong {
+  font-size: 18px;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.v-signal-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.v-judgement-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  padding-top: 30px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.v-evidence-highlight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.v-evidence-highlight-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.v-evidence-highlight-card span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-evidence-highlight-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+.v-judgement-col h3, .v-text-block h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 16px;
+  color: var(--text-primary);
+}
+
+.v-bullet-list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.v-bullet-list li {
+  margin-bottom: 12px;
+}
+
+.v-text-block {
+  margin-bottom: 0;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(247,248,250,0.98) 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.v-text-block p {
+  color: var(--text-secondary);
+  line-height: 1.75;
+  font-size: 15px;
+  margin: 0;
+}
+
+.v-monitoring-box {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-top: 20px;
+}
+
+.v-analysis-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.v-report-card-head {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.v-report-card-head span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-monitoring-box strong {
+  color: var(--status-error);
+}
+
+.v-section-desc {
+  color: var(--text-secondary);
+  margin: -16px 0 30px;
+  font-size: 14px;
+}
+
+.v-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.v-evidence-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.v-evidence-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.v-ev-type {
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-surface-highlight);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.v-ev-source, .v-ev-date {
+  color: var(--text-tertiary);
+}
+
+.v-ev-image-box {
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-base);
+}
+
+.v-ev-image-box img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.v-ev-page-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+}
+
+.v-ev-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.v-ev-summary {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+}
+
+.v-ev-link {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-primary);
+  text-decoration: none;
+}
+
+.v-ev-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .v-doc-nav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+  .v-nav-actions,
+  .v-nav-action-cluster {
+    width: 100%;
+    justify-items: stretch;
+    justify-content: flex-start;
+  }
+  .v-judgement-grid {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .v-signal-grid,
+  .v-evidence-highlight-grid,
+  .v-analysis-section-grid {
+    grid-template-columns: 1fr;
+  }
+  .v-btn-outline,
+  .v-btn-solid {
+    width: 100%;
+  }
+  .v-executive-summary {
+    font-size: 20px;
+  }
+  .v-section-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+</style>

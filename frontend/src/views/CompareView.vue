@@ -1,602 +1,899 @@
 <template>
-  <div class="page-stack compare-page refined-compare-page">
-    <PagePanel title="企业对比台" eyebrow="Compare Studio">
-      <div class="compare-command-shell">
-        <div class="compare-command-main">
-          <div class="sub-panel compare-selection-panel">
-            <div class="sub-panel-header">
-              <h3>选择对比对象</h3>
-              <span class="badge-subtle">{{ selectedCodes.length }}/4</span>
-            </div>
-            <div class="compare-target-grid refined-target-grid">
-              <button
-                v-for="item in targets"
-                :key="item.company_code"
-                type="button"
-                class="compare-target-card refined-target-card"
-                :class="{ active: selectedCodes.includes(item.company_code) }"
-                @click="toggleCompany(item.company_code)"
-              >
-                <strong>{{ item.company_name }}</strong>
-                <span>{{ item.exchange }}</span>
-              </button>
-            </div>
-            <div class="button-row left-align top-gap">
-              <button class="button-primary" @click="loadComparison" :disabled="selectedCodes.length < 2 || loading">开始对比</button>
-              <button class="button-ghost" @click="resetSelection">默认组合</button>
-            </div>
-          </div>
-
-          <div v-if="bootstrapping" class="empty-state">正在加载企业池与默认组合...</div>
-          <div v-else-if="selectedCodes.length < 2" class="empty-state">至少选择两家企业。</div>
-          <div v-else-if="loading" class="empty-state">正在生成对比结论...</div>
-          <div v-else-if="error" class="error-box">{{ error }}</div>
-          <template v-else-if="result">
-            <div class="compare-decision-shell">
-              <div class="compare-verdict-card">
-                <div>
-                  <p class="section-tag">当前结论</p>
-                  <h3>{{ result.winner_company_name }}</h3>
-                  <p>{{ result.summary }}</p>
-                </div>
-                <div class="compare-verdict-stats">
-                  <div class="verdict-mini-stat">
-                    <span>领先维度</span>
-                    <strong>{{ winnerDimensionCount }}</strong>
-                  </div>
-                  <div class="verdict-mini-stat">
-                    <span>对比年份</span>
-                    <strong>{{ result.report_year }}</strong>
-                  </div>
-                </div>
-              </div>
-
-              <div class="compare-signal-grid">
-                <div class="compare-signal-card">
-                  <span>总分差</span>
-                  <strong>{{ formatMetric(scoreSpread) }}</strong>
-                  <p>{{ leaderRow?.company_name || '领先方' }} 相比次席的综合差距。</p>
-                </div>
-                <div class="compare-signal-card">
-                  <span>证据总量</span>
-                  <strong>{{ totalResearchCount + totalIndustryCount }}</strong>
-                  <p>个股研报 {{ totalResearchCount }} · 行业研报 {{ totalIndustryCount }}</p>
-                </div>
-                <div class="compare-signal-card">
-                  <span>最新披露</span>
-                  <strong>{{ freshnessSummary?.latest_periodic_label || '年报' }}</strong>
-                  <p>{{ freshnessSummary?.latest_official_disclosure || '暂无最新披露时间' }}</p>
-                </div>
-                <div class="compare-signal-card">
-                  <span>时效锚点</span>
-                  <strong>{{ freshnessSummary?.latest_stock_report || '暂无' }}</strong>
-                  <p>行业更新 {{ freshnessSummary?.latest_industry_report || '暂无' }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="compare-closure-strip">
-              <RouterLink :to="`/workbench/${result.winner_company_code}`" class="compare-closure-link primary">
-                查看赢家工作台
-              </RouterLink>
-              <RouterLink :to="`/competition/${result.winner_company_code}`" class="compare-closure-link">
-                导出赢家材料
-              </RouterLink>
-              <a
-                v-if="winnerEvidenceCompany?.financial_source_url"
-                class="compare-closure-link"
-                :href="winnerEvidenceCompany.financial_source_url"
-                target="_blank"
-                rel="noreferrer"
-              >
-                打开财报原文
-              </a>
-              <button type="button" class="compare-closure-link" @click="resetSelection">回到默认组合</button>
-            </div>
-
-            <div class="compare-reasoning-grid">
-              <article v-for="item in reasoningCards" :key="item.title" class="compare-reasoning-card">
-                <div class="trace-title-row">
-                  <strong>{{ item.title }}</strong>
-                  <span class="badge-subtle">{{ item.tag }}</span>
-                </div>
-                <p class="compare-reasoning-highlight">{{ item.highlight }}</p>
-                <p>{{ item.detail }}</p>
-              </article>
-            </div>
-
-            <div class="compare-chart-panel compare-story-panel">
-              <div class="sub-panel-header">
-                <h3>决策分野</h3>
-                <span class="badge-subtle">越长越强</span>
-              </div>
-              <div class="bar-compare-list">
-                <div v-for="item in result.comparison_rows" :key="item.company_code" class="bar-compare-item">
-                  <div class="bar-compare-label-row">
-                    <strong>{{ item.company_name }}</strong>
-                    <span>{{ item.total_score.toFixed(1) }}</span>
-                  </div>
-                  <div class="bar-track"><div class="bar-fill" :style="{ width: scoreWidth(item.total_score) }"></div></div>
-                </div>
-              </div>
-              <div class="compare-spotlight-grid top-gap">
-                <div v-for="item in spotlightCards" :key="item.title" class="compare-spotlight-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.title }}</strong>
-                    <span>{{ item.companyName }}</span>
-                  </div>
-                  <strong class="compare-spotlight-value">{{ formatMetric(item.delta) }}</strong>
-                  <p>{{ item.detail }}</p>
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <div v-if="result" class="compare-command-side">
-          <div class="compare-action-card compare-closure-card">
-            <div class="trace-title-row">
-              <strong>对比闭环</strong>
-              <span class="badge-subtle">{{ result.winner_company_name }}</span>
-            </div>
-            <div class="compare-action-grid">
-              <RouterLink :to="`/workbench/${result.winner_company_code}`" class="compare-action-link primary">查看赢家</RouterLink>
-              <RouterLink :to="`/competition/${result.winner_company_code}`" class="compare-action-link">导出材料</RouterLink>
-              <RouterLink :to="{ path: '/', query: { companies: selectedCodes.join(',') } }" class="compare-action-link">回到分析中枢</RouterLink>
-              <button type="button" class="compare-action-link" @click="resetSelection">默认组合</button>
-            </div>
-            <p class="compare-side-note">{{ closureSummary }}</p>
-          </div>
-          <div class="compare-action-card">
-            <div class="trace-title-row">
-              <strong>当前组合</strong>
-              <span class="badge-subtle">{{ selectedCompanyNames.length }} 家</span>
-            </div>
-            <div class="selected-pill-group">
-              <span v-for="name in selectedCompanyNames" :key="name" class="selected-pill">{{ name }}</span>
-            </div>
-            <p class="compare-side-note">{{ comboSummary }}</p>
-          </div>
-          <div class="compare-action-card">
-            <div class="trace-title-row">
-              <strong>判断基线</strong>
-              <span class="badge-subtle">真实披露</span>
-            </div>
-            <div class="stack-list">
-              <div class="action-line-card">
-                <p>年报口径 {{ result.report_year }}，最新定期披露 {{ freshnessSummary?.latest_periodic_label || '年报' }} {{ freshnessSummary?.latest_official_disclosure || '暂无' }}。</p>
-              </div>
-              <div class="action-line-card">
-                <p>个股研报最新 {{ freshnessSummary?.latest_stock_report || '暂无' }}，行业研报最新 {{ freshnessSummary?.latest_industry_report || '暂无' }}。</p>
-              </div>
-            </div>
+  <div class="page-stack v-document-page">
+    <div class="v-doc-container v-compare-container">
+      
+      <!-- Top Nav -->
+      <nav class="v-doc-nav">
+        <RouterLink to="/" class="v-back-link">
+          <span class="v-arrow">←</span> <span>返回中枢</span>
+        </RouterLink>
+        <div v-if="result" class="v-nav-actions">
+          <span class="v-nav-actions-label">页面动作</span>
+          <div class="v-nav-action-cluster">
+            <button v-if="evidenceCompanies.length" class="v-btn-outline" @click="scrollToSection('compare-signal-section')">查看对比信号</button>
+            <button v-if="companies.length === 2" class="v-btn-outline" @click="scrollToSection('compare-matrix-section')">查看核心矩阵</button>
+            <RouterLink :to="`/workbench/${result.winner_company_code}`" class="v-btn-solid">进入优势方分析</RouterLink>
+            <RouterLink :to="`/competition/${result.winner_company_code}`" class="v-btn-outline">导出优势方材料</RouterLink>
           </div>
         </div>
+      </nav>
+
+      <!-- Strategy Header -->
+      <header class="v-doc-header">
+        <h1 class="v-doc-title">企业对比判断</h1>
+        <p class="v-doc-subtitle">基于财务口径、研究证据与财报图表锚点，对两家企业做横向判断与证据回链。</p>
+      </header>
+
+      <div v-if="fromOverview" class="v-entry-note">
+        <span class="v-entry-note-label">来自分析中枢</span>
+        <p>已承接首页中的关注企业与问题语境，适合直接完成横向比较并继续进入优势方分析。</p>
       </div>
 
-      <template v-if="result">
-        <div class="compare-dimension-board">
-          <div v-for="dimension in result.dimensions" :key="dimension.dimension" class="dimension-board-card">
-            <div class="trace-title-row">
-              <strong>{{ dimension.dimension }}</strong>
-              <span class="badge-subtle">{{ dimension.winner_company_name }}</span>
-            </div>
-            <div class="mini-bar-list top-gap">
-              <div v-for="value in dimension.values" :key="`${dimension.dimension}-${value.company_code}`" class="mini-bar-item">
-                <div class="mini-bar-head">
-                  <span>{{ value.company_name }}</span>
-                  <strong>{{ formatMetric(value.value) }}</strong>
-                </div>
-                <div class="mini-bar-track"><div class="mini-bar-fill" :style="{ width: dimensionWidth(dimension.values, value.value) }"></div></div>
-              </div>
-            </div>
-            <p class="dimension-conclusion">{{ dimension.conclusion }}</p>
-          </div>
+      <!-- Selection Stage -->
+      <section class="v-config-stage">
+        <h2 class="v-section-title">01 / 选择对比对象</h2>
+        <div class="v-target-grid">
+          <button
+            v-for="item in targets"
+            :key="item.company_code"
+            class="v-target-btn"
+            :class="{ 'is-selected': selectedCodes.includes(item.company_code) }"
+            @click="toggleCompany(item.company_code)"
+          >
+            <strong>{{ item.company_name }}</strong>
+            <span class="v-exchange-tag">{{ formatExchange(item.exchange) }}</span>
+          </button>
         </div>
-
-        <div class="panel-split two-cols">
-          <div class="sub-panel compact-data-panel">
-            <h3>关键指标</h3>
-            <div class="compare-table compact-compare-table">
-              <div class="compare-table-row compare-table-head">
-                <span>企业</span>
-                <span>净利率</span>
-                <span>ROE</span>
-                <span>研发强度</span>
-                <span>营收 CAGR</span>
-                <span>风险</span>
-              </div>
-              <div v-for="item in result.comparison_rows" :key="`row-${item.company_code}`" class="compare-table-row">
-                <strong>{{ item.company_name }}</strong>
-                <span>{{ formatMetric(item.net_margin_pct, '%') }}</span>
-                <span>{{ formatMetric(item.roe_pct, '%') }}</span>
-                <span>{{ formatMetric(item.rd_ratio_pct, '%') }}</span>
-                <span>{{ formatMetric(item.revenue_cagr_pct, '%') }}</span>
-                <span>{{ item.risk_level }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="sub-panel compact-data-panel">
-            <h3>对比快照</h3>
-            <div class="stack-list">
-              <div v-for="company in compareEvidenceCompanies" :key="company.company_code" class="compare-company-brief">
-                <div class="trace-title-row">
-                  <strong>{{ company.company_name }}</strong>
-                  <span class="badge-subtle">{{ company.company_code }}</span>
-                </div>
-                <div class="selected-pill-group compare-company-tags">
-                  <span class="selected-pill">领先维度 {{ getCompanyLeadershipCount(company.company_code) }}</span>
-                  <span class="selected-pill">趋势区间 {{ getTrendYears(company) }}</span>
-                  <span class="selected-pill">个股研报 {{ getDigestCount(company.research_digest) }}</span>
-                  <span class="selected-pill">行业研报 {{ getDigestCount(company.industry_digest) }}</span>
-                  <span class="selected-pill">多模态 {{ getMultimodalFieldCount(company) }} 项</span>
-                </div>
-                <p>{{ getAnnualAnchor(company) }}</p>
-                <p>{{ getLatestDisclosure(company) }}</p>
-                <p>{{ getMultimodalSummary(company) }}</p>
-                <p v-if="company.risk_flags?.length">关注：{{ company.risk_flags.join('；') }}</p>
-              </div>
-            </div>
-          </div>
+        <div class="v-action-row">
+          <button class="v-btn-solid" @click="loadComparison" :disabled="selectedCodes.length < 2 || isLoading">
+            {{ isLoading ? '正在生成横向判断...' : '生成企业对比结果' }}
+          </button>
+          <button class="v-btn-outline" @click="resetSelection">重置目标</button>
         </div>
+        <p class="v-status-note" v-if="selectedCodes.length < 2">至少选择两家企业后，再开始横向比较。</p>
+      </section>
 
-        <div class="panel-split two-cols">
-          <div class="sub-panel compact-data-panel">
-            <h3>证据流</h3>
-            <div class="stack-list">
-              <div v-for="company in compareEvidenceCompanies" :key="`stream-${company.company_code}`" class="compare-evidence-stream">
-                <div class="trace-title-row">
+      <!-- Loading / Error -->
+      <div v-if="isLoading" class="v-loading-block">
+        <div class="v-spinner"></div>
+        <p>正在整理差异、证据与横向判断...</p>
+      </div>
+      <div v-if="loadError" class="v-error-block">
+        <p><strong>企业对比暂时未能完成</strong></p>
+        <p>{{ loadError }}</p>
+      </div>
+
+      <!-- Result Stage -->
+      <article v-if="!isLoading && result && companies.length === 2" class="v-doc-body">
+        
+        <!-- Total Verdict -->
+        <section class="v-doc-section">
+          <h2 class="v-section-title">02 / 全局判断</h2>
+          <div class="v-verdict-banner">
+            <span class="v-verdict-label">当前相对占优方</span>
+            <h3 class="v-verdict-winner">{{ result.winner_company_name }}</h3>
+            <p class="v-verdict-summary">{{ result.summary }}</p>
+          </div>
+          <ul class="v-bullet-list v-judgement-list">
+            <li v-for="(hl, idx) in result.highlights" :key="idx">{{ hl }}</li>
+          </ul>
+        </section>
+
+        <section id="compare-signal-section" class="v-doc-section" v-if="evidenceCompanies.length">
+          <h2 class="v-section-title">03 / 对比信号</h2>
+          <div class="v-company-brief-grid">
+            <article v-for="company in evidenceCompanies" :key="company.company_code" class="v-company-brief-card">
+              <div class="v-company-brief-head">
+                <div>
                   <strong>{{ company.company_name }}</strong>
-                  <span class="badge-subtle">{{ getLatestDisclosure(company) }}</span>
+                  <p>{{ company.company_code }}</p>
                 </div>
-                <p>个股研报：{{ getLatestTitle(company.research_digest, '暂无个股研报标题') }}</p>
-                <p>行业议题：{{ getLatestTitle(company.industry_digest, '暂无行业研报标题') }}</p>
-                <p>图表锚点：{{ getMultimodalSummary(company) }}</p>
-                <div v-if="getMultimodalAssetLinks(company).length" class="page-anchor-row top-gap">
-                  <a
-                    v-for="item in getMultimodalAssetLinks(company)"
-                    :key="`${company.company_code}-${item.label}-${item.url || 'missing'}`"
-                    class="page-anchor-link"
-                    :href="item.url || company.financial_source_url || undefined"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {{ item.label }}
-                  </a>
+                <span class="v-badge" v-if="company.freshness_digest?.latest_periodic_label">
+                  {{ company.freshness_digest.latest_periodic_label }}
+                </span>
+              </div>
+              <div class="v-company-brief-metrics">
+                <div class="v-company-metric">
+                  <span>最新披露</span>
+                  <strong>{{ formatDate(company.freshness_digest?.latest_official_disclosure) || '同步中' }}</strong>
                 </div>
-                <a v-if="company.financial_source_url" :href="company.financial_source_url" target="_blank" rel="noreferrer">查看财报来源</a>
+                <div class="v-company-metric">
+                  <span>图表字段</span>
+                  <strong>{{ company.multimodal_digest?.filled_field_count || 0 }} 项</strong>
+                </div>
+                <div class="v-company-metric">
+                  <span>个股研报</span>
+                  <strong>{{ company.research_digest?.count || 0 }} 篇</strong>
+                </div>
+                <div class="v-company-metric">
+                  <span>行业研报</span>
+                  <strong>{{ company.industry_digest?.count || 0 }} 篇</strong>
+                </div>
+              </div>
+              <p class="v-company-brief-copy">
+                {{ company.multimodal_digest?.summary || '当前可继续结合财报原件与研报证据完成横向判断。' }}
+              </p>
+              <div class="v-company-brief-actions">
+                <a
+                  v-if="company.financial_source_url"
+                  class="v-btn-outline"
+                  :href="company.financial_source_url"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  查看财报原件
+                </a>
+                <RouterLink :to="`/workbench/${company.company_code}`" class="v-btn-solid">
+                  进入企业分析
+                </RouterLink>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- The Matrix -->
+        <section id="compare-matrix-section" class="v-doc-section">
+          <h2 class="v-section-title">04 / 核心指标矩阵</h2>
+          <div class="v-matrix">
+            <div class="v-matrix-header">
+              <div class="v-matrix-col-title">对照指标参数</div>
+              <div class="v-matrix-col-target"><strong>{{ companies[0].company_name }}</strong></div>
+              <div class="v-matrix-col-target"><strong>{{ companies[1].company_name }}</strong></div>
+            </div>
+            
+            <div class="v-matrix-row">
+              <div class="v-matrix-label">系统综合赋分</div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': companies[0].total_score > companies[1].total_score }">
+                {{ formatNumber(companies[0].total_score, 1) }}
+              </div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': companies[1].total_score > companies[0].total_score }">
+                {{ formatNumber(companies[1].total_score, 1) }}
+              </div>
+            </div>
+
+            <div class="v-matrix-row">
+              <div class="v-matrix-label">研报覆盖密度</div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': (companies[0].research_report_count) > (companies[1].research_report_count) }">
+                {{ companies[0].research_report_count }} 篇
+              </div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': (companies[1].research_report_count) > (companies[0].research_report_count) }">
+                {{ companies[1].research_report_count }} 篇
+              </div>
+            </div>
+
+            <div class="v-matrix-row">
+              <div class="v-matrix-label">营业收入规模 (百万)</div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': (companies[0].revenue_million) > (companies[1].revenue_million) }">
+                {{ formatNumber(companies[0].revenue_million, 0) }}
+              </div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': (companies[1].revenue_million) > (companies[0].revenue_million) }">
+                {{ formatNumber(companies[1].revenue_million, 0) }}
+              </div>
+            </div>
+
+            <div class="v-matrix-row">
+              <div class="v-matrix-label">净利润规模 (百万)</div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': (companies[0].net_profit_million) > (companies[1].net_profit_million) }">
+                {{ formatNumber(companies[0].net_profit_million, 0) }}
+              </div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': (companies[1].net_profit_million) > (companies[0].net_profit_million) }">
+                {{ formatNumber(companies[1].net_profit_million, 0) }}
+              </div>
+            </div>
+
+            <div class="v-matrix-row">
+              <div class="v-matrix-label">净利率 (净利润占比)</div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': (companies[0].net_margin_pct || 0) > (companies[1].net_margin_pct || 0) }">
+                {{ formatPercent(companies[0].net_margin_pct) }}
+              </div>
+              <div class="v-matrix-val" :class="{ 'v-winning-val': (companies[1].net_margin_pct || 0) > (companies[0].net_margin_pct || 0) }">
+                {{ formatPercent(companies[1].net_margin_pct) }}
+              </div>
+            </div>
+
+            <div class="v-matrix-row">
+              <div class="v-matrix-label">风险定级</div>
+              <div class="v-matrix-val" :class="{ 'v-risk-val': companies[0].risk_level === '高' }">
+                {{ companies[0].risk_level }}风险
+              </div>
+              <div class="v-matrix-val" :class="{ 'v-risk-val': companies[1].risk_level === '高' }">
+                {{ companies[1].risk_level }}风险
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- Sector Detail -->
+        <section class="v-doc-section" v-if="result.dimensions && result.dimensions.length">
+          <h2 class="v-section-title">05 / 维度判断</h2>
+          <div class="v-dimension-grid">
+            <div v-for="dim in result.dimensions" :key="dim.dimension" class="v-dimension-card">
+              <h3 class="v-dimension-title">{{ dim.dimension }}</h3>
+              <p class="v-dimension-conclusion">{{ dim.conclusion }}</p>
+              <div class="v-dimension-tags">
+                <span class="v-badge v-badge-winner">优势方: {{ dim.winner_company_name }}</span>
               </div>
             </div>
           </div>
+        </section>
 
-          <div class="sub-panel compact-data-panel">
-            <h3>证据入口</h3>
-            <div class="stack-list">
-              <div v-for="company in compareEvidenceCompanies" :key="`source-${company.company_code}`" class="info-card compact">
-                <div class="trace-title-row">
-                  <strong>{{ company.company_name }}</strong>
-                  <span class="badge-subtle">{{ getLatestResearchDate(company) || '研报待补' }}</span>
-                </div>
-                <p>最新行业更新 {{ getLatestIndustryDate(company) || '暂无' }} · 研究机构 {{ getLatestInstitution(company.research_digest) }}</p>
-                <p>图表抽取 {{ getMultimodalFieldCount(company) }} 项 · 后端 {{ company.multimodal_digest?.backend || '待补齐' }}</p>
-                <a v-if="company.financial_source_url" :href="company.financial_source_url" target="_blank" rel="noreferrer">查看财报来源</a>
-              </div>
+        <section class="v-doc-section v-action-section">
+          <h2 class="v-section-title">06 / 后续动作</h2>
+          <div class="v-nav-actions bottom-actions">
+            <span class="v-nav-actions-label">继续推进</span>
+            <div class="v-nav-action-cluster">
+              <RouterLink :to="`/workbench/${result.winner_company_code}`" class="v-btn-solid">进入 {{ result.winner_company_name }} 工作台深潜</RouterLink>
+              <RouterLink :to="`/competition/${result.winner_company_code}`" class="v-btn-outline">导出目标标的材料</RouterLink>
             </div>
           </div>
-        </div>
-      </template>
-    </PagePanel>
+        </section>
+
+      </article>
+      
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
-
 import { api } from '../api/client';
-import type {
-  CompareCompanyFreshnessDigest,
-  CompareEvidenceCompany,
-  CompareEvidenceDigest,
-  CompanyCompareResponse,
-  MultimodalAssetLink,
-} from '../api/types';
-import PagePanel from '../components/PagePanel.vue';
+import type { CompanyCompareResponse, CompanyComparisonRow } from '../api/types';
 import { useDashboardStore } from '../stores/dashboard';
 
-const MAX_SELECTION = 4;
 const route = useRoute();
 const router = useRouter();
 const store = useDashboardStore();
+
 const selectedCodes = ref<string[]>([]);
-const loading = ref(false);
-const bootstrapping = ref(true);
-const error = ref<string | null>(null);
+const loadError = ref('');
+const isLoading = ref(false);
 const result = ref<CompanyCompareResponse | null>(null);
 
 const targets = computed(() => store.targets);
-const selectedCompanyNames = computed(() => targets.value.filter((item) => selectedCodes.value.includes(item.company_code)).map((item) => item.company_name));
-const comparisonRows = computed(() => result.value?.comparison_rows || []);
-const compareEvidenceCompanies = computed<CompareEvidenceCompany[]>(() => result.value?.evidence.companies || []);
-const leaderRow = computed(() => comparisonRows.value[0] || null);
-const runnerUpRow = computed(() => comparisonRows.value[1] || null);
-const winnerDimensionCount = computed(() => {
-  if (!result.value) return 0;
-  return result.value.dimensions.filter((item) => item.winner_company_code === result.value?.winner_company_code).length;
+const companies = computed<CompanyComparisonRow[]>(() => {
+  return result.value ? result.value.comparison_rows.slice(0, 2) : [];
 });
-const scoreSpread = computed(() => {
-  if (!leaderRow.value || !runnerUpRow.value) return 0;
-  return leaderRow.value.total_score - runnerUpRow.value.total_score;
+
+const evidenceCompanies = computed(() => {
+  return result.value?.evidence?.companies?.slice(0, 2) || [];
 });
-const totalResearchCount = computed(() => comparisonRows.value.reduce((sum, item) => sum + item.research_report_count, 0));
-const totalIndustryCount = computed(() => comparisonRows.value.reduce((sum, item) => sum + item.industry_report_count, 0));
-const winnerEvidenceCompany = computed(() => {
-  if (!result.value) return null;
-  return compareEvidenceCompanies.value.find((item) => item.company_code === result.value?.winner_company_code) || compareEvidenceCompanies.value[0] || null;
-});
-const totalMultimodalFieldCount = computed(() => compareEvidenceCompanies.value.reduce((sum, item) => sum + getMultimodalFieldCount(item), 0));
-const spotlightCards = computed(() => {
-  if (!result.value) return [];
-  return result.value.dimensions
-    .filter((item) => item.dimension !== '综合表现')
-    .slice(0, 4)
-    .map((item) => {
-      const [first, second] = item.values;
-      return {
-        title: item.dimension,
-        companyName: item.winner_company_name,
-        delta: Math.abs((first?.value || 0) - (second?.value || 0)),
-        detail: item.conclusion,
-      };
-    });
-});
-function getLatestSortedValue(values: string[]) {
-  return values.slice().sort()[values.length - 1] || null;
+const fromOverview = computed(() => route.query.entry === 'overview');
+
+const exchangeLabels: Record<string, string> = { SSE: '上交所', SZSE: '深交所', BSE: '北交所' };
+
+function formatExchange(val?: string | null) {
+  return exchangeLabels[String(val || '').toUpperCase()] || String(val || '未知');
 }
 
-const freshnessSummary = computed<CompareCompanyFreshnessDigest | null>(() => {
-  if (!result.value) return null;
-  const provided = result.value.evidence.freshness || {};
-  const officialDates = compareEvidenceCompanies.value.map((item) => getOfficialDisclosureDate(item)).filter((item): item is string => Boolean(item));
-  const latestStockDates = compareEvidenceCompanies.value.map((item) => getLatestResearchDate(item)).filter((item): item is string => Boolean(item));
-  const latestIndustryDates = compareEvidenceCompanies.value.map((item) => getLatestIndustryDate(item)).filter((item): item is string => Boolean(item));
-  return {
-    annual_report_year: provided.annual_report_year ?? result.value.report_year,
-    latest_official_disclosure: provided.latest_official_disclosure || getLatestSortedValue(officialDates),
-    latest_periodic_label: provided.latest_periodic_label || (officialDates.length ? '年报' : null),
-    latest_stock_report: provided.latest_stock_report || getLatestSortedValue(latestStockDates),
-    latest_industry_report: provided.latest_industry_report || getLatestSortedValue(latestIndustryDates),
-  };
-});
-const closureSummary = computed(() => {
-  if (!result.value) return '';
-  const runnerUpName = runnerUpRow.value?.company_name || '次席企业';
-  return `${result.value.winner_company_name} 当前领先 ${runnerUpName} ${formatMetric(scoreSpread.value)} 分，已具备继续深挖、导出和回看原文的完整闭环。`;
-});
-const comboSummary = computed(() => {
-  if (!result.value) return '';
-  return `本轮组合覆盖 ${selectedCompanyNames.value.join('、')}，总共调用个股研报 ${totalResearchCount.value} 篇、行业研报 ${totalIndustryCount.value} 篇。`;
-});
-const reasoningCards = computed(() => {
-  if (!result.value || !leaderRow.value) return [];
-  const growthDimension = result.value.dimensions.find((item) => item.dimension === '成长性');
-  const innovationDimension = result.value.dimensions.find((item) => item.dimension === '创新投入');
-  const resilienceDimension = result.value.dimensions.find((item) => item.dimension === '经营韧性');
-  const winnerRisk = leaderRow.value.risk_level || '待补';
-  const challengerRisk = runnerUpRow.value?.risk_level || '待补';
-  return [
-    {
-      title: '胜负判断链',
-      tag: result.value.winner_company_name,
-      highlight: `${result.value.winner_company_name} 领先 ${formatMetric(scoreSpread.value)} 分，拿下 ${winnerDimensionCount.value} 个维度。`,
-      detail: result.value.summary,
-    },
-    {
-      title: '增长与盈利链',
-      tag: growthDimension?.winner_company_name || leaderRow.value.company_name,
-      highlight: `${formatMetric(leaderRow.value.net_margin_pct, '%')} 净利率 · ${formatMetric(leaderRow.value.revenue_cagr_pct, '%')} 营收 CAGR`,
-      detail: growthDimension?.conclusion || spotlightCards.value[0]?.detail || '增长与盈利结论待补充。',
-    },
-    {
-      title: '风险与时效链',
-      tag: freshnessSummary.value?.latest_periodic_label || '真实披露',
-      highlight: `${leaderRow.value.company_name} 风险 ${winnerRisk}，${runnerUpRow.value?.company_name || '对手'} 风险 ${challengerRisk}。`,
-      detail: `当前最新定期披露为 ${freshnessSummary.value?.latest_periodic_label || '年报'} ${freshnessSummary.value?.latest_official_disclosure || '暂无'}，个股研报最新 ${freshnessSummary.value?.latest_stock_report || '暂无'}。`,
-    },
-    {
-      title: '证据回链',
-      tag: `${compareEvidenceCompanies.value.length} 家企业`,
-      highlight: `总计 ${totalResearchCount.value + totalIndustryCount.value} 条研报证据，图表抽取 ${totalMultimodalFieldCount.value} 项字段。`,
-      detail: innovationDimension?.conclusion || resilienceDimension?.conclusion || '证据回链已接入财报原文、研报标题和多模态页锚点。',
-    },
-  ];
-});
-
-function defaultCodes() {
-  return targets.value.slice(0, 2).map((item) => item.company_code);
+function formatNumber(val: number | null | undefined, fixed = 2) {
+  if (val == null || !Number.isFinite(val)) return '-';
+  return Number(val).toFixed(fixed);
 }
 
-function formatMetric(value: number | null | undefined, suffix = '') {
-  return value == null ? '暂无' : `${value.toFixed(1)}${suffix}`;
+function formatPercent(val: number | null | undefined) {
+  if (val == null || !Number.isFinite(val)) return '-';
+  return `${(Number(val)).toFixed(1)}%`;
 }
 
-function getDigestCount(digest: CompareEvidenceDigest | undefined) {
-  const count = digest?.count;
-  return typeof count === 'number' ? count : 0;
+function formatDate(val?: string | null) {
+  if (!val) return '';
+  return String(val).replace('T', ' ').slice(0, 10);
 }
 
-function getTrendYears(company: CompareEvidenceCompany) {
-  const trend = company.trend_digest || {};
-  const start = trend.start_year;
-  const end = trend.end_year;
-  if (typeof start === 'number' && typeof end === 'number') {
-    return `${start}-${end}`;
+function scrollToSection(sectionId: string) {
+  if (typeof document === 'undefined') return;
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleCompany(code: string) {
+  const index = selectedCodes.value.indexOf(code);
+  if (index >= 0) {
+    selectedCodes.value.splice(index, 1);
+  } else {
+    // Keep max 2
+    if (selectedCodes.value.length >= 2) {
+      selectedCodes.value.shift();
+    }
+    selectedCodes.value.push(code);
   }
-  return '暂无';
-}
-
-function getLatestTitle(digest: CompareEvidenceDigest | undefined, fallback: string) {
-  const title = Array.isArray(digest?.latest_titles) ? digest?.latest_titles?.[0] : null;
-  return typeof title === 'string' && title.trim() ? title : fallback;
-}
-
-function getLatestInstitution(digest: CompareEvidenceDigest | undefined) {
-  const institution = Array.isArray(digest?.latest_institutions) ? digest?.latest_institutions?.[0] : null;
-  return typeof institution === 'string' && institution.trim() ? institution : '暂无';
-}
-
-function getLatestRowDate(digest: CompareEvidenceDigest | undefined) {
-  const row = Array.isArray(digest?.latest_rows) ? digest?.latest_rows?.[0] : null;
-  const reportDate = row && typeof row === 'object' ? row.report_date : null;
-  return typeof reportDate === 'string' && reportDate.trim() ? reportDate : null;
-}
-
-function extractDateFromSource(sourceUrl?: string | null) {
-  if (!sourceUrl) return null;
-  const normalized = sourceUrl.replace(/_/g, '-');
-  const match = normalized.match(/(20\d{2})-(\d{2})-(\d{2})/) || normalized.match(/(20\d{2})(\d{2})(\d{2})/);
-  if (!match) return null;
-  return `${match[1]}-${match[2]}-${match[3]}`;
-}
-
-function getOfficialDisclosureDate(company: CompareEvidenceCompany) {
-  return company.freshness_digest?.latest_official_disclosure
-    || company.freshness_digest?.annual_report_published_at
-    || company.financial_published_at
-    || extractDateFromSource(company.financial_source_url);
-}
-
-function getLatestResearchDate(company: CompareEvidenceCompany) {
-  return company.freshness_digest?.latest_stock_report || getLatestRowDate(company.research_digest);
-}
-
-function getLatestIndustryDate(company: CompareEvidenceCompany) {
-  return company.freshness_digest?.latest_industry_report || getLatestRowDate(company.industry_digest);
-}
-
-function getAnnualAnchor(company: CompareEvidenceCompany) {
-  const year = company.freshness_digest?.annual_report_year;
-  const publishedAt = company.freshness_digest?.annual_report_published_at || company.financial_published_at || extractDateFromSource(company.financial_source_url);
-  if (year && publishedAt) {
-    return `年报口径 ${year} · 披露时间 ${publishedAt}`;
-  }
-  if (year) {
-    return `年报口径 ${year}`;
-  }
-  return '年报披露时间待补充';
-}
-
-function getLatestDisclosure(company: CompareEvidenceCompany) {
-  const label = company.freshness_digest?.latest_periodic_label || '年报';
-  const date = getOfficialDisclosureDate(company);
-  return date ? `最新披露 ${label} · ${date}` : '最新披露暂无';
-}
-
-function getCompanyLeadershipCount(companyCode: string) {
-  if (!result.value) return 0;
-  return result.value.dimensions.filter((item) => item.winner_company_code === companyCode).length;
-}
-
-function getMultimodalFieldCount(company: CompareEvidenceCompany) {
-  return company.multimodal_digest?.filled_field_count || 0;
-}
-
-function getMultimodalSummary(company: CompareEvidenceCompany) {
-  return company.multimodal_digest?.summary || '图表锚点待补齐';
-}
-
-function getMultimodalAssetLinks(company: CompareEvidenceCompany): MultimodalAssetLink[] {
-  return company.multimodal_digest?.page_asset_links?.slice(0, 4) || [];
-}
-
-function scoreWidth(score: number) {
-  const max = Math.max(...(result.value?.comparison_rows.map((item) => item.total_score) || [1]));
-  return `${Math.max(16, (score / max) * 100)}%`;
-}
-
-function dimensionWidth(values: Array<{ value: number }>, value: number) {
-  const max = Math.max(...values.map((item) => item.value), 1);
-  return `${Math.max(14, (value / max) * 100)}%`;
-}
-
-function getQueryCodes() {
-  const queryValue = typeof route.query.companies === 'string' ? route.query.companies : '';
-  return queryValue.split(',').map((item) => item.trim()).filter(Boolean);
-}
-
-function getResolvedCodes(queryCodes: string[]) {
-  const validCodes = new Set(targets.value.map((item) => item.company_code));
-  const filtered = queryCodes.filter((item) => validCodes.has(item));
-  if (filtered.length >= 2) {
-    return filtered.slice(0, MAX_SELECTION);
-  }
-  return defaultCodes().slice(0, MAX_SELECTION);
-}
-
-async function waitForStoreLoad() {
-  while (store.loading && !store.payload && !store.error) {
-    await new Promise((resolve) => setTimeout(resolve, 80));
-  }
-}
-
-function syncQuery() {
-  router.replace({
-    query: selectedCodes.value.length ? { companies: selectedCodes.value.join(',') } : {},
-  });
 }
 
 function resetSelection() {
-  selectedCodes.value = defaultCodes();
-  syncQuery();
-  if (selectedCodes.value.length >= 2) {
-    void loadComparison();
-  }
-}
-
-function toggleCompany(companyCode: string) {
-  const exists = selectedCodes.value.includes(companyCode);
-  if (exists) {
-    if (selectedCodes.value.length <= 2) return;
-    selectedCodes.value = selectedCodes.value.filter((code) => code !== companyCode);
+  const ranked = store.payload?.ranking || [];
+  if (ranked.length >= 2) {
+    selectedCodes.value = [String(ranked[0].company_code), String(ranked[1].company_code)];
+  } else if (targets.value.length >= 2) {
+    selectedCodes.value = [targets.value[0].company_code, targets.value[1].company_code];
   } else {
-    if (selectedCodes.value.length >= MAX_SELECTION) return;
-    selectedCodes.value = [...selectedCodes.value, companyCode];
+    selectedCodes.value = [];
   }
-  syncQuery();
 }
 
-async function ensureTargets() {
-  if (!store.payload && !store.loading) {
-    await store.load();
-  } else if (store.loading && !store.payload) {
-    await waitForStoreLoad();
+function parseUrlCodes() {
+  const q = route.query.companies;
+  if (typeof q === 'string' && q) {
+    const arr = q.split(',').slice(0, 2).filter(Boolean);
+    if (arr.length > 0) {
+      selectedCodes.value = arr;
+    }
   }
-  selectedCodes.value = getResolvedCodes(getQueryCodes());
 }
 
 async function loadComparison() {
   if (selectedCodes.value.length < 2) return;
-  loading.value = true;
-  error.value = null;
+  isLoading.value = true;
+  loadError.value = '';
   try {
+    const codesStr = selectedCodes.value.join(',');
     result.value = await api.getCompanyCompare(selectedCodes.value);
-  } catch (requestError) {
-    error.value = requestError instanceof Error ? requestError.message : '企业对比加载失败';
+    const nextQuery: Record<string, string> = { companies: codesStr };
+    if (typeof route.query.entry === 'string') nextQuery.entry = route.query.entry;
+    if (typeof route.query.focus === 'string') nextQuery.focus = route.query.focus;
+    if (typeof route.query.company === 'string') nextQuery.company = route.query.company;
+    void router.replace({ query: nextQuery });
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : '企业对比暂时未能完成，请稍后重试';
+    result.value = null;
   } finally {
-    loading.value = false;
+    isLoading.value = false;
   }
 }
 
 onMounted(async () => {
-  bootstrapping.value = true;
-  try {
-    await ensureTargets();
-    if (selectedCodes.value.length >= 2) {
-      await loadComparison();
-    }
-  } finally {
-    bootstrapping.value = false;
+  if (!store.payload && !store.loading) {
+    await store.load();
+  }
+  parseUrlCodes();
+  if (selectedCodes.value.length === 0) {
+    resetSelection();
+  }
+  if (selectedCodes.value.length >= 2) {
+    void loadComparison();
   }
 });
+
+watch(() => route.query.companies, () => {
+  parseUrlCodes();
+});
 </script>
+
+<style scoped>
+.v-document-page {
+  background: var(--bg-base);
+  min-height: 100vh;
+  padding: 40px 20px 100px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', -apple-system, sans-serif;
+}
+
+.v-doc-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.v-compare-container {
+  max-width: 1000px;
+}
+
+.v-doc-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 60px;
+}
+
+.v-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.v-back-link:hover {
+  color: var(--text-primary);
+}
+
+.v-arrow {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+}
+
+.v-doc-header {
+  border-bottom: 2px solid var(--text-primary);
+  padding-bottom: 30px;
+  margin-bottom: 40px;
+}
+
+.v-entry-note {
+  display: grid;
+  gap: 6px;
+  margin: -8px 0 28px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  background: var(--bg-surface-soft);
+}
+
+.v-entry-note-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-entry-note p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.v-doc-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  color: var(--text-primary);
+}
+
+.v-doc-subtitle {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.v-section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  margin: 0 0 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v-doc-section {
+  margin-bottom: 60px;
+}
+
+.v-config-stage {
+  margin-bottom: 60px;
+}
+
+/* Selector Grid */
+.v-target-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.v-target-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.v-target-btn:hover {
+  border-color: var(--border-strong);
+}
+
+.v-target-btn.is-selected {
+  border-color: var(--text-primary);
+  background: var(--bg-surface-highlight);
+  box-shadow: 0 0 0 1px var(--text-primary);
+}
+
+.v-exchange-tag {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.v-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.v-status-note {
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: var(--status-error);
+}
+
+/* Actions */
+.v-btn-solid {
+  background: var(--text-primary);
+  color: var(--bg-base);
+  border: 1px solid transparent;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  transition: background 0.2s;
+}
+
+.v-btn-solid:hover:not(:disabled) {
+  background: #333;
+}
+
+.v-btn-solid:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.v-btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  transition: background 0.2s;
+}
+
+.v-btn-outline:hover {
+  background: var(--bg-surface-highlight);
+}
+
+/* Loader */
+.v-loading-block {
+  padding: 60px 0;
+  text-align: center;
+}
+
+.v-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--text-primary);
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: v-spin 1s linear infinite;
+}
+
+@keyframes v-spin {
+  to { transform: rotate(360deg); }
+}
+
+.v-error-block {
+  padding: 40px;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: var(--status-error);
+}
+
+/* Verdict */
+.v-verdict-banner {
+  background: var(--bg-surface-highlight);
+  border: 1px solid var(--border-subtle);
+  padding: 30px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.v-verdict-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.v-verdict-winner {
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--brand-primary);
+  margin: 0 0 16px;
+}
+
+.v-verdict-summary {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.v-judgement-list {
+  padding-left: 20px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.v-judgement-list li {
+  margin-bottom: 12px;
+}
+
+.v-company-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.v-company-brief-card {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,248,251,0.98) 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.v-company-brief-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.v-company-brief-head strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+
+.v-company-brief-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.v-company-brief-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.v-company-metric {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid var(--border-subtle);
+}
+
+.v-company-metric span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-company-metric strong {
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.v-company-brief-copy {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.v-company-brief-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.v-nav-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.v-nav-actions-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-nav-action-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.bottom-actions {
+  justify-items: start;
+}
+
+.bottom-actions .v-nav-action-cluster {
+  justify-content: flex-start;
+}
+
+/* Matrix */
+.v-matrix {
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.v-matrix-header {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1.5fr;
+  background: var(--bg-surface-highlight);
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.v-matrix-col-title {
+  padding: 16px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.v-matrix-col-target {
+  padding: 16px 20px;
+  font-family: 'Syne', sans-serif;
+  font-size: 18px;
+  color: var(--text-primary);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.v-matrix-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1.5fr;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.2s;
+}
+
+.v-matrix-row:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.v-matrix-row:last-child {
+  border-bottom: none;
+}
+
+.v-matrix-label {
+  padding: 16px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.v-matrix-val {
+  padding: 16px 20px;
+  font-size: 16px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+}
+
+.v-winning-val {
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+
+.v-risk-val {
+  color: var(--status-error);
+  font-weight: 700;
+}
+
+/* Dimensions grids */
+.v-dimension-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.v-dimension-card {
+  border: 1px solid var(--border-subtle);
+  padding: 24px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.v-dimension-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 16px;
+  color: var(--text-primary);
+}
+
+.v-dimension-conclusion {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0 0 20px;
+}
+
+.v-badge {
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.v-badge-winner {
+  background: var(--bg-surface-highlight);
+  color: var(--brand-primary);
+  border: 1px solid var(--border-strong);
+}
+
+@media (max-width: 768px) {
+  .v-doc-nav,
+  .v-target-grid,
+  .v-company-brief-grid,
+  .v-dimension-grid {
+    grid-template-columns: 1fr;
+  }
+  .v-company-brief-metrics,
+  .v-matrix-header,
+  .v-matrix-row {
+    grid-template-columns: 1fr;
+  }
+  .v-action-row,
+  .v-nav-actions,
+  .v-company-brief-actions,
+  .v-nav-action-cluster {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+  .v-nav-actions {
+    width: 100%;
+    justify-items: stretch;
+  }
+  .v-matrix-col-target,
+  .v-matrix-val {
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .v-btn-solid,
+  .v-btn-outline {
+    width: 100%;
+  }
+}
+</style>

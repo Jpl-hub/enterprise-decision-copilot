@@ -74,6 +74,7 @@ class DecisionService:
         industry = self.analytics_service.get_company_industry_digest(company_code)
         macro = self.analytics_service.get_macro_digest()
         multimodal = self.analytics_service.get_company_multimodal_digest(company_code, report_year=int(row["report_year"]))
+        freshness = self.analytics_service._build_company_freshness_digest(row, research, industry)
         evidence = self.retrieval_service.retrieve_company_evidence(company_code, question, limit=4)
         evidence_highlights = self._build_evidence_highlights(evidence)
         multimodal_highlight = self._build_multimodal_highlight(multimodal)
@@ -134,12 +135,18 @@ class DecisionService:
             f"语义召回到个股证据 {len(evidence['stock_reports'])} 条、行业证据 {len(evidence['industry_reports'])} 条，"
             f"财报图表锚点 {int(multimodal.get('filled_field_count') or 0)} 项。"
         )
+        executive_summary = (
+            f"{row['company_name']} 当前建议为“{verdict}”。"
+            f"综合得分 {float(row['total_score']):.1f}，风险等级 {row['risk_level']}。"
+            + ("数据时效存在折损，建议结合最新披露继续复核。" if freshness.get("is_stale_data") else "可据此继续开展经营追问与横向比较。")
+        )
 
         brief = {
             "company_code": str(company_code),
             "company_name": row["company_name"],
             "question": question,
             "verdict": verdict,
+            "executive_summary": executive_summary,
             "summary": summary,
             "key_judgements": key_judgements,
             "action_recommendations": action_recommendations,
@@ -153,6 +160,13 @@ class DecisionService:
                 "multimodal_digest": multimodal,
                 "macro_items": macro.get("items", []),
                 "trend_digest": trend,
+                "evidences": self.analytics_service._build_unified_evidences(
+                    financial_source_url=row.get("source_url"),
+                    multimodal=multimodal,
+                    stock_reports=evidence["stock_reports"],
+                    industry_reports=evidence["industry_reports"],
+                ),
+                **freshness,
             },
         }
         if self.narrative_service is None:

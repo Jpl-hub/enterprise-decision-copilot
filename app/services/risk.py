@@ -17,6 +17,8 @@ class RiskService:
         trend = self.analytics_service.get_company_trend_digest(company_code)
         research = self.analytics_service.get_company_research_digest(company_code)
         industry = self.analytics_service.get_company_industry_digest(company_code)
+        multimodal = self.analytics_service.get_company_multimodal_digest(company_code, report_year=int(row["report_year"]))
+        freshness = self.analytics_service._build_company_freshness_digest(row, research, industry)
         history = self.analytics_service.get_company_history(company_code)
         model_prediction = self.risk_model_service.predict_company(history)
 
@@ -125,7 +127,15 @@ class RiskService:
                 'trend_digest': trend,
                 'research_digest': research,
                 'industry_digest': industry,
+                'multimodal_digest': multimodal,
                 'heuristic_score': round(heuristic_score, 1),
                 'model_prediction': model_prediction,
+                'evidences': self.analytics_service._build_unified_evidences(
+                    financial_source_url=row.get('source_url'),
+                    multimodal=multimodal,
+                    stock_reports=research.get('latest_rows', []),
+                    industry_reports=industry.get('latest_rows', []),
+                ),
+                **freshness,
             },
         }

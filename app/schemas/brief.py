@@ -10,6 +10,7 @@ class DecisionBriefResponse(BaseModel):
     company_name: str
     question: str
     verdict: str
+    executive_summary: str | None = None
     summary: str
     key_judgements: list[str] = Field(default_factory=list)
     action_recommendations: list[str] = Field(default_factory=list)

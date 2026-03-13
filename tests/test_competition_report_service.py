@@ -26,6 +26,9 @@ def test_competition_report_service_exports_files() -> None:
         assert package is not None
         assert package["citation_count"] >= 3
         assert package["citations"][0]["citation_id"] == "E1"
+        assert package["brief_verdict"]
+        assert package["risk_level"]
+        assert package["evidence_digest"]["semantic_stock_count"] >= 0
         assert package["markdown_path"]
         assert package["evidence_path"]
         assert Path(package["markdown_path"]).exists()
@@ -65,6 +68,9 @@ def test_competition_package_route_returns_export_payload() -> None:
         assert payload["company_code"] == "300760"
         assert payload["sections"]
         assert payload["citations"]
+        assert payload["brief_verdict"]
+        assert payload["risk_level"]
+        assert "pending_review_count" in payload["evidence_digest"]
         assert payload["markdown_path"]
         assert any("多模态" in section["content"] for section in payload["sections"])
         logs = audit_service.list_recent(limit=5)

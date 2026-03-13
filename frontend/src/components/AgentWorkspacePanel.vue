@@ -33,7 +33,7 @@
       </div>
 
       <div v-if="agentStore.loading" class="answer-line-card pending-answer-card pending-chat-bubble">
-        <p>正在分析，稍等片刻...</p>
+        <p>正在整理分析结果，稍等片刻...</p>
       </div>
 
       <div class="agent-input-shell bottom-input-shell compact-bottom-input">
@@ -79,6 +79,21 @@
 
             <div v-else-if="panel.key === 'plan' && agentStore.latest?.plan?.length" class="floating-panel-body">
               <TracePanel :trace="agentStore.latest.plan" />
+            </div>
+
+            <div v-else-if="panel.key === 'route' && routeCandidates.length" class="floating-panel-body">
+              <div class="agent-route-list">
+                <article v-for="item in routeCandidates" :key="`${item.intent}-${item.score}`" class="agent-route-card">
+                  <div class="agent-route-top">
+                    <div>
+                      <span class="agent-route-label">{{ item.label }}</span>
+                      <strong class="agent-route-score">评分 {{ item.score.toFixed(1) }}</strong>
+                    </div>
+                    <span class="agent-route-chip">{{ item.intent }}</span>
+                  </div>
+                  <p class="agent-route-reasons">{{ item.reasons.join('；') || '当前按默认链路进入。' }}</p>
+                </article>
+              </div>
             </div>
 
             <div v-else-if="panel.key === 'followup' && followUpQuestions.length" class="floating-panel-body">
@@ -129,7 +144,7 @@ const taskModes = [
 const agentStore = useAgentThreadStore();
 const draft = ref(props.seedQuestion);
 const manualTaskMode = ref<string | null>(null);
-const activeFloatingPanel = ref<'summary' | 'plan' | 'followup' | null>(null);
+const activeFloatingPanel = ref<'summary' | 'plan' | 'route' | 'followup' | null>(null);
 const activeTaskMode = computed(() => manualTaskMode.value || agentStore.taskMode || 'company_diagnosis');
 
 const basePrompts = computed(() => {
@@ -166,13 +181,15 @@ const basePrompts = computed(() => {
 
 const starterPrompts = computed(() => basePrompts.value.slice(0, props.compact ? 2 : 3));
 const followUpQuestions = computed(() => agentStore.latest?.suggested_questions?.slice(0, props.compact ? 3 : 4) || []);
+const routeCandidates = computed(() => agentStore.latest?.route_candidates?.slice(0, props.compact ? 2 : 3) || []);
 const hasConversation = computed(() => agentStore.messages.length > 0);
 const messagePreview = computed(() => props.compact ? agentStore.messages.slice(-4) : agentStore.messages);
 
 const floatingPanels = computed(() => {
-  const panels: Array<{ key: 'summary' | 'plan' | 'followup'; label: string }> = [];
+  const panels: Array<{ key: 'summary' | 'plan' | 'route' | 'followup'; label: string }> = [];
   if (agentStore.latest) panels.push({ key: 'summary', label: '本轮结论' });
   if (agentStore.latest?.plan?.length) panels.push({ key: 'plan', label: '执行步骤' });
+  if (routeCandidates.value.length) panels.push({ key: 'route', label: '分析路径' });
   if (followUpQuestions.value.length) panels.push({ key: 'followup', label: '推荐追问' });
   return panels;
 });
@@ -187,7 +204,7 @@ const outputCards = computed(() => {
   const evidence = latest.evidence || {};
   if (latest.task_mode === 'company_risk_forecast') {
     const model = evidence.model_prediction as Record<string, unknown> | undefined;
-    const probability = typeof model?.high_risk_probability === 'number' ? `${(model.high_risk_probability * 100).toFixed(1)}%` : '暂无';
+    const probability = typeof model?.high_risk_probability === 'number' ? `${(model.high_risk_probability * 100).toFixed(1)}%` : '同步中';
     cards.push({ label: '高风险概率', value: probability });
   } else if (latest.task_mode === 'company_compare') {
     const companies = (evidence.companies as unknown[] | undefined)?.length || 0;
@@ -219,7 +236,7 @@ function applyPrompt(text: string) {
   void submit();
 }
 
-function toggleFloatingPanel(key: 'summary' | 'plan' | 'followup') {
+function toggleFloatingPanel(key: 'summary' | 'plan' | 'route' | 'followup') {
   activeFloatingPanel.value = activeFloatingPanel.value === key ? null : key;
 }
 

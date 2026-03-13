@@ -26,6 +26,10 @@ def test_dashboard_payload_has_targets() -> None:
     service = AnalyticsService()
     payload = service.get_dashboard_payload()
     assert len(payload["targets"]) >= 1
+    assert len(payload["company_pool"]) >= 1
+    assert payload["system_status_tagline"]
+    assert payload["home_summary"]
+    assert payload["company_pool"][0]["tags"]
     assert "freshness" in payload
 
 
@@ -62,6 +66,10 @@ def test_company_report_has_sections() -> None:
     assert "evidence" in report
     assert report["evidence"]["multimodal_digest"]["available"] is True
     assert report["evidence"]["multimodal_digest"]["filled_field_count"] >= 1
+    assert report["evidence"]["evidences"]
+    assert any(item["evidence_type"] == "image" for item in report["evidence"]["evidences"])
+    assert "is_stale_data" in report["evidence"]
+    assert "missing_expected_full_year_report" in report["evidence"]
 
 
 def test_company_compare_has_dimensions_and_evidence() -> None:
@@ -93,6 +101,8 @@ def test_agent_api_returns_execution_trace() -> None:
     assert payload["evidence"]["companies"]
     assert any(step["step"] == "生成结果" for step in payload["trace"])
     assert any(step["step"] == "选择分析路径" for step in payload["plan"])
+    assert payload["route_candidates"]
+    assert payload["route_candidates"][0]["intent"] == "company_compare"
 
 
 def test_company_trend_digest_has_multi_year_metrics() -> None:
@@ -119,11 +129,14 @@ def test_decision_brief_contains_evidence_highlights() -> None:
     container = build_service_container()
     brief = container.decision_service.build_company_decision_brief("300760", "结合海外增长和风险看迈瑞医疗")
     assert brief is not None
+    assert brief["executive_summary"]
     assert brief["evidence"]["query_terms"]
     assert brief["evidence"]["query_profile"]["query_variants"]
     assert brief["evidence_highlights"]
     assert all("证据：" in item for item in brief["evidence_highlights"])
     assert brief["evidence"]["multimodal_digest"]["available"] is True
+    assert brief["evidence"]["evidences"]
+    assert any(item["evidence_type"] == "pdf_anchor" for item in brief["evidence"]["evidences"])
 
 
 def test_risk_service_returns_forecast() -> None:
@@ -134,6 +147,8 @@ def test_risk_service_returns_forecast() -> None:
     assert forecast["heuristic_score"] >= 0
     assert "heuristic_score" in forecast["evidence"]
     assert "model_prediction" in forecast
+    assert forecast["evidence"]["evidences"]
+    assert any(item["evidence_type"] in {"text", "image"} for item in forecast["evidence"]["evidences"])
 
 
 def test_risk_model_summary_api_returns_payload() -> None:
@@ -162,6 +177,22 @@ def test_agent_can_answer_quality_governance_questions() -> None:
     assert '数据' in payload['title']
     assert payload['evidence']
     assert payload['trace']
+
+
+def test_intent_router_exposes_ranked_candidates() -> None:
+    router = IntentRouter()
+    ranked = router.score_intents(
+        "比较迈瑞医疗和联影医疗的风险与盈利能力",
+        [
+            {"company_code": "300760", "company_name": "迈瑞医疗"},
+            {"company_code": "688271", "company_name": "联影医疗"},
+        ],
+    )
+
+    assert ranked
+    assert ranked[0]["intent"] == AgentIntent.COMPANY_COMPARE
+    assert ranked[0]["score"] > 0
+    assert ranked[0]["reasons"]
 
 
 def test_agent_thread_keeps_focus_for_follow_up_questions() -> None:

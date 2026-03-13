@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
 import AuditView from '../views/AuditView.vue';
+import BoardView from '../views/BoardView.vue';
 import CompareView from '../views/CompareView.vue';
 import CompetitionView from '../views/CompetitionView.vue';
 import LoginView from '../views/LoginView.vue';
@@ -15,6 +16,7 @@ export const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: LoginView },
     { path: '/', name: 'overview', component: OverviewView, meta: { requiresAuth: true } },
+    { path: '/board', name: 'board', component: BoardView, meta: { requiresAuth: true } },
     { path: '/compare', name: 'compare', component: CompareView, meta: { requiresAuth: true } },
     { path: '/workbench/:companyCode?', name: 'workbench', component: WorkbenchView, props: true, meta: { requiresAuth: true } },
     { path: '/quality', name: 'quality', component: QualityCenterView, meta: { requiresAuth: true } },

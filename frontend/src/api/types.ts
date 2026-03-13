@@ -100,6 +100,41 @@ export interface AuditLogItem {
   created_at: string;
 }
 
+export interface PipelineStatus {
+  has_financials: boolean;
+  has_reports: boolean;
+  has_macro: boolean;
+}
+
+export interface AuthUser {
+  user_id: string;
+  username: string;
+  display_name: string;
+  role: string;
+  created_at: string;
+  last_login_at?: string | null;
+}
+
+export interface LoginResponse {
+  token: string;
+  expires_at: string;
+  user: AuthUser;
+}
+
+export interface RegisterResponse {
+  user: AuthUser;
+}
+
+export interface AuditLogItem {
+  log_id: string;
+  user_id?: string | null;
+  event_type: string;
+  target_type?: string | null;
+  target_id?: string | null;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface AuditLogListResponse {
   total: number;
   items: AuditLogItem[];
@@ -110,7 +145,8 @@ export interface TargetCompany {
   company_name: string;
   exchange: string;
   industry: string;
-  segment: string;
+  segment?: string | null;
+  tags?: string[];
 }
 
 export interface DashboardMetrics {
@@ -147,6 +183,9 @@ export interface DashboardFreshness {
 export interface DashboardPayload {
   status: PipelineStatus;
   targets: TargetCompany[];
+  company_pool?: TargetCompany[];
+  system_status_tagline?: string | null;
+  home_summary?: string | null;
   metrics: DashboardMetrics | null;
   freshness?: DashboardFreshness | null;
   ranking: Array<Record<string, unknown>>;
@@ -161,8 +200,33 @@ export interface EvidenceItem {
   institution?: string | null;
   industry_name?: string | null;
   matched_excerpt?: string | null;
+  matched_terms?: string[];
+  ranking_breakdown?: {
+    char_score?: number;
+    word_score?: number;
+    hybrid_score?: number;
+    keyword_boost?: number;
+    recency_boost?: number;
+    sentiment_boost?: number;
+    entity_boost?: number;
+    rerank_score?: number;
+    matched_terms?: string[];
+    query_variant_count?: number;
+  };
   rerank_score?: number;
   ranking_signals?: string[];
+}
+
+export interface UnifiedEvidence {
+  evidence_type: 'text' | 'image' | 'link' | 'pdf_anchor';
+  source_url?: string;
+  image_url?: string;
+  page_num?: number | string;
+  page_label?: string;
+  report_date?: string;
+  institution?: string;
+  title?: string;
+  summary?: string;
 }
 
 export interface MultimodalMetricItem {
@@ -204,7 +268,9 @@ export interface CompanyReportResponse {
   sections: Array<{ title: string; content: string }>;
   strengths: string[];
   risks: string[];
-  evidence: Record<string, unknown>;
+  evidence: {
+    evidences?: UnifiedEvidence[];
+  } & Record<string, unknown>;
 }
 
 export interface DecisionBriefResponse {
@@ -212,6 +278,7 @@ export interface DecisionBriefResponse {
   company_name: string;
   question: string;
   verdict: string;
+  executive_summary?: string;
   summary: string;
   key_judgements: string[];
   action_recommendations: string[];
@@ -221,6 +288,7 @@ export interface DecisionBriefResponse {
     semantic_stock_reports?: EvidenceItem[];
     semantic_industry_reports?: EvidenceItem[];
     financial_source_url?: string;
+    evidences?: UnifiedEvidence[];
   } & Record<string, unknown>;
 }
 
@@ -266,7 +334,9 @@ export interface RiskForecastResponse {
   monitoring_items: string[];
   heuristic_score: number;
   model_prediction?: RiskModelPredictionResponse | null;
-  evidence: Record<string, unknown>;
+  evidence: {
+    evidences?: UnifiedEvidence[];
+  } & Record<string, unknown>;
 }
 
 export interface CompanyComparisonRow {
@@ -473,6 +543,13 @@ export interface AgentThreadMemory {
   evidence_focus: string[];
 }
 
+export interface AgentRouteCandidate {
+  intent: string;
+  label: string;
+  score: number;
+  reasons: string[];
+}
+
 export interface AgentThreadSummary {
   thread_id: string;
   title: string;
@@ -513,6 +590,7 @@ export interface AgentResponse {
   evidence?: Record<string, unknown> | null;
   trace: AgentTraceStep[];
   plan: AgentPlanStep[];
+  route_candidates?: AgentRouteCandidate[];
   task_mode: string;
   task_label: string;
   skill_id?: string | null;
@@ -752,6 +830,32 @@ export interface DataPreparationSummaryResponse {
   preparation_notes: string[];
 }
 
+export interface RetrievalEvalCaseResult {
+  case_id: string;
+  scope: string;
+  query: string;
+  target_code?: string | null;
+  relevant_keywords: string[];
+  hit_at_3: boolean;
+  hit_at_5: boolean;
+  reciprocal_rank: number;
+  ndcg_at_5: number;
+  top_titles: string[];
+  matched_titles: string[];
+}
+
+export interface RetrievalEvaluationSummaryResponse {
+  generated_at?: string | null;
+  case_count: number;
+  hit_at_3: number;
+  hit_at_5: number;
+  mrr: number;
+  ndcg_at_5: number;
+  retrieval_mode?: string | null;
+  strategy_labels: string[];
+  cases: RetrievalEvalCaseResult[];
+}
+
 export interface ManualReviewSubmitResponse {
   review: ManualReviewRecord;
   summary: QualitySummaryResponse;
@@ -764,10 +868,27 @@ export interface CompetitionPackageResponse {
   question: string;
   exported_at: string;
   summary: string;
+  brief_verdict?: string | null;
+  risk_level?: string | null;
   citation_count: number;
   export_dir?: string | null;
   markdown_path?: string | null;
   evidence_path?: string | null;
+  evidence_digest?: {
+    multimodal_field_count?: number;
+    multimodal_page_count?: number;
+    semantic_stock_count?: number;
+    semantic_industry_count?: number;
+    official_source_url?: string | null;
+    query_terms?: string[];
+    pending_review_count?: number;
+    company_anomaly_count?: number;
+    company_review_queue_count?: number;
+    risk_driver_count?: number;
+    risk_monitor_count?: number;
+    latest_periodic_label?: string | null;
+    latest_official_disclosure?: string | null;
+  };
   sections: Array<{ title: string; content: string }>;
   citations: Array<{
     citation_id: string;

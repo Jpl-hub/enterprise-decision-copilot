@@ -6,7 +6,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.api.routes.quality import get_governance_summary, get_preparation_summary, get_quality_summary, submit_manual_review, sync_auto_reviews
+from app.api.routes.quality import (
+    get_governance_summary,
+    get_preparation_summary,
+    get_quality_summary,
+    get_retrieval_evaluation_summary,
+    submit_manual_review,
+    sync_auto_reviews,
+)
 from app.schemas.quality import ManualReviewRequest
 from app.services.audit import AuditService
 from app.services.quality import DataQualityService
@@ -256,3 +263,20 @@ def test_quality_route_returns_governance_payload() -> None:
     assert payload["company_coverage"]
     assert payload["field_quality"]
     assert payload["evidence_mapping"]
+
+
+def test_quality_service_returns_retrieval_evaluation_summary() -> None:
+    payload = DataQualityService().get_retrieval_evaluation_summary()
+
+    assert payload["case_count"] >= 1
+    assert payload["retrieval_mode"] == "hybrid_tfidf_rerank"
+    assert payload["strategy_labels"]
+    assert payload["cases"]
+    assert "hit_at_3" in payload
+
+
+def test_quality_route_returns_retrieval_evaluation_payload() -> None:
+    payload = asyncio.run(get_retrieval_evaluation_summary(quality_service=DataQualityService()))
+
+    assert payload["case_count"] >= 1
+    assert payload["cases"]

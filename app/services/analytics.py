@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -108,6 +110,28 @@ def _format_number(value: object, digits: int = 2, suffix: str = "") -> str:
 
 def _safe_path_text(value: object) -> str:
     return str(value or "").strip().replace("\\", "/")
+
+
+def _safe_iso_text(value: object) -> str | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    text = str(value).strip()
+    return text or None
+
+
+def _safe_date_ordinal(value: object) -> int | None:
+    text = _safe_iso_text(value)
+    if not text:
+        return None
+    try:
+        return pd.to_datetime(text).date().toordinal()
+    except Exception:
+        return None
 
 
 class AnalyticsService:
@@ -275,6 +299,193 @@ class AnalyticsService:
 
     def get_targets(self) -> list[dict]:
         return self.targets.to_dict("records")
+
+    def _expected_full_year_report_year(self, today: date | None = None) -> int:
+        current = today or date.today()
+        return current.year - 2 if current.month < 5 else current.year - 1
+
+    def _latest_periodic_snapshot(self, company_code: str) -> dict | None:
+        if self.official_periodic_snapshots.empty:
+            return None
+        scoped = self.official_periodic_snapshots[
+            self.official_periodic_snapshots["company_code"].astype(str) == str(company_code)
+        ].copy()
+        if scoped.empty:
+            return None
+        scoped["report_year"] = pd.to_numeric(scoped["report_year"], errors="coerce")
+        scoped["published_at"] = scoped["published_at"].astype(str)
+        return scoped.sort_values(["published_at", "report_year"], ascending=[False, False]).head(1).to_dict("records")[0]
+
+    def _build_company_freshness_digest(self, row: dict, research: dict, industry: dict) -> dict:
+        company_code = str(row["company_code"])
+        latest_periodic = self._latest_periodic_snapshot(company_code)
+        annual_year = int(row["report_year"]) if pd.notna(row.get("report_year")) else None
+        expected_year = self._expected_full_year_report_year()
+        annual_published_at = _safe_iso_text(row.get("published_at"))
+        latest_stock_rows = research.get("latest_rows", [])
+        latest_industry_rows = industry.get("latest_rows", [])
+        latest_stock_report = _safe_iso_text(latest_stock_rows[0].get("report_date")) if latest_stock_rows else None
+        latest_industry_report = _safe_iso_text(latest_industry_rows[0].get("report_date")) if latest_industry_rows else None
+
+        stale_reasons: list[str] = []
+        missing_expected_full_year_report = annual_year is None or annual_year < expected_year
+        if missing_expected_full_year_report:
+            stale_reasons.append(
+                f"当前应以 {expected_year} 年完整年报作为最新完整口径，但系统仅覆盖到 {annual_year or '未知'} 年。"
+            )
+
+        today_ordinal = date.today().toordinal()
+        latest_stock_ordinal = _safe_date_ordinal(latest_stock_report)
+        latest_industry_ordinal = _safe_date_ordinal(latest_industry_report)
+        if latest_stock_ordinal is not None and today_ordinal - latest_stock_ordinal > 180:
+            stale_reasons.append("个股研报最近更新时间超过 180 天，需警惕观点时效衰减。")
+        if latest_industry_ordinal is not None and today_ordinal - latest_industry_ordinal > 180:
+            stale_reasons.append("行业研报最近更新时间超过 180 天，行业判断需要补充验证。")
+
+        stale_since_candidates = [item for item in [annual_published_at, latest_stock_report, latest_industry_report] if item]
+        return {
+            "latest_full_year_report_year": annual_year,
+            "expected_full_year_report_year": expected_year,
+            "missing_expected_full_year_report": missing_expected_full_year_report,
+            "annual_report_published_at": annual_published_at,
+            "latest_official_disclosure": _safe_iso_text(latest_periodic.get("published_at")) if latest_periodic else annual_published_at,
+            "latest_periodic_label": latest_periodic.get("period_label") if latest_periodic else ("年报" if annual_published_at else None),
+            "latest_stock_report": latest_stock_report,
+            "latest_industry_report": latest_industry_report,
+            "is_stale_data": bool(stale_reasons),
+            "stale_reason": "；".join(stale_reasons) if stale_reasons else None,
+            "stale_since": min(stale_since_candidates) if stale_since_candidates else None,
+            "freshness_level": "warning" if stale_reasons else "healthy",
+        }
+
+    def _build_company_tags(self, row: dict, freshness: dict) -> list[str]:
+        tags: list[str] = []
+        company_code = str(row["company_code"])
+        target_row = self.targets[self.targets["company_code"].astype(str) == company_code]
+        segment = None
+        if not target_row.empty:
+            segment = str(target_row.iloc[0].get("segment") or "").strip()
+
+        risk_level = str(row.get("risk_level") or "").strip()
+        annual_year = freshness.get("latest_full_year_report_year")
+        periodic_label = str(freshness.get("latest_periodic_label") or "").strip()
+
+        if risk_level:
+            tags.append(f"{risk_level}风险")
+        if segment:
+            tags.append(segment)
+        if annual_year:
+            tags.append(f"{annual_year}年报")
+        if periodic_label and periodic_label != "年报":
+            tags.append(periodic_label)
+        if bool(row.get("risk_flags")):
+            tags.append("需重点跟踪")
+
+        deduped: list[str] = []
+        for item in tags:
+            if item and item not in deduped:
+                deduped.append(item)
+        return deduped[:4]
+
+    def _build_unified_evidences(
+        self,
+        *,
+        financial_source_url: str | None,
+        multimodal: dict,
+        stock_reports: list[dict] | None = None,
+        industry_reports: list[dict] | None = None,
+        limit: int = 8,
+    ) -> list[dict]:
+        evidences: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+
+        def push(item: dict) -> None:
+            key = (
+                str(item.get("evidence_type") or ""),
+                str(item.get("source_url") or item.get("image_url") or item.get("page_label") or item.get("title") or ""),
+            )
+            if key in seen:
+                return
+            seen.add(key)
+            evidences.append(item)
+
+        report_year = multimodal.get("report_year")
+        published_at = _safe_iso_text(multimodal.get("published_at"))
+        if financial_source_url:
+            push(
+                {
+                    "evidence_type": "pdf_anchor",
+                    "source_url": financial_source_url,
+                    "page_label": f"{report_year}年财报原文" if report_year else "财报原文",
+                    "report_date": published_at,
+                }
+            )
+
+        for asset in list(multimodal.get("page_asset_links") or []):
+            image_url = _safe_iso_text(asset.get("url"))
+            if not image_url:
+                continue
+            label = str(asset.get("label") or "").strip() or "财报页图"
+            page_match = re.search(r"(\d+)", label)
+            push(
+                {
+                    "evidence_type": "image",
+                    "source_url": multimodal.get("source_url") or financial_source_url,
+                    "image_url": image_url,
+                    "page_num": int(page_match.group(1)) if page_match else None,
+                    "page_label": label,
+                    "report_date": published_at,
+                    "title": str(asset.get("group") or "财报图表锚点"),
+                }
+            )
+
+        for row in list(stock_reports or []):
+            push(
+                {
+                    "evidence_type": "text",
+                    "source_url": row.get("source_url"),
+                    "report_date": _safe_iso_text(row.get("report_date")),
+                    "institution": row.get("institution"),
+                    "page_label": row.get("title"),
+                    "title": row.get("title"),
+                    "summary": row.get("matched_excerpt"),
+                }
+            )
+
+        for row in list(industry_reports or []):
+            push(
+                {
+                    "evidence_type": "text",
+                    "source_url": row.get("source_url"),
+                    "report_date": _safe_iso_text(row.get("report_date")),
+                    "institution": row.get("institution") or row.get("industry_name"),
+                    "page_label": row.get("title"),
+                    "title": row.get("title"),
+                    "summary": row.get("matched_excerpt"),
+                }
+            )
+
+        return evidences[:limit]
+
+    def _build_company_pool(self, snapshot: pd.DataFrame) -> list[dict]:
+        if self.targets.empty:
+            return []
+        rows: list[dict] = []
+        for target in self.targets.to_dict("records"):
+            company_code = str(target["company_code"])
+            company_row = snapshot[snapshot["company_code"].astype(str) == company_code]
+            row = company_row.iloc[0].to_dict() if not company_row.empty else {"company_code": company_code}
+            research = self.get_company_research_digest(company_code)
+            industry = self.get_company_industry_digest(company_code)
+            freshness = self._build_company_freshness_digest(row, research, industry) if company_row.shape[0] else {}
+            rows.append(
+                {
+                    **target,
+                    "company_code": company_code,
+                    "tags": self._build_company_tags(row, freshness) if freshness else list(target.get("tags") or []),
+                }
+            )
+        return rows
 
     def _segment_to_industry_keywords(self, segment: str) -> list[str]:
         mapping = {
@@ -649,6 +860,7 @@ class AnalyticsService:
         industry = self.get_company_industry_digest(company_code)
         macro = self.get_macro_digest()
         multimodal = self.get_company_multimodal_digest(company_code, report_year=int(row["report_year"]))
+        freshness = self._build_company_freshness_digest(row, research, industry)
 
         strengths = []
         risks = list(row.get("risk_flags") or [])
@@ -736,6 +948,13 @@ class AnalyticsService:
                 "industry_reports": industry.get("latest_rows", []),
                 "macro_items": macro.get("items", []),
                 "trend_digest": trend,
+                "evidences": self._build_unified_evidences(
+                    financial_source_url=row.get("source_url"),
+                    multimodal=multimodal,
+                    stock_reports=research.get("latest_rows", []),
+                    industry_reports=industry.get("latest_rows", []),
+                ),
+                **freshness,
             },
         }
 
@@ -981,6 +1200,9 @@ class AnalyticsService:
             return {
                 "status": status,
                 "targets": self.get_targets(),
+                "company_pool": self.get_targets(),
+                "system_status_tagline": "当前尚未完成企业样本与真实数据装载。",
+                "home_summary": "请先完成真实数据刷新，再进入企业分析与对比流程。",
                 "metrics": None,
                 "freshness": self.get_data_freshness(),
                 "ranking": [],
@@ -998,14 +1220,29 @@ class AnalyticsService:
             "research_report_count": int(len(self.reports)),
             "industry_report_count": int(len(self.industry_reports)),
         }
+        freshness = self.get_data_freshness()
+        latest_disclosure = freshness.get("latest_official_disclosure")
+        latest_periodic_label = freshness.get("latest_periodic_label") or "定期披露"
+        evidence_count = int(len(self.reports) + len(self.industry_reports))
+        home_summary = (
+            f"围绕 {metrics['sample_count']} 家{settings.target_industry}企业，"
+            f"把财报、研报与宏观数据串成可追溯的企业分析中枢。"
+        )
+        system_status_tagline = (
+            f"当前已覆盖 {metrics['sample_count']} 家企业、{evidence_count} 份研究证据，"
+            f"最新{latest_periodic_label}更新至 {latest_disclosure or '待补齐'}。"
+        )
         ranking = snapshot[["company_code", "company_name", "total_score", "risk_level"]].head(8)
         watchlist = snapshot.sort_values(["risk_penalty", "total_score"], ascending=[False, True]).head(5)
         macro = [] if self.macro.empty else self.macro.to_dict('records')
         return {
             "status": status,
             "targets": self.get_targets(),
+            "company_pool": self._build_company_pool(snapshot),
+            "system_status_tagline": system_status_tagline,
+            "home_summary": home_summary,
             "metrics": metrics,
-            "freshness": self.get_data_freshness(),
+            "freshness": freshness,
             "ranking": ranking.to_dict("records"),
             "watchlist": watchlist[["company_code", "company_name", "risk_level", "risk_flags"]].to_dict("records"),
             "macro": macro,

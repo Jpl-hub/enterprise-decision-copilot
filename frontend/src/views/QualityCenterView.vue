@@ -1,776 +1,317 @@
 <template>
-  <div class="page-stack quality-page refined-quality-page">
-    <PagePanel title="数据底座" eyebrow="Data Control Tower">
-      <template #actions>
-        <div class="toolbar-cluster">
-          <button class="button-primary" @click="loadSummary" :disabled="loading">刷新</button>
+  <div class="page-stack v-document-page">
+    <div class="v-doc-container">
+      
+      <!-- Top Nav -->
+      <nav class="v-doc-nav">
+        <RouterLink to="/" class="v-back-link">
+          <span class="v-arrow">←</span> <span>返回中枢</span>
+        </RouterLink>
+        <div class="v-nav-actions">
+          <button class="v-btn-outline" @click="loadSummary" :disabled="loading">实时刷新探针</button>
         </div>
-      </template>
+      </nav>
 
-      <div v-if="loading" class="empty-state">正在加载数据底座状态...</div>
-      <template v-else-if="summary">
-        <section class="control-tower-hero">
-          <div class="tower-main-card">
-            <div>
-              <p class="section-tag">系统状态</p>
-              <h3>{{ readinessHeadline }}</h3>
-              <p>{{ readinessText }}</p>
-            </div>
-            <div class="tower-pill-row">
-              <span class="tower-pill">财报 {{ percent(summary.official_report_coverage_ratio) }}</span>
-              <span class="tower-pill">图表 {{ percent(summary.multimodal_extract_coverage_ratio) }}</span>
-              <span class="tower-pill">提醒 {{ summary.pending_review_count }} 项</span>
-            </div>
-          </div>
+      <!-- Strategy Header -->
+      <header class="v-doc-header">
+        <h1 class="v-doc-title">合规审计与可信底座</h1>
+        <p class="v-doc-subtitle">全局数据湖仓实况、模型引擎状态监控及底层数据血缘追踪。</p>
+      </header>
 
-          <div class="tower-side-grid">
-            <div class="tower-stat-card">
-              <span>核心样本</span>
-              <strong>{{ summary.target_pool_ready ? '已就绪' : '未完成' }}</strong>
-              <div class="signal-meter"><div class="signal-meter-fill" :style="{ width: `${summary.official_report_coverage_ratio * 100}%` }"></div></div>
-            </div>
-            <div class="tower-stat-card">
-              <span>扩展样本</span>
-              <strong>{{ summary.universe_report_downloaded_slots }}/{{ summary.universe_report_expected_slots }}</strong>
-              <div class="signal-meter"><div class="signal-meter-fill accent" :style="{ width: `${summary.multimodal_extract_coverage_ratio * 100}%` }"></div></div>
-            </div>
-            <div class="tower-stat-card warning">
-              <span>图表补全</span>
-              <strong>{{ summary.multimodal_extract_report_count }}/{{ summary.multimodal_expected_report_count }}</strong>
-              <div class="signal-meter"><div class="signal-meter-fill warning" :style="{ width: pendingWidth }"></div></div>
-            </div>
-          </div>
-        </section>
+      <!-- Permissions Gate -->
+      <div v-if="!authStore.canViewAudit" class="v-warning-banner" style="margin-bottom: 40px; margin-top: 0">
+        <strong>权限受限</strong>
+        <p>当前账号不具备系统级数据探针的查阅权限。如需获取审计报告，请联系数据质量团队。</p>
+      </div>
 
-        <section class="data-flow-board">
-          <div class="flow-card">
-            <span>官方财报</span>
-            <strong>{{ summary.official_report_downloaded_slots }}/{{ summary.official_report_expected_slots }}</strong>
-            <p>三所正式披露年报已进入主分析链路。</p>
-          </div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-card">
-            <span>扩展样本</span>
-            <strong>{{ summary.universe_report_downloaded_slots }}/{{ summary.universe_report_expected_slots }}</strong>
-            <p>扩展企业池的年报下载进度，决定后续可扩到多大范围。</p>
-          </div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-card">
-            <span>图表补全</span>
-            <strong>{{ summary.multimodal_extract_report_count }}/{{ summary.multimodal_expected_report_count }}</strong>
-            <p>复杂图表和表格是否已经补成结构化证据。</p>
-          </div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-card accent-card">
-            <span>Agent 证据链</span>
-            <strong>{{ summary.multimodal_backends.join(' / ') || '规则链路' }}</strong>
-            <p>最终进入企业分析、对比和导出材料。</p>
-          </div>
-        </section>
+      <template v-else>
+        <!-- Loading State -->
+        <div v-if="loading" class="v-loading-block">
+          <div class="v-spinner"></div>
+          <p>正在同步全网节点状态，拉取合规与质量探针，请稍候...</p>
+        </div>
 
-        <section v-if="preparation" class="preparation-section">
-          <div class="panel-split two-cols">
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>数据准备度</h3>
-                <span class="badge-subtle">{{ preparation.generated_at?.slice(0, 16).replace('T', ' ') || '实时快照' }}</span>
+        <div v-else-if="summary" class="v-doc-body" style="margin-top: 20px;">
+          
+          <!-- Master Status -->
+          <section class="v-doc-section">
+            <h2 class="v-section-title">01 / 全局链路状态快照</h2>
+            <div class="v-export-dashboard" style="margin-bottom: 24px;">
+              <div class="v-export-stat">
+                <span class="v-stat-label">权威财报覆盖度</span>
+                <strong class="v-stat-val">{{ percent(summary.official_report_coverage_ratio) }}</strong>
               </div>
-              <div class="foundation-stat-grid">
-                <div class="tower-stat-card">
-                  <span>来源类型</span>
-                  <strong>{{ preparation.source_count }}</strong>
-                  <p>{{ preparation.processed_dataset_count }} 个 processed 数据集已落盘。</p>
-                </div>
-                <div class="tower-stat-card">
-                  <span>企业池</span>
-                  <strong>{{ preparation.target_pool_company_count }} / {{ preparation.universe_company_count }}</strong>
-                  <p>核心企业池与外围企业池的当前规模。</p>
-                </div>
-                <div class="tower-stat-card">
-                  <span>训练准备</span>
-                  <strong>{{ preparation.multimodal_sft_sample_count }}</strong>
-                  <p>多模态 SFT 样本，当前抽取 {{ preparation.multimodal_extract_count }} 份。</p>
-                </div>
-                <div class="tower-stat-card">
-                  <span>扩样候选</span>
-                  <strong>{{ preparation.selected_candidate_count }} / {{ preparation.promotion_candidate_count }}</strong>
-                  <p>已排出的下一轮重点扩样企业。</p>
-                </div>
+              <div class="v-export-stat">
+                <span class="v-stat-label">拓展样本池装载</span>
+                <strong class="v-stat-val">{{ summary.universe_report_downloaded_slots }} / {{ summary.universe_report_expected_slots }}</strong>
+              </div>
+              <div class="v-export-stat">
+                <span class="v-stat-label">多模态解析率</span>
+                <strong class="v-stat-val">{{ percent(summary.multimodal_extract_coverage_ratio) }}</strong>
+              </div>
+              <div class="v-export-stat">
+                <span class="v-stat-label">阻断级拦截总量</span>
+                <strong class="v-stat-val" :class="{ 'v-danger-text': summary.pending_review_count > 0 }">{{ summary.pending_review_count }} 项</strong>
               </div>
             </div>
 
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>来源成熟度</h3>
-                <span class="badge-subtle">{{ preparation.annual_years.join(' / ') || '年度待补齐' }}</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in preparation.source_status" :key="item.source_key" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ formatCount(item.rows) }} 行</span>
-                  </div>
-                  <p>最新 {{ item.latest || '待刷新' }}</p>
-                  <span v-if="item.coverage_note" class="foundation-dataset-note">{{ item.coverage_note }}</span>
+            <!-- Anomaly Alerts -->
+            <div class="v-anomaly-grid">
+              <div class="v-anomaly-card">
+                <div class="v-anomaly-head">
+                  <strong>文件缺失拦截</strong>
+                  <span class="v-danger-text">{{ summary.issue_breakdown.missing_reports }} 宗</span>
                 </div>
+                <p>底层文件物理断档，中断推演。</p>
+              </div>
+              <div class="v-anomaly-card">
+                <div class="v-anomaly-head">
+                  <strong>字段合规校验拦截</strong>
+                  <span class="v-danger-text">{{ summary.issue_breakdown.field_gaps }} 批</span>
+                </div>
+                <p>结构解析版式变异引发降级。</p>
+              </div>
+              <div class="v-anomaly-card">
+                <div class="v-anomaly-head">
+                  <strong>多模态渲染停滞</strong>
+                  <span class="v-warning-text">{{ summary.issue_breakdown.multimodal_missing }} 批</span>
+                </div>
+                <p>复杂矢量图大模型转译超时或异常。</p>
+              </div>
+              <div class="v-anomaly-card">
+                <div class="v-anomaly-head">
+                  <strong>认知熵过低拦截</strong>
+                  <span class="v-warning-text">{{ summary.issue_breakdown.multimodal_low_coverage }} 笔</span>
+                </div>
+                <p>信息提取量低于可信研判阈值。</p>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div class="panel-split two-cols">
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>扩样候选</h3>
-                <span class="badge-subtle">下一轮可拉升数据规模</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in preparation.top_candidates" :key="item.company_code" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.company_name }}</strong>
-                    <span>{{ item.priority_score.toFixed(2) }}</span>
-                  </div>
-                  <p>{{ item.industry_name || '未分类' }} · 研报 {{ item.report_count }} 篇 · 机构 {{ item.institution_count }} 家</p>
-                  <span v-if="item.latest_report_date" class="foundation-dataset-note">最新研报 {{ item.latest_report_date }}</span>
-                </div>
-              </div>
+          <!-- Governance Matrix -->
+          <section class="v-doc-section" v-if="governance">
+            <h2 class="v-section-title">02 / 核准信源目录表</h2>
+            
+            <div class="v-data-table-wrapper">
+              <table class="v-data-table">
+                <thead>
+                  <tr>
+                    <th>资源名称与域</th>
+                    <th>调用优先级</th>
+                    <th>限定校验域</th>
+                    <th>合规备注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in governance.source_catalog" :key="item.source_name">
+                    <td>
+                      <strong class="v-text-primary">{{ item.source_name }}</strong>
+                      <br/>
+                      <span class="v-text-muted">{{ item.domain }}</span>
+                    </td>
+                    <td><span class="v-badge">{{ item.priority }}</span></td>
+                    <td>{{ item.usage_scope }}</td>
+                    <td class="v-text-muted">{{ item.compliance_note }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
+          </section>
 
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>准备结论</h3>
-                <span class="badge-subtle">先补这些</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in preparation.preparation_notes" :key="item" class="action-line-card">
-                  <p>{{ item }}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="preparation.promoted_exchange_status.length || preparation.promoted_companies.length" class="panel-split two-cols">
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>扩样执行结果</h3>
-                <span class="badge-subtle">{{ preparation.promotion_years.join(' / ') || '年度样本' }}</span>
-              </div>
-              <div class="foundation-stat-grid">
-                <div class="tower-stat-card">
-                  <span>已下载年报</span>
-                  <strong>{{ preparation.promoted_report_download_count }}</strong>
-                  <p>首批扩样企业已进入仓内的正式年报 PDF 数量。</p>
-                </div>
-                <div class="tower-stat-card">
-                  <span>待补年份</span>
-                  <strong>{{ preparation.promoted_report_missing_count }}</strong>
-                  <p>还缺正式年报的年份槽位，后续需要继续补采。</p>
-                </div>
-                <div class="tower-stat-card">
-                  <span>完整企业</span>
-                  <strong>{{ preparation.promoted_ready_company_count }}</strong>
-                  <p>扩样首批里已经覆盖所有目标年份的企业。</p>
-                </div>
-                <div class="tower-stat-card">
-                  <span>部分就绪</span>
-                  <strong>{{ preparation.promoted_partial_company_count }}</strong>
-                  <p>已有真实年报，但还没有补齐全部年份。</p>
-                </div>
-              </div>
-
-              <div class="stack-list top-gap">
-                <div v-for="item in preparation.promoted_exchange_status" :key="item.exchange" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ formatExchange(item.exchange) }}</strong>
-                    <span>{{ item.downloaded_reports }} / {{ item.downloaded_reports + item.missing_reports }}</span>
-                  </div>
-                  <p>已选企业 {{ item.selected_companies }} 家，当前待补 {{ item.missing_reports }} 份。</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>首批扩样企业</h3>
-                <span class="badge-subtle">真实下载状态</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in preparation.promoted_companies" :key="`${item.exchange}-${item.company_code}`" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.company_name }}</strong>
-                    <span>{{ item.downloaded_reports }} / {{ preparation.promotion_years.length || 0 }}</span>
-                  </div>
-                  <p>{{ formatExchange(item.exchange) }} · {{ item.industry_name || '未分类' }} · 优先级 {{ item.priority_score.toFixed(2) }}</p>
-                  <span class="foundation-dataset-note">
-                    已下载 {{ formatYearList(item.downloaded_years) }}<span v-if="item.missing_years.length"> · 待补 {{ formatYearList(item.missing_years) }}</span>
-                  </span>
-                  <span v-if="item.latest_published_at" class="foundation-dataset-note">最新披露 {{ item.latest_published_at }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="governance" class="preparation-section">
-          <div class="sub-panel compact-data-panel foundation-overview-panel">
-            <div class="sub-panel-header">
-              <h3>可信治理表</h3>
-              <span class="badge-subtle">{{ governance.generated_at?.slice(0, 16).replace('T', ' ') || '实时快照' }}</span>
-            </div>
-            <p class="foundation-overview-text">
-              这里直接回答“数据从哪来、覆盖到哪、哪些字段能不能信、系统结论依赖什么证据”，不是再写抽象说明。
-            </p>
-          </div>
-
-          <div class="panel-split two-cols">
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>数据源登记表</h3>
-                <span class="badge-subtle">{{ governance.source_catalog.length }} 条</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in governance.source_catalog" :key="`${item.source_name}-${item.entry_url}`" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.source_name }}</strong>
-                    <span>{{ item.priority }}</span>
-                  </div>
-                  <p>{{ item.domain }} · {{ item.usage_scope }}</p>
-                  <span class="foundation-dataset-note">{{ item.compliance_note }}</span>
-                  <a :href="item.entry_url" target="_blank" rel="noreferrer" class="text-link-button">查看入口</a>
-                </div>
-              </div>
-            </div>
-
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>企业覆盖表</h3>
-                <span class="badge-subtle">{{ governance.company_coverage.length }} 家核心企业</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in governance.company_coverage" :key="item.company_code" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.company_name }}</strong>
-                    <span>{{ formatExchange(item.exchange) }}</span>
-                  </div>
-                  <p>{{ item.industry || '未分类' }} · 年报 {{ item.annual_report_count }} 份 · 定期披露 {{ item.periodic_report_count }} 条</p>
-                  <span class="foundation-dataset-note">
-                    年份 {{ formatYearList(item.annual_years) }} · 研报 {{ item.research_report_count }} 条 · 多模态 {{ item.multimodal_extract_count }} 份
-                  </span>
-                  <span v-if="item.latest_disclosure" class="foundation-dataset-note">最新披露 {{ item.latest_disclosure }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel-split two-cols">
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>字段质量表</h3>
-                <span class="badge-subtle">按空值率排序</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in governance.field_quality" :key="`${item.dataset}-${item.field}`" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.dataset }} / {{ item.field }}</strong>
-                    <span>{{ percent(item.null_ratio) }}</span>
-                  </div>
-                  <p>{{ item.source_type }} · {{ item.extraction_method }}</p>
-                  <span class="foundation-dataset-note">{{ item.review_status }} · {{ item.usage_scope }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>证据映射表</h3>
-                <span class="badge-subtle">{{ governance.evidence_mapping.length }} 个模块</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in governance.evidence_mapping" :key="item.module" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.module }}</strong>
-                    <span>{{ item.output_label }}</span>
-                  </div>
-                  <p>来源 {{ item.primary_sources.join(' / ') }}</p>
-                  <span class="foundation-dataset-note">证据字段 {{ item.evidence_fields.join(' / ') }}</span>
-                  <span class="foundation-dataset-note">{{ item.verification_rule }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="stack && (stackPillars.length || stackEngines.length)" class="system-blueprint-section">
-          <div class="sub-panel compact-data-panel blueprint-summary-panel">
-            <div class="sub-panel-header">
-              <h3>系统蓝图</h3>
-              <span class="badge-subtle">三条主线 · {{ stackGeneratedAt }}</span>
-            </div>
-            <p class="foundation-overview-text">
-              这里不展示概念口号，只展示当前仓里已经落地的系统能力、短板和下一步。系统按“传统应用 + Agent / 深度学习 / 大数据计算”三条线同步推进。
-            </p>
-
-            <div v-if="stackPillars.length" class="blueprint-pillar-grid">
-              <article v-for="pillar in stackPillars" :key="pillar.pillar_id" :class="['blueprint-pillar-card', pillar.status]">
-                <div class="blueprint-pillar-head">
+          <!-- System Stack & Engins -->
+          <section class="v-doc-section" v-if="stack && stackPillars.length">
+            <h2 class="v-section-title">03 / 分析引擎构件矩阵</h2>
+            
+            <div class="v-stack-grid">
+              <div v-for="pillar in stackPillars" :key="pillar.pillar_id" class="v-stack-card">
+                <div class="v-stack-head">
                   <div>
-                    <span class="section-tag">{{ pillar.name }}</span>
-                    <h4>{{ pillar.stage_label }}</h4>
+                    <span class="v-stat-label">{{ pillar.name }}</span>
+                    <h3 class="v-stack-title">{{ pillar.stage_label }}</h3>
                   </div>
-                  <div class="blueprint-score-badge">
+                  <div class="v-stack-score">
                     <strong>{{ formatReadiness(pillar.readiness_score) }}</strong>
-                    <span>就绪度</span>
+                    <span>就绪指数</span>
                   </div>
                 </div>
-                <div class="mini-bar-track top-gap">
-                  <div class="mini-bar-fill blueprint-score-fill" :style="{ width: readinessWidth(pillar.readiness_score) }"></div>
-                </div>
-                <p>{{ pillar.summary }}</p>
-
-                <div class="blueprint-pill-row">
-                  <span
-                    v-for="metric in pillar.headline_metrics"
-                    :key="`${pillar.pillar_id}-${metric.label}`"
-                    :class="['blueprint-metric-pill', `tone-${metric.tone}`]"
-                  >
+                <p class="v-stack-summary">{{ pillar.summary }}</p>
+                <div class="v-stack-metrics">
+                  <span v-for="metric in pillar.headline_metrics" :key="metric.label" class="v-badge" :class="metric.tone">
                     {{ metric.label }} {{ metric.value }}
                   </span>
                 </div>
-
-                <div class="stack-list top-gap">
-                  <div class="action-line-card">
-                    <strong>已成形</strong>
-                    <p>{{ pillar.strengths[0] }}</p>
+                <div class="v-stack-lines">
+                  <div class="v-stack-line">
+                    <strong class="v-text-primary">核心阵地</strong>
+                    <span>{{ pillar.strengths[0] }}</span>
                   </div>
-                  <div class="action-line-card">
-                    <strong>当前缺口</strong>
-                    <p>{{ pillar.gaps[0] }}</p>
-                  </div>
-                  <div class="action-line-card">
-                    <strong>下一步</strong>
-                    <p>{{ pillar.next_steps[0] }}</p>
+                  <div class="v-stack-line">
+                    <strong class="v-danger-text">攻坚阻塞</strong>
+                    <span>{{ pillar.gaps[0] }}</span>
                   </div>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Data Preparation / Sourcing -->
+          <section class="v-doc-section" v-if="preparation">
+            <h2 class="v-section-title">04 / 大模型语料提纯 (SFT)</h2>
+            <div class="v-export-split" style="gap:24px; row-gap:24px;">
+              <div class="v-download-card">
+                <div class="v-dl-icon">SFT</div>
+                <div class="v-dl-info">
+                  <strong>全域指令回流微调集</strong>
+                  <p>样本总数: {{ preparation.multimodal_sft_sample_count }}</p>
+                </div>
+              </div>
+              <div class="v-download-card">
+                <div class="v-dl-icon">EXT</div>
+                <div class="v-dl-info">
+                  <strong>结构化知识抽取向量</strong>
+                  <p>抽取总数: {{ preparation.multimodal_extract_count }}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="v-doc-section" v-if="retrievalEvaluation">
+            <h2 class="v-section-title">05 / 检索评测基线</h2>
+            <p class="v-doc-subtitle v-section-intro">
+              当前不是只看“能不能搜到”，而是持续量化命中率、排序质量和检索策略表现。
+            </p>
+
+            <div class="v-export-dashboard" style="margin-bottom: 24px;">
+              <div class="v-export-stat">
+                <span class="v-stat-label">评测样本数</span>
+                <strong class="v-stat-val">{{ retrievalEvaluation.case_count }}</strong>
+              </div>
+              <div class="v-export-stat">
+                <span class="v-stat-label">Hit@3</span>
+                <strong class="v-stat-val">{{ percent(retrievalEvaluation.hit_at_3) }}</strong>
+              </div>
+              <div class="v-export-stat">
+                <span class="v-stat-label">MRR</span>
+                <strong class="v-stat-val">{{ scoreText(retrievalEvaluation.mrr) }}</strong>
+              </div>
+              <div class="v-export-stat">
+                <span class="v-stat-label">nDCG@5</span>
+                <strong class="v-stat-val">{{ scoreText(retrievalEvaluation.ndcg_at_5) }}</strong>
+              </div>
+            </div>
+
+            <div class="v-retrieval-head">
+              <div class="v-retrieval-mode">
+                <strong>当前检索策略</strong>
+                <p>{{ retrievalEvaluation.retrieval_mode || 'hybrid_tfidf_rerank' }}</p>
+              </div>
+              <div class="v-stack-metrics">
+                <span v-for="label in retrievalEvaluation.strategy_labels" :key="label" class="v-badge neutral">
+                  {{ label }}
+                </span>
+              </div>
+            </div>
+
+            <div class="v-retrieval-case-list">
+              <article v-for="item in retrievalEvaluation.cases.slice(0, 4)" :key="item.case_id" class="v-retrieval-case">
+                <div class="v-retrieval-case-top">
+                  <div>
+                    <span class="v-stat-label">{{ item.scope === 'company' ? '企业问答' : '行业问答' }}</span>
+                    <h3 class="v-retrieval-case-title">{{ item.query }}</h3>
+                  </div>
+                  <div class="v-retrieval-case-score" :class="{ success: item.hit_at_3, warning: !item.hit_at_3 }">
+                    {{ item.hit_at_3 ? 'Top3 命中' : 'Top3 未命中' }}
+                  </div>
+                </div>
+                <div class="v-retrieval-case-metrics">
+                  <span>MRR {{ scoreText(item.reciprocal_rank) }}</span>
+                  <span>nDCG@5 {{ scoreText(item.ndcg_at_5) }}</span>
+                </div>
+                <p class="v-retrieval-case-line">
+                  目标关键词：{{ item.relevant_keywords.join('、') }}
+                </p>
+                <p class="v-retrieval-case-line" v-if="item.matched_titles.length">
+                  命中文档：{{ item.matched_titles.join('；') }}
+                </p>
+                <p class="v-retrieval-case-line v-text-muted" v-else>
+                  当前 Top5 中尚未出现显式命中标题，需要继续优化召回与排序。
+                </p>
               </article>
             </div>
-          </div>
+          </section>
 
-          <div class="panel-split two-cols blueprint-detail-grid">
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>关键引擎</h3>
-                <span class="badge-subtle">{{ stackEngines.length }} 个模块</span>
-              </div>
-              <div class="blueprint-engine-grid">
-                <article v-for="engine in stackEngines" :key="engine.engine_id" :class="['blueprint-engine-card', engine.status]">
-                  <div class="trace-title-row">
-                    <strong>{{ engine.name }}</strong>
-                    <span>{{ formatReadiness(engine.readiness_score || 0) }}</span>
-                  </div>
-                  <p class="engine-category-line">{{ engine.category }} · {{ engine.stage_label || '状态同步中' }}</p>
-                  <p>{{ engine.role }}</p>
-                  <div class="blueprint-engine-metrics">
-                    <span
-                      v-for="metric in engine.headline_metrics"
-                      :key="`${engine.engine_id}-${metric.label}`"
-                      :class="['blueprint-metric-pill', 'compact', `tone-${metric.tone}`]"
-                    >
-                      {{ metric.label }} {{ metric.value }}
-                    </span>
-                  </div>
-                  <span v-if="engine.gaps.length" class="foundation-dataset-note">缺口：{{ engine.gaps[0] }}</span>
-                </article>
-              </div>
-            </div>
-
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>系统判断</h3>
-                <span class="badge-subtle">设计逻辑</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in stackStory" :key="item" class="action-line-card">
-                  <p>{{ item }}</p>
-                </div>
-              </div>
-              <div class="sub-panel-header top-gap">
-                <h3>下一阶段工程动作</h3>
-                <span class="badge-subtle">按这个顺序做</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in stackActions" :key="item" class="action-line-card">
-                  <p>{{ item }}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="foundation" class="foundation-section">
-          <div class="sub-panel compact-data-panel foundation-overview-panel">
-            <div class="sub-panel-header">
-              <h3>湖仓与计算引擎</h3>
-              <span class="badge-subtle">{{ foundation.warehouse_table_count }} 张表视图</span>
-            </div>
-
-            <div class="foundation-stat-grid">
-              <div class="tower-stat-card">
-                <span>仓内总行数</span>
-                <strong>{{ formatCount(foundation.total_warehouse_rows) }}</strong>
-                <p>Bronze / Silver / Gold 统一进入 DuckDB mart。</p>
-              </div>
-              <div class="tower-stat-card">
-                <span>CSV 产物</span>
-                <strong>{{ foundation.csv_artifact_count }}</strong>
-                <p>原始与清洗链路均保留可追溯落盘。</p>
-              </div>
-              <div class="tower-stat-card">
-                <span>Parquet 产物</span>
-                <strong>{{ foundation.parquet_artifact_count }}</strong>
-                <p>便于后续接入更大规模批处理与分析引擎。</p>
-              </div>
-              <div class="tower-stat-card">
-                <span>官方 PDF 清单</span>
-                <strong>{{ foundation.official_inventory_rows }}</strong>
-                <p>真实披露下载与抽取链路的入口样本。</p>
-              </div>
-            </div>
-
-            <div class="foundation-layer-grid">
-              <div v-for="item in foundation.lake_layers" :key="item.layer" class="foundation-layer-card">
-                <span>{{ formatLayer(item.layer) }}</span>
-                <strong>{{ item.table_count }} 张表</strong>
-                <p>{{ formatCount(item.row_count) }} 行</p>
-              </div>
-            </div>
-
-            <div class="tower-pill-row foundation-mart-row">
-              <span v-for="item in foundation.mart_views.slice(0, 6)" :key="item" class="tower-pill">{{ item }}</span>
-            </div>
-          </div>
-
-          <div class="panel-split two-cols foundation-detail-grid">
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>空值热点</h3>
-                <span class="badge-subtle">治理优先级</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in foundation.top_null_fields" :key="`${item.table}-${item.field}`" class="foundation-hotspot-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.table }} / {{ item.field }}</strong>
-                    <span>{{ percent(item.null_ratio) }}</span>
-                  </div>
-                  <div class="mini-bar-track">
-                    <div class="mini-bar-fill warning" :style="{ width: `${Math.max(12, item.null_ratio * 100)}%` }"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="sub-panel compact-data-panel">
-              <div class="sub-panel-header">
-                <h3>主题数据集</h3>
-                <span class="badge-subtle">规模与缺口</span>
-              </div>
-              <div class="stack-list">
-                <div v-for="item in foundation.dataset_profiles.slice(0, 6)" :key="item.table" class="foundation-dataset-card">
-                  <div class="trace-title-row">
-                    <strong>{{ item.table }}</strong>
-                    <span>{{ formatCount(item.rows) }} 行</span>
-                  </div>
-                  <p>{{ item.columns }} 列 · 重复 {{ item.duplicate_rows }} 条 · 最高空值 {{ percent(item.max_null_ratio) }}</p>
-                  <span v-if="item.hotspot_fields.length" class="foundation-dataset-note">
-                    热点字段：{{ item.hotspot_fields.map((field) => `${field.field} ${percent(field.null_ratio)}`).join(' · ') }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="periodCoverage.length" class="freshness-section">
-          <div class="sub-panel compact-data-panel freshness-panel">
-            <div class="sub-panel-header">
-              <h3>定期披露覆盖</h3>
-              <span class="badge-subtle">{{ latestDisclosureLine }}</span>
-            </div>
-            <div class="freshness-period-grid">
-              <div v-for="period in periodCoverage" :key="period.period_type" class="freshness-period-card">
-                <div class="freshness-period-head">
-                  <strong>{{ period.period_label }}</strong>
-                  <span class="badge-subtle">{{ period.covered_companies }}/{{ targetPoolCount }}</span>
-                </div>
-                <div class="mini-bar-track">
-                  <div class="mini-bar-fill freshness-bar-fill" :style="{ width: `${Math.max(12, period.coverage_ratio * 100)}%` }"></div>
-                </div>
-                <p>{{ percent(period.coverage_ratio) }} 覆盖，最新 {{ period.latest_company_name || '暂无' }}</p>
-                <span class="freshness-period-meta">{{ period.latest_published_at || '暂无披露日期' }}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div class="panel-split two-cols">
-          <div class="sub-panel compact-data-panel">
-            <div class="sub-panel-header">
-              <h3>交易所接入</h3>
-              <span class="badge-subtle">三所运行态</span>
-            </div>
-            <div class="stack-list">
-              <div v-for="item in summary.exchange_status" :key="item.exchange" class="exchange-board-card">
-                <div class="trace-title-row">
-                  <strong>{{ formatExchange(item.exchange) }}</strong>
-                  <span>{{ item.downloaded_rows }}/{{ item.rows }}</span>
-                </div>
-                <div class="signal-meter top-gap"><div class="signal-meter-fill dark" :style="{ width: exchangeWidth(item) }"></div></div>
-                <div class="exchange-board-meta">
-                  <span>Manifest {{ item.manifest_exists ? '已就绪' : '缺失' }}</span>
-                  <span>文件缺失 {{ item.file_missing_rows }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="sub-panel compact-data-panel">
-            <div class="sub-panel-header">
-              <h3>当前缺口</h3>
-              <span class="badge-subtle">先看这些</span>
-            </div>
-            <div class="stack-list">
-              <div class="anomaly-heat-card">
-                <div class="trace-title-row">
-                  <strong>缺报告</strong>
-                  <span>{{ summary.issue_breakdown.missing_reports }} 项</span>
-                </div>
-                <p>主样本或扩展样本里，仍未下载到位的官方年报。</p>
-              </div>
-              <div class="anomaly-heat-card">
-                <div class="trace-title-row">
-                  <strong>字段缺口</strong>
-                  <span>{{ summary.issue_breakdown.field_gaps }} 项</span>
-                </div>
-                <p>关键字段缺失或版式异常，可能影响经营与风险判断。</p>
-              </div>
-              <div class="anomaly-heat-card">
-                <div class="trace-title-row">
-                  <strong>图表待补</strong>
-                  <span>{{ summary.issue_breakdown.multimodal_missing }} 项</span>
-                </div>
-                <p>已下载年报但还没有完成图表与表格补全。</p>
-              </div>
-              <div class="anomaly-heat-card">
-                <div class="trace-title-row">
-                  <strong>图表偏少</strong>
-                  <span>{{ summary.issue_breakdown.multimodal_low_coverage }} 项</span>
-                </div>
-                <p>已做图表补全，但识别字段仍然偏少。</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel-split two-cols">
-          <div class="sub-panel compact-data-panel">
-            <div class="sub-panel-header">
-              <h3>图表抽取进展</h3>
-              <span class="badge-subtle">多模态</span>
-            </div>
-            <div v-if="recentExtracts.length" class="stack-list">
-              <div v-for="item in summary.multimodal_recent_extracts.slice(0, 4)" :key="`${item.company_code}-${item.report_year}`" class="multimodal-board-card">
-                <div class="trace-title-row">
-                  <strong>{{ item.company_name || item.company_code }}</strong>
-                  <span>{{ item.backend }}</span>
-                </div>
-                <div class="mini-bar-item top-gap">
-                  <div class="mini-bar-head">
-                    <span>字段补全</span>
-                    <strong>{{ item.filled_field_count }}</strong>
-                  </div>
-                  <div class="mini-bar-track"><div class="mini-bar-fill" :style="{ width: multimodalFieldWidth(item.filled_field_count) }"></div></div>
-                </div>
-                <p>页面 {{ item.page_images.length }} 张 · {{ item.notes.join('；') || '已进入证据链' }}</p>
-              </div>
-            </div>
-            <div v-else class="stack-list">
-              <div v-for="item in multimodalFallbackCards" :key="item.title" class="multimodal-board-card">
-                <div class="trace-title-row">
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.value }}</span>
-                </div>
-                <p>{{ item.detail }}</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="sub-panel compact-data-panel">
-            <div class="sub-panel-header">
-              <h3>可信度判断</h3>
-              <span class="badge-subtle">当前建议</span>
-            </div>
-            <div class="stack-list">
-              <div v-for="item in confidenceNotes" :key="item" class="action-line-card"><p>{{ item }}</p></div>
-            </div>
-          </div>
         </div>
       </template>
-    </PagePanel>
+
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-
+import { RouterLink } from 'vue-router';
 import { api } from '../api/client';
 import type {
   AIStackSummaryResponse,
   DataFoundationSummaryResponse,
   DataGovernanceSummaryResponse,
   DataPreparationSummaryResponse,
-  ExchangeQualityStatus,
   QualitySummaryResponse,
+  RetrievalEvaluationSummaryResponse,
+  WarehouseSummaryResponse,
 } from '../api/types';
-import PagePanel from '../components/PagePanel.vue';
-import { useDashboardStore } from '../stores/dashboard';
+import { useAuthStore } from '../stores/auth';
 
+const authStore = useAuthStore();
 const loading = ref(false);
+
 const summary = ref<QualitySummaryResponse | null>(null);
 const foundation = ref<DataFoundationSummaryResponse | null>(null);
 const governance = ref<DataGovernanceSummaryResponse | null>(null);
 const preparation = ref<DataPreparationSummaryResponse | null>(null);
+const retrievalEvaluation = ref<RetrievalEvaluationSummaryResponse | null>(null);
 const stack = ref<AIStackSummaryResponse | null>(null);
-const dashboardStore = useDashboardStore();
+const warehouse = ref<WarehouseSummaryResponse | null>(null);
 
-const readinessHeadline = computed(() => {
-  if (!summary.value) return '加载中';
-  if (!summary.value.target_pool_ready) return '核心样本还没有全部就绪';
-  if (summary.value.multimodal_extract_coverage_ratio < 0.5) return '核心样本可用，但图表补全还没有做完';
-  if (summary.value.universe_report_coverage_ratio < 0.9) return '核心样本可用，扩展样本仍在补齐';
-  return '数据底座已进入稳定运行';
-  return '数据底座正在持续扩充';
-});
+const stackPillars = computed(() => stack.value?.pillars || []);
 
-const readinessText = computed(() => {
-  if (!summary.value) return '正在汇总';
-  return `核心样本 ${summary.value.official_report_downloaded_slots}/${summary.value.official_report_expected_slots}，扩展样本 ${summary.value.universe_report_downloaded_slots}/${summary.value.universe_report_expected_slots}，图表补全 ${summary.value.multimodal_extract_report_count}/${summary.value.multimodal_expected_report_count}。`;
-});
-
-const recentExtracts = computed(() => summary.value?.multimodal_recent_extracts || []);
-const stackGeneratedAt = computed(() => {
-  const value = stack.value?.generated_at;
-  return typeof value === 'string' && value ? value.slice(0, 16).replace('T', ' ') : '系统快照';
-});
-const stackPillars = computed(() => (Array.isArray(stack.value?.pillars) ? stack.value?.pillars || [] : []));
-const stackEngines = computed(() => (Array.isArray(stack.value?.engines) ? stack.value?.engines || [] : []));
-const stackStory = computed(() => (Array.isArray(stack.value?.system_story) ? stack.value?.system_story || [] : []));
-const stackActions = computed(() => (Array.isArray(stack.value?.priority_actions) ? stack.value?.priority_actions || [] : []));
-const periodCoverage = computed(() => dashboardStore.payload?.freshness?.period_summaries || []);
-const targetPoolCount = computed(() => dashboardStore.targets.length || summary.value?.target_pool_company_count || 0);
-const latestDisclosureLine = computed(() => {
-  const freshness = dashboardStore.payload?.freshness;
-  if (!freshness?.latest_official_disclosure) return '真实披露';
-  return `${freshness.latest_periodic_label || '年报'} 更新到 ${freshness.latest_official_disclosure}`;
-});
-
-const confidenceNotes = computed(() => {
-  if (!summary.value) return [];
-  const notes = [
-    `核心样本已覆盖 ${summary.value.official_report_downloaded_slots}/${summary.value.official_report_expected_slots}，主分析链路可以先围绕这些企业展开。`,
-    `扩展样本当前是 ${summary.value.universe_report_downloaded_slots}/${summary.value.universe_report_expected_slots}，后续大范围对比还要继续补齐。`,
-  ];
-  if (summary.value.multimodal_extract_coverage_ratio < 0.5) {
-    notes.push('图表补全还不够，遇到复杂图表型问题时需要谨慎引用。');
-  } else if (summary.value.universe_report_coverage_ratio < 0.9) {
-    notes.push('主样本可用，但扩展企业池还没有完全补齐。');
-  } else {
-    notes.push('核心样本、扩展样本和图表补全都已进入可用区间。');
-  }
-  return notes;
-});
-
-const multimodalFallbackCards = computed(() => {
-  if (!summary.value || recentExtracts.value.length) return [];
-  const backendLabel = summary.value.multimodal_backends.join(' / ') || '规则链路';
-  return [
-    {
-      title: '待补任务',
-      value: `${summary.value.issue_breakdown.multimodal_missing} 项`,
-      detail: '优先补齐核心样本年报中的复杂图表、经营分部表和风险提示页，避免复杂问题只剩文本结论。',
-    },
-    {
-      title: '当前引擎',
-      value: backendLabel,
-      detail: '这部分代表图表抽取将由哪些链路负责，后续要把多模态结果真正送进企业分析和对比证据流。',
-    },
-    {
-      title: '引用策略',
-      value: summary.value.multimodal_extract_coverage_ratio < 0.5 ? '谨慎引用' : '逐步放开',
-      detail: '在近期抽取样本为空时，页面直接展示治理优先级，避免控制塔区域出现空白。',
-    },
-  ];
-});
-
-const pendingWidth = computed(() => `${Math.min(100, Math.max(12, (summary.value?.pending_review_count || 0) * 10))}%`);
-
-function percent(value: number) {
+function percent(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '0%';
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function formatCount(value: number) {
-  return Intl.NumberFormat('zh-CN').format(value || 0);
+function formatReadiness(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'N/A';
+  return (value * 100).toFixed(0);
 }
 
-function formatExchange(value: string) {
-  const labels: Record<string, string> = { SSE: '上交所', SZSE: '深交所', BSE: '北交所' };
-  return labels[String(value || '').toUpperCase()] || value;
-}
-
-function formatLayer(value: string) {
-  const labels: Record<string, string> = {
-    bronze: 'Bronze 原始层',
-    silver: 'Silver 清洗层',
-    gold: 'Gold 主题层',
-  };
-  return labels[String(value || '').toLowerCase()] || value;
-}
-
-function exchangeWidth(item: ExchangeQualityStatus) {
-  if (!item.rows) return '8%';
-  return `${Math.max(10, (item.downloaded_rows / item.rows) * 100)}%`;
-}
-
-function multimodalFieldWidth(count: number) {
-  return `${Math.min(100, Math.max(12, count * 4))}%`;
-}
-
-function formatReadiness(value: number) {
-  return `${Math.round((value || 0) * 100)}`;
-}
-
-function readinessWidth(value: number) {
-  return `${Math.max(12, Math.min(100, (value || 0) * 100))}%`;
-}
-
-function formatYearList(values: number[]) {
-  if (!values.length) return '暂无';
-  return values.join(' / ');
+function scoreText(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '0.000';
+  return value.toFixed(3);
 }
 
 async function loadSummary() {
+  if (!authStore.canViewAudit) return;
   loading.value = true;
   try {
-    const [governanceSummary, qualitySummary, foundationSummary, preparationSummary, aiStack] = await Promise.all([
-      api.getQualityGovernance(),
+    const [qSum, qFou, qGov, qPre, rEval, sSum, wSum] = await Promise.all([
       api.getQualitySummary(),
       api.getQualityFoundation(),
+      api.getQualityGovernance(),
       api.getQualityPreparation(),
+      api.getRetrievalEvaluation(),
       api.getAIStack(),
-      dashboardStore.payload ? Promise.resolve(dashboardStore.payload) : dashboardStore.load(),
+      api.getWarehouseSummary(),
     ]);
-    governance.value = governanceSummary;
-    summary.value = qualitySummary;
-    foundation.value = foundationSummary;
-    preparation.value = preparationSummary;
-    stack.value = aiStack;
+    summary.value = qSum;
+    foundation.value = qFou;
+    governance.value = qGov;
+    preparation.value = qPre;
+    retrievalEvaluation.value = rEval;
+    stack.value = sSum;
+    warehouse.value = wSum;
+  } catch (error) {
+    console.warn(error);
   } finally {
     loading.value = false;
   }
@@ -780,3 +321,512 @@ onMounted(() => {
   void loadSummary();
 });
 </script>
+
+<style scoped>
+.v-document-page {
+  background: var(--bg-base);
+  min-height: 100vh;
+  padding: 40px 20px 100px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', -apple-system, sans-serif;
+}
+
+.v-doc-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.v-doc-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 60px;
+}
+
+.v-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.v-back-link:hover {
+  color: var(--text-primary);
+}
+
+.v-arrow {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+}
+
+.v-btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.v-btn-outline:hover:not(:disabled) {
+  background: var(--bg-surface-highlight);
+}
+
+.v-doc-header {
+  border-bottom: 2px solid var(--text-primary);
+  padding-bottom: 30px;
+  margin-bottom: 40px;
+}
+
+.v-doc-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  color: var(--text-primary);
+}
+
+.v-doc-subtitle {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.v-section-intro {
+  margin-bottom: 20px;
+  font-size: 15px;
+}
+
+.v-warning-banner {
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 16px 20px;
+  border-radius: 6px;
+}
+
+.v-warning-banner strong {
+  display: block;
+  color: #d97706;
+  font-size: 14px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v-warning-banner p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Loading */
+.v-loading-block {
+  padding: 80px 0;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.v-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--text-primary);
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: v-spin 1s linear infinite;
+}
+
+@keyframes v-spin {
+  to { transform: rotate(360deg); }
+}
+
+.v-section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  margin: 0 0 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v-doc-section {
+  margin-bottom: 60px;
+}
+
+/* Dashboard Summary */
+.v-export-dashboard {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 24px;
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.v-export-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.v-stat-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+}
+
+.v-stat-val {
+  font-size: 18px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.v-danger-text { color: var(--status-error) !important; }
+.v-warning-text { color: #d97706 !important; }
+.v-text-primary { color: var(--text-primary) !important; }
+.v-text-muted { color: var(--text-tertiary) !important; }
+
+/* Anomalies Grid */
+.v-anomaly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.v-anomaly-card {
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.v-anomaly-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.v-anomaly-head strong {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.v-anomaly-head span {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.v-anomaly-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Base Tables */
+.v-data-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.v-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.v-data-table th, .v-data-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+
+.v-data-table th {
+  background: var(--bg-surface-highlight);
+  color: var(--text-tertiary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v-data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.v-badge {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  background: var(--bg-surface-highlight);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  display: inline-block;
+}
+
+.v-badge.positive {
+  color: var(--brand-primary);
+  border-color: rgba(34,197,94,0.3);
+  background: rgba(34,197,94,0.05);
+}
+
+/* Stack Matrix */
+.v-stack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.v-retrieval-head {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.v-retrieval-mode {
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(247,248,250,0.98) 100%);
+}
+
+.v-retrieval-mode strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-retrieval-mode p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.v-retrieval-case-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.v-retrieval-case {
+  padding: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,249,251,0.98) 100%);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 12px;
+}
+
+.v-retrieval-case-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.v-retrieval-case-title {
+  margin: 6px 0 0;
+  font-size: 20px;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+}
+
+.v-retrieval-case-score {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--text-primary);
+}
+
+.v-retrieval-case-score.success {
+  background: rgba(15, 111, 40, 0.1);
+  color: #0f6f28;
+}
+
+.v-retrieval-case-score.warning {
+  background: rgba(180, 83, 9, 0.12);
+  color: #b45309;
+}
+
+.v-retrieval-case-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.v-retrieval-case-line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.v-stack-card {
+  padding: 24px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.v-stack-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.v-stack-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 8px 0 0;
+  color: var(--text-primary);
+}
+
+.v-stack-score {
+  text-align: right;
+}
+
+.v-stack-score strong {
+  display: block;
+  font-size: 24px;
+  font-family: var(--font-mono);
+  color: var(--brand-primary);
+  line-height: 1;
+}
+
+.v-stack-score span {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+}
+
+.v-stack-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+}
+
+.v-stack-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.v-stack-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 16px;
+}
+
+.v-stack-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.v-stack-line strong {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v-stack-line span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* SFT Cards */
+.v-export-split {
+  display: flex;
+}
+
+.v-download-card {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.v-dl-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.v-dl-info strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+
+.v-dl-info p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 900px) {
+  .v-export-dashboard {
+    grid-template-columns: 1fr 1fr;
+  }
+  .v-anomaly-grid {
+    grid-template-columns: 1fr;
+  }
+  .v-stack-grid {
+    grid-template-columns: 1fr;
+  }
+  .v-retrieval-case-list {
+    grid-template-columns: 1fr;
+  }
+  .v-export-split {
+    flex-direction: column;
+  }
+}
+</style>

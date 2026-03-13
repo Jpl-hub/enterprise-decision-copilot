@@ -250,3 +250,29 @@ class AutoReviewSyncResponse(BaseModel):
     skipped_count: int
     created: list[ManualReviewRecord] = Field(default_factory=list)
     summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class RetrievalEvalCaseResult(BaseModel):
+    case_id: str
+    scope: str
+    query: str
+    target_code: str | None = None
+    relevant_keywords: list[str] = Field(default_factory=list)
+    hit_at_3: bool = False
+    hit_at_5: bool = False
+    reciprocal_rank: float = 0.0
+    ndcg_at_5: float = 0.0
+    top_titles: list[str] = Field(default_factory=list)
+    matched_titles: list[str] = Field(default_factory=list)
+
+
+class RetrievalEvaluationSummaryResponse(BaseModel):
+    generated_at: str | None = None
+    case_count: int = 0
+    hit_at_3: float = 0.0
+    hit_at_5: float = 0.0
+    mrr: float = 0.0
+    ndcg_at_5: float = 0.0
+    retrieval_mode: str | None = None
+    strategy_labels: list[str] = Field(default_factory=list)
+    cases: list[RetrievalEvalCaseResult] = Field(default_factory=list)

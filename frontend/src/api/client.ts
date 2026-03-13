@@ -11,6 +11,7 @@ import type {
   DataFoundationSummaryResponse,
   DataGovernanceSummaryResponse,
   DataPreparationSummaryResponse,
+  RetrievalEvaluationSummaryResponse,
   DashboardPayload,
   DecisionBriefResponse,
   LoginResponse,
@@ -159,6 +160,9 @@ export const api = {
   },
   getQualityPreparation() {
     return request<DataPreparationSummaryResponse>('/api/quality/preparation');
+  },
+  getRetrievalEvaluation() {
+    return request<RetrievalEvaluationSummaryResponse>('/api/quality/retrieval-evaluation');
   },
   syncAutoReviews(limit = 12) {
     return request<{ created_count: number; skipped_count: number; created: Array<Record<string, unknown>>; summary: QualitySummaryResponse }>(`/api/quality/reviews/auto?limit=${limit}`, {

@@ -1,0 +1,42 @@
+[
+  {
+    "case_id": "company-300760-opportunity",
+    "scope": "company",
+    "company_code": "300760",
+    "query": "结合研报看迈瑞医疗的海外增长机会",
+    "relevant_keywords": ["迈瑞医疗", "海外", "增长"]
+  },
+  {
+    "case_id": "company-688271-risk",
+    "scope": "company",
+    "company_code": "688271",
+    "query": "联影医疗当前最需要警惕的经营风险是什么",
+    "relevant_keywords": ["联影医疗", "风险", "经营"]
+  },
+  {
+    "case_id": "company-600276-innovation",
+    "scope": "company",
+    "company_code": "600276",
+    "query": "恒瑞医药的创新药布局和研发投入怎么看",
+    "relevant_keywords": ["恒瑞医药", "创新", "研发"]
+  },
+  {
+    "case_id": "company-300015-cashflow",
+    "scope": "company",
+    "company_code": "300015",
+    "query": "爱尔眼科的现金流和扩张压力如何",
+    "relevant_keywords": ["爱尔眼科", "现金流", "扩张"]
+  },
+  {
+    "case_id": "industry-device-trend",
+    "scope": "industry",
+    "query": "医疗器械赛道最近的行业趋势和景气变化",
+    "relevant_keywords": ["医疗器械", "行业", "景气"]
+  },
+  {
+    "case_id": "industry-cxo-policy",
+    "scope": "industry",
+    "query": "CXO 赛道最近有哪些政策和景气信号",
+    "relevant_keywords": ["CXO", "政策", "景气"]
+  }
+]

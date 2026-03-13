@@ -3,13 +3,16 @@ from __future__ import annotations
 import csv
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from math import log2
 
 import pandas as pd
 
 from app.config import settings
 from app.data_access import load_targets
+from app.services.analytics import AnalyticsService
+from app.services.retrieval import RetrievalService
 
 
 @dataclass(slots=True)
@@ -51,6 +54,7 @@ class DataQualityService:
         self.inventory_path = inventory_path or (raw_official_dir / "report_inventory.csv")
         self.review_queue_path = review_queue_path or (review_dir / "manual_review_queue.csv")
         self.multimodal_extract_dir = multimodal_extract_dir or (settings.cache_dir / "official_extract_multimodal")
+        self.retrieval_eval_cases_path = settings.data_dir / "evals" / "retrieval_eval_cases.json"
         self.review_queue_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _read_csv(self, path: Path, dtype: dict[str, str] | None = None) -> pd.DataFrame:
@@ -222,6 +226,139 @@ class DataQualityService:
                 }
             )
         return records
+
+    def _read_retrieval_eval_cases(self) -> list[dict]:
+        if not self.retrieval_eval_cases_path.exists():
+            return []
+        try:
+            payload = json.loads(self.retrieval_eval_cases_path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        return payload if isinstance(payload, list) else []
+
+    def _row_matches_keywords(self, row: dict, keywords: list[str]) -> bool:
+        haystack = " ".join(
+            str(row.get(key) or "")
+            for key in ("title", "matched_excerpt", "institution", "industry_name", "source_url")
+        )
+        return any(keyword and keyword in haystack for keyword in keywords)
+
+    def _dcg_at_k(self, relevances: list[int], k: int) -> float:
+        score = 0.0
+        for idx, rel in enumerate(relevances[:k], start=1):
+            if rel <= 0:
+                continue
+            score += rel / log2(idx + 1)
+        return score
+
+    def get_retrieval_evaluation_summary(self) -> dict:
+        cases = self._read_retrieval_eval_cases()
+        if not cases:
+            return {
+                "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "case_count": 0,
+                "hit_at_3": 0.0,
+                "hit_at_5": 0.0,
+                "mrr": 0.0,
+                "ndcg_at_5": 0.0,
+                "retrieval_mode": "hybrid_tfidf_rerank",
+                "strategy_labels": ["char_tfidf", "word_tfidf", "entity_expansion", "keyword_overlap", "recency_rerank"],
+                "cases": [],
+            }
+
+        analytics = AnalyticsService()
+        retrieval = RetrievalService(analytics)
+        case_results: list[dict] = []
+        hit3_total = 0
+        hit5_total = 0
+        rr_total = 0.0
+        ndcg_total = 0.0
+        retrieval_mode = None
+        strategy_labels: list[str] = []
+
+        for raw_case in cases:
+            case_id = str(raw_case.get("case_id") or "").strip()
+            scope = str(raw_case.get("scope") or "company").strip()
+            query = str(raw_case.get("query") or "").strip()
+            target_code = str(raw_case.get("company_code") or "").strip() or None
+            relevant_keywords = [str(item).strip() for item in list(raw_case.get("relevant_keywords") or []) if str(item).strip()]
+            if not case_id or not query or not relevant_keywords:
+                continue
+
+            if scope == "company" and target_code:
+                result = retrieval.retrieve_company_evidence(target_code, query, limit=5)
+                rows = list(result.get("stock_reports") or []) + list(result.get("industry_reports") or [])
+            else:
+                result = retrieval.retrieve_industry_evidence(query, limit=5)
+                rows = list(result.get("industry_reports") or [])
+
+            if retrieval_mode is None:
+                profile = result.get("query_profile") or {}
+                retrieval_mode = str(profile.get("retrieval_mode") or "hybrid_tfidf_rerank")
+                strategy_labels = [str(item) for item in list(profile.get("strategy_labels") or []) if str(item)]
+
+            relevances = [1 if self._row_matches_keywords(row, relevant_keywords) else 0 for row in rows]
+            hit_at_3 = any(relevances[:3])
+            hit_at_5 = any(relevances[:5])
+            reciprocal_rank = 0.0
+            for idx, rel in enumerate(relevances, start=1):
+                if rel:
+                    reciprocal_rank = 1.0 / idx
+                    break
+            dcg = self._dcg_at_k(relevances, 5)
+            ideal_rels = sorted(relevances, reverse=True)
+            idcg = self._dcg_at_k(ideal_rels, 5) or 1.0
+            ndcg = dcg / idcg
+
+            hit3_total += int(hit_at_3)
+            hit5_total += int(hit_at_5)
+            rr_total += reciprocal_rank
+            ndcg_total += ndcg
+            case_results.append(
+                {
+                    "case_id": case_id,
+                    "scope": scope,
+                    "query": query,
+                    "target_code": target_code,
+                    "relevant_keywords": relevant_keywords,
+                    "hit_at_3": hit_at_3,
+                    "hit_at_5": hit_at_5,
+                    "reciprocal_rank": round(reciprocal_rank, 4),
+                    "ndcg_at_5": round(ndcg, 4),
+                    "top_titles": [str(row.get("title") or "未命名证据").strip() for row in rows[:5]],
+                    "matched_titles": [
+                        str(row.get("title") or "未命名证据").strip()
+                        for row, rel in zip(rows[:5], relevances[:5], strict=False)
+                        if rel
+                    ],
+                }
+            )
+
+        case_count = len(case_results)
+        if case_count == 0:
+            return {
+                "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "case_count": 0,
+                "hit_at_3": 0.0,
+                "hit_at_5": 0.0,
+                "mrr": 0.0,
+                "ndcg_at_5": 0.0,
+                "retrieval_mode": retrieval_mode or "hybrid_tfidf_rerank",
+                "strategy_labels": strategy_labels,
+                "cases": [],
+            }
+
+        return {
+            "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "case_count": case_count,
+            "hit_at_3": round(hit3_total / case_count, 4),
+            "hit_at_5": round(hit5_total / case_count, 4),
+            "mrr": round(rr_total / case_count, 4),
+            "ndcg_at_5": round(ndcg_total / case_count, 4),
+            "retrieval_mode": retrieval_mode or "hybrid_tfidf_rerank",
+            "strategy_labels": strategy_labels,
+            "cases": case_results,
+        }
 
     def get_multimodal_extract_summary(self) -> dict:
         extracts = self._load_multimodal_extracts()

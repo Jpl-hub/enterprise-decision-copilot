@@ -112,6 +112,7 @@ class AgentWorkflow:
         if context.intent == AgentIntent.COMPANY_COMPARE:
             context.add_plan('确认对比范围', '确认参与对比的企业集合，并统一年度口径。')
             context.add_plan('抽取横向证据', '抽取多家企业的财报、研报与风险信号进行横向比对。')
+            context.add_plan('形成胜负判断', '归并维度差异、风险差距和证据锚点，输出赢家结论。')
         elif context.intent == AgentIntent.DATA_QUALITY:
             context.add_plan('检查数据覆盖', '检查官方财报覆盖、多模态抽取和异常分布。')
             context.add_plan('整理待处理问题', '汇总自动检测出的异常和缺口，识别优先处理的问题。')
@@ -121,10 +122,13 @@ class AgentWorkflow:
         elif context.intent in {AgentIntent.COMPANY_DECISION_BRIEF, AgentIntent.COMPANY_REPORT, AgentIntent.COMPANY_DIAGNOSIS}:
             context.add_plan('汇总企业证据', '汇总企业财报、研报和趋势证据。')
             context.add_plan('形成经营判断', '形成经营判断、风险机会和建议动作。')
+            context.add_plan('绑定证据锚点', '把财报页图、研报摘要与原始链接绑定到结论上。')
         elif context.intent == AgentIntent.INDUSTRY_TREND:
             context.add_plan('整理行业资料', '聚合行业研报与宏观指标，识别景气与主题变化。')
+            context.add_plan('输出赛道判断', '抽取行业主题、景气变化和宏观脉冲。')
         elif context.intent == AgentIntent.OVERVIEW:
             context.add_plan('汇总全局信息', '汇总样本企业、研报覆盖和宏观摘要。')
+            context.add_plan('识别优先动作', '识别值得深挖的企业对象与后续问题。')
         else:
             context.add_plan('问题引导', '回退到默认引导，帮助用户锁定企业与任务。')
 
@@ -140,6 +144,7 @@ class AgentWorkflow:
         matches = self.analytics_service.find_company_matches(cleaned_question) if cleaned_question else []
         context = WorkflowContext(question=execution_question, matches=matches)
         preferred_intent = self._resolve_preferred_task_mode(preferred_task_mode)
+        route_candidates: list[dict] = []
         context.add_plan('接收问题', '接收用户问题并准备识别企业对象。')
         if matches:
             matched_names = '、'.join(match['company_name'] for match in matches)
@@ -152,6 +157,14 @@ class AgentWorkflow:
         if not cleaned_question:
             context.intent = AgentIntent.FALLBACK
             context.add_plan('判断任务类型', '问题为空，进入默认引导。')
+            route_candidates = [
+                {
+                    'intent': AgentIntent.FALLBACK.value,
+                    'label': self._intent_label(AgentIntent.FALLBACK),
+                    'score': 10.0,
+                    'reasons': ['问题为空，进入默认引导'],
+                }
+            ]
         elif not self.analytics_service.has_ready_data():
             status = self.analytics_service.get_pipeline_status()
             context.add_trace(
@@ -188,8 +201,26 @@ class AgentWorkflow:
                 context.intent = preferred_intent
                 context.add_plan('判断任务类型', f"已按任务模式进入：{self._intent_label(context.intent)}。")
                 context.add_trace('任务识别', f"当前由任务模式指定为：{self._intent_label(context.intent)}。")
+                route_candidates = [
+                    {
+                        'intent': context.intent.value,
+                        'label': self._intent_label(context.intent),
+                        'score': 10.0,
+                        'reasons': ['由界面任务模式直接指定'],
+                    }
+                ]
             else:
-                detected_intent = self.intent_router.detect_intent(cleaned_question, matches)
+                scored_candidates = self.intent_router.score_intents(cleaned_question, matches)
+                route_candidates = [
+                    {
+                        'intent': item['intent'].value,
+                        'label': self._intent_label(item['intent']),
+                        'score': item['score'],
+                        'reasons': item['reasons'],
+                    }
+                    for item in scored_candidates[:3]
+                ]
+                detected_intent = scored_candidates[0]['intent']
                 resolved_intent, adopted_context = self._resolve_contextual_intent(
                     cleaned_question,
                     matches,
@@ -197,6 +228,12 @@ class AgentWorkflow:
                     context_task_mode,
                 )
                 context.intent = resolved_intent
+                if route_candidates:
+                    top = route_candidates[0]
+                    context.add_trace(
+                        '路由依据',
+                        f"首选 {top['label']}，评分 {top['score']}，依据：{'；'.join(top['reasons']) or '默认规则'}。",
+                    )
                 if adopted_context:
                     context.add_plan('承接上下文', f"本轮问题未显式改任务，继续沿用上一轮：{self._intent_label(context.intent)}。")
                     context.add_trace('承接上下文', f"沿用线程上一轮任务模式：{self._intent_label(context.intent)}。")
@@ -224,6 +261,7 @@ class AgentWorkflow:
         payload['skill_label'] = skill.label if skill is not None else None
         payload['stage_label'] = stage_label
         payload['deliverables'] = deliverables
+        payload['route_candidates'] = route_candidates
         return payload
 
 

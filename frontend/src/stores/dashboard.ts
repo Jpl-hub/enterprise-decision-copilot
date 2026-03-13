@@ -17,8 +17,14 @@ export const useDashboardStore = defineStore('dashboard', {
   }),
   getters: {
     targets(state) {
-      return state.payload?.targets || [];
+      return state.payload?.company_pool || state.payload?.targets || [];
     },
+    systemStatusTagline(state) {
+      return state.payload?.system_status_tagline || null;
+    },
+    homeSummary(state) {
+      return state.payload?.home_summary || null;
+    }
   },
   actions: {
     async load() {

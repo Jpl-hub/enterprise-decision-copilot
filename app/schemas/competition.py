@@ -27,10 +27,13 @@ class CompetitionPackageResponse(BaseModel):
     question: str
     exported_at: str
     summary: str
+    brief_verdict: str | None = None
+    risk_level: str | None = None
     citation_count: int
     export_dir: str | None = None
     markdown_path: str | None = None
     evidence_path: str | None = None
+    evidence_digest: dict[str, Any] = Field(default_factory=dict)
     sections: list[CompetitionPackageSection] = Field(default_factory=list)
     citations: list[CompetitionCitation] = Field(default_factory=list)
     quality_snapshot: dict[str, Any] = Field(default_factory=dict)

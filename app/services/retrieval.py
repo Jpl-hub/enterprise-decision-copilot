@@ -287,6 +287,33 @@ class RetrievalService:
             return 0.02
         return round(((ordinal - min_ord) / (max_ord - min_ord)) * 0.08, 4)
 
+    def _build_ranking_breakdown(
+        self,
+        *,
+        char_score: float,
+        word_score: float,
+        hybrid_score: float,
+        keyword_boost: float,
+        date_boost: float,
+        sentiment_boost: float,
+        entity_boost: float,
+        rerank_score: float,
+        matched_terms: list[str],
+        query_variants: list[str],
+    ) -> dict:
+        return {
+            "char_score": round(float(char_score), 4),
+            "word_score": round(float(word_score), 4),
+            "hybrid_score": round(float(hybrid_score), 4),
+            "keyword_boost": round(float(keyword_boost), 4),
+            "recency_boost": round(float(date_boost), 4),
+            "sentiment_boost": round(float(sentiment_boost), 4),
+            "entity_boost": round(float(entity_boost), 4),
+            "rerank_score": round(float(rerank_score), 4),
+            "matched_terms": matched_terms[:6],
+            "query_variant_count": len(query_variants),
+        }
+
     def _hybrid_scores(self, index: CorpusIndex, query_variants: list[str]) -> tuple[np.ndarray, np.ndarray]:
         chunk_count = len(index.chunk_frame)
         char_scores = np.zeros(chunk_count, dtype=float)
@@ -385,6 +412,19 @@ class RetrievalService:
             report_row["relevance_score"] = round(hybrid_score, 4)
             report_row["rerank_score"] = rerank_score
             report_row["ranking_signals"] = signals
+            report_row["matched_terms"] = matched_terms[:6]
+            report_row["ranking_breakdown"] = self._build_ranking_breakdown(
+                char_score=float(char_scores[chunk_idx]),
+                word_score=float(word_scores[chunk_idx]),
+                hybrid_score=hybrid_score,
+                keyword_boost=keyword_boost,
+                date_boost=date_boost,
+                sentiment_boost=sentiment_boost,
+                entity_boost=entity_boost,
+                rerank_score=rerank_score,
+                matched_terms=matched_terms,
+                query_variants=query_variants,
+            )
             selected_reports.append(report_row)
             if len(selected_reports) >= limit:
                 break
@@ -416,6 +456,14 @@ class RetrievalService:
             "query_terms": query_terms,
             "expansion_terms": expansion_terms,
             "query_variants": self._build_query_variants(query, expansion_terms=expansion_terms),
+            "retrieval_mode": "hybrid_tfidf_rerank",
+            "strategy_labels": [
+                "char_tfidf",
+                "word_tfidf",
+                "entity_expansion",
+                "keyword_overlap",
+                "recency_rerank",
+            ],
         }
         return {
             "query": query,
@@ -432,6 +480,13 @@ class RetrievalService:
             "query_terms": query_terms,
             "expansion_terms": query_terms[:3],
             "query_variants": self._build_query_variants(query, expansion_terms=query_terms[:3]),
+            "retrieval_mode": "hybrid_tfidf_rerank",
+            "strategy_labels": [
+                "char_tfidf",
+                "word_tfidf",
+                "keyword_overlap",
+                "recency_rerank",
+            ],
         }
         return {
             "query": query,

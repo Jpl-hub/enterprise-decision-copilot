@@ -9,6 +9,7 @@ from app.schemas.quality import (
     DataGovernanceSummaryResponse,
     DataPreparationSummaryResponse,
     DataQualitySummaryResponse,
+    RetrievalEvaluationSummaryResponse,
     ManualReviewRequest,
     ManualReviewSubmitResponse,
 )
@@ -45,6 +46,13 @@ async def get_governance_summary(
     quality_service: DataQualityService = Depends(get_quality_service),
 ) -> dict:
     return quality_service.get_governance_summary()
+
+
+@router.get("/retrieval-evaluation", response_model=RetrievalEvaluationSummaryResponse)
+async def get_retrieval_evaluation_summary(
+    quality_service: DataQualityService = Depends(get_quality_service),
+) -> dict:
+    return quality_service.get_retrieval_evaluation_summary()
 
 
 @router.post("/reviews", response_model=ManualReviewSubmitResponse)

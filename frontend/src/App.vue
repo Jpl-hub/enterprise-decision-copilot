@@ -11,10 +11,12 @@
           <h1>企智策源</h1>
           <span class="brand-pill">智能体·数据·模型</span>
         </div>
+        <p class="brand-subline">企业运营分析与决策支持系统</p>
       </div>
 
       <nav class="top-nav refined-top-nav">
         <RouterLink to="/" class="nav-chip" exact-active-class="nav-chip-exact-active">开始分析</RouterLink>
+        <RouterLink to="/board" class="nav-chip">态势总览</RouterLink>
         <RouterLink to="/workbench" class="nav-chip">企业分析</RouterLink>
         <RouterLink to="/compare" class="nav-chip">企业对比</RouterLink>
         <RouterLink to="/quality" class="nav-chip">数据治理</RouterLink>

@@ -92,6 +92,31 @@ class CompetitionReportService:
     def _company_quality_snapshot(self, company_code: str) -> dict:
         return self.quality_service.get_company_quality_snapshot(company_code)
 
+    def _build_evidence_digest(self, report: dict, brief: dict, risk: dict, quality_snapshot: dict) -> dict[str, Any]:
+        report_evidence = report.get("evidence", {}) or {}
+        brief_evidence = brief.get("evidence", {}) or {}
+        risk_evidence = risk.get("evidence", {}) or {}
+        multimodal = report_evidence.get("multimodal_digest", {}) or {}
+        company_anomalies = quality_snapshot.get("company_anomalies", []) or []
+        company_review_queue = quality_snapshot.get("company_review_queue", []) or []
+        return {
+            "multimodal_field_count": int(multimodal.get("filled_field_count") or 0),
+            "multimodal_page_count": len(multimodal.get("page_asset_links", []) or []),
+            "semantic_stock_count": len(brief_evidence.get("semantic_stock_reports", []) or []),
+            "semantic_industry_count": len(brief_evidence.get("semantic_industry_reports", []) or []),
+            "official_source_url": report_evidence.get("financial_source_url"),
+            "query_terms": list(brief_evidence.get("query_terms", []) or [])[:6],
+            "pending_review_count": int(quality_snapshot.get("pending_review_count") or 0),
+            "company_anomaly_count": len(company_anomalies),
+            "company_review_queue_count": len(company_review_queue),
+            "risk_driver_count": len(risk.get("drivers", []) or []),
+            "risk_monitor_count": len(risk.get("monitoring_items", []) or []),
+            "latest_periodic_label": brief_evidence.get("latest_periodic_label") or risk_evidence.get("latest_periodic_label"),
+            "latest_official_disclosure": (
+                brief_evidence.get("latest_official_disclosure") or risk_evidence.get("latest_official_disclosure")
+            ),
+        }
+
     def _refs(self, citations: list[dict], start: int = 0, limit: int = 2) -> str:
         selected = citations[start : start + limit]
         if not selected:
@@ -208,6 +233,7 @@ class CompetitionReportService:
 
         citations = self._build_citations(report, brief)
         quality_snapshot = self._company_quality_snapshot(company_code)
+        evidence_digest = self._build_evidence_digest(report, brief, risk, quality_snapshot)
         exported_at = datetime.now().isoformat(timespec="seconds")
         package = {
             "company_code": str(company_code),
@@ -215,9 +241,12 @@ class CompetitionReportService:
             "report_year": int(report["report_year"]),
             "question": question,
             "exported_at": exported_at,
-            "summary": brief["summary"],
+            "summary": brief.get("executive_summary") or brief["summary"],
+            "brief_verdict": brief.get("verdict"),
+            "risk_level": risk.get("risk_level"),
             "sections": self._build_sections(report, brief, risk, quality_snapshot, citations),
             "citations": citations,
+            "evidence_digest": evidence_digest,
             "quality_snapshot": quality_snapshot,
             "report": report,
             "brief": brief,
@@ -245,6 +274,9 @@ class CompetitionReportService:
                         "report_year": package["report_year"],
                         "question": package["question"],
                         "exported_at": package["exported_at"],
+                        "brief_verdict": package.get("brief_verdict"),
+                        "risk_level": package.get("risk_level"),
+                        "evidence_digest": evidence_digest,
                         "quality_snapshot": quality_snapshot,
                         "citations": citations,
                         "report": report,
