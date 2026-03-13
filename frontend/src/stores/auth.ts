@@ -2,7 +2,6 @@ import { defineStore } from 'pinia';
 
 import { api } from '../api/client';
 import type { AuthUser } from '../api/types';
-import { clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from '../utils/auth';
 
 interface AuthState {
   user: AuthUser | null;
@@ -20,7 +19,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAuthenticated(state) {
-      return Boolean(state.user && getStoredAuthToken());
+      return Boolean(state.user);
     },
     role(state) {
       return state.user?.role || 'viewer';
@@ -41,18 +40,16 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     async restoreSession() {
       if (this.ready) return;
-      const token = getStoredAuthToken();
-      if (!token) {
-        this.ready = true;
-        return;
-      }
       this.loading = true;
+      this.error = null;
       try {
         this.user = await api.getMe();
       } catch (error) {
-        clearStoredAuthToken();
         this.user = null;
-        this.error = error instanceof Error ? error.message : '登录状态恢复失败';
+        const message = error instanceof Error ? error.message : '登录状态恢复失败';
+        if (message !== '登录状态已失效，请重新登录。' && message !== '请先登录。') {
+          this.error = message;
+        }
       } finally {
         this.loading = false;
         this.ready = true;
@@ -63,7 +60,6 @@ export const useAuthStore = defineStore('auth', {
       this.error = null;
       try {
         const payload = await api.login(username, password);
-        setStoredAuthToken(payload.token);
         this.user = payload.user;
         this.ready = true;
       } catch (error) {
@@ -85,11 +81,8 @@ export const useAuthStore = defineStore('auth', {
     },
     async logout() {
       try {
-        if (getStoredAuthToken()) {
-          await api.logout();
-        }
+        await api.logout();
       } finally {
-        clearStoredAuthToken();
         this.user = null;
         this.ready = true;
       }

@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     vision_llm_model: str = "Qwen/Qwen2.5-VL-72B-Instruct"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     auth_token_ttl_hours: int = 72
+    auth_cookie_name: str = "edc_session"
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: str = "lax"
+    auth_cookie_domain: str = ""
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

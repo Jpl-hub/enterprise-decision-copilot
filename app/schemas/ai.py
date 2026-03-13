@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AIHeadlineMetric(BaseModel):
@@ -10,6 +10,8 @@ class AIHeadlineMetric(BaseModel):
 
 
 class AIEngineMetricSet(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     sample_count: int | None = None
     roc_auc: float | None = None
     model_type: str | None = None

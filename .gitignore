@@ -26,6 +26,7 @@ data/quality/
 data/test_exports/
 data/test_models/
 data/test_quality/
+data/test_*/
 data/test_temp/
 data/test_universe/
 data/test_warehouse/

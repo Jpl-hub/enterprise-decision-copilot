@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
 
 import AuditView from '../views/AuditView.vue';
 import BoardView from '../views/BoardView.vue';
@@ -9,7 +10,6 @@ import OverviewView from '../views/OverviewView.vue';
 import QualityCenterView from '../views/QualityCenterView.vue';
 import ThreadsView from '../views/ThreadsView.vue';
 import WorkbenchView from '../views/WorkbenchView.vue';
-import { getStoredAuthToken } from '../utils/auth';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -29,12 +29,16 @@ export const router = createRouter({
   },
 });
 
-router.beforeEach((to) => {
-  const hasToken = Boolean(getStoredAuthToken());
-  if (to.name !== 'login' && to.meta.requiresAuth && !hasToken) {
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore();
+  if (!authStore.ready) {
+    await authStore.restoreSession();
+  }
+
+  if (to.name !== 'login' && to.meta.requiresAuth && !authStore.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } };
   }
-  if (to.name === 'login' && hasToken) {
+  if (to.name === 'login' && authStore.isAuthenticated) {
     return { name: 'overview' };
   }
   return true;

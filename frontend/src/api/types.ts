@@ -81,7 +81,6 @@ export interface AuthUser {
 }
 
 export interface LoginResponse {
-  token: string;
   expires_at: string;
   user: AuthUser;
 }
@@ -116,7 +115,6 @@ export interface AuthUser {
 }
 
 export interface LoginResponse {
-  token: string;
   expires_at: string;
   user: AuthUser;
 }

@@ -25,24 +25,18 @@ import type {
   WarehouseOverviewResponse,
   WarehouseSummaryResponse,
 } from './types';
-import { clearStoredAuthToken, getStoredAuthToken } from '../utils/auth';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getStoredAuthToken();
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers || {}),
     },
     ...init,
   });
-
-  if (response.status === 401) {
-    clearStoredAuthToken();
-  }
 
   if (!response.ok) {
     let message = `请求失败（${response.status}）`;

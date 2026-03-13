@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Cookie, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.config import settings
 from app.core.container import ServiceContainer
 from app.services.agent import AgentService
 from app.services.ai_stack import AIStackService
@@ -42,6 +43,19 @@ def get_auth_service(container: ServiceContainer = Depends(get_container)) -> Au
 
 
 
+def get_request_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    cookie_token: str | None = Cookie(default=None, alias=settings.auth_cookie_name),
+) -> str | None:
+    if credentials is not None and credentials.scheme.lower() == 'bearer':
+        return credentials.credentials
+    if cookie_token:
+        return cookie_token
+    return request.cookies.get(settings.auth_cookie_name)
+
+
+
 def get_audit_service(container: ServiceContainer = Depends(get_container)) -> AuditService:
     return container.audit_service
 
@@ -58,12 +72,12 @@ def get_ai_stack_service(container: ServiceContainer = Depends(get_container)) -
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Depends(get_request_token),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    if credentials is None or credentials.scheme.lower() != 'bearer':
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='请先登录。')
-    return auth_service.get_user_by_token(credentials.credentials)
+    return auth_service.get_user_by_token(token)
 
 
 
