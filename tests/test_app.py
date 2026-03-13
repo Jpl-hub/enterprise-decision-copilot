@@ -33,6 +33,7 @@ def test_dashboard_payload_has_targets() -> None:
     assert payload["home_summary"]
     assert payload["company_pool"][0]["tags"]
     assert "freshness" in payload
+    assert payload["data_authenticity"]["real_data_only"] is True
 
 
 def test_dashboard_payload_exposes_freshness_summary() -> None:
@@ -72,6 +73,8 @@ def test_company_report_has_sections() -> None:
     assert any(item["evidence_type"] == "image" for item in report["evidence"]["evidences"])
     assert "is_stale_data" in report["evidence"]
     assert "missing_expected_full_year_report" in report["evidence"]
+    assert report["data_authenticity"]["real_data_only"] is True
+    assert "financial" in report["data_authenticity"]["source_types_present"]
 
 
 def test_company_compare_has_dimensions_and_evidence() -> None:
@@ -88,6 +91,7 @@ def test_company_compare_has_dimensions_and_evidence() -> None:
     assert comparison["evidence"]["freshness"]["latest_official_disclosure"]
     assert comparison["evidence"]["companies"][0]["freshness_digest"]["annual_report_year"]
     assert comparison["evidence"]["companies"][0]["multimodal_digest"]["filled_field_count"] >= 1
+    assert comparison["data_authenticity"]["real_data_only"] is True
 
 
 def test_agent_can_generate_company_report() -> None:
@@ -108,6 +112,8 @@ def test_agent_api_returns_execution_trace() -> None:
     assert any(step["step"] == "选择分析路径" for step in payload["plan"])
     assert payload["route_candidates"]
     assert payload["route_candidates"][0]["intent"] == "company_compare"
+    assert payload["data_authenticity"]["real_data_only"] is True
+    assert payload["execution_digest"]["trust_status"] == "trusted"
 
 
 def test_company_trend_digest_has_multi_year_metrics() -> None:

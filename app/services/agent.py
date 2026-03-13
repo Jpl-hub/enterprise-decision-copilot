@@ -15,15 +15,23 @@ from app.agents.models import ThreadMessage
 from app.agents.workflow import AgentWorkflow
 from app.db import get_connection, init_db
 from app.services.audit import AuditService
+from app.services.data_authenticity import DataAuthenticityService
 
 logger = logging.getLogger(__name__)
 
 
 class AgentService:
-    def __init__(self, workflow: AgentWorkflow, audit_service: AuditService | None = None, db_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        workflow: AgentWorkflow,
+        audit_service: AuditService | None = None,
+        db_path: Path | None = None,
+        data_authenticity_service: DataAuthenticityService | None = None,
+    ) -> None:
         self.workflow = workflow
         self.audit_service = audit_service
         self.db_path = db_path
+        self.data_authenticity_service = data_authenticity_service or DataAuthenticityService()
         init_db(db_path)
         self.follow_up_keywords = ('展开', '详细', '具体', '继续', '补充', '细说', '往下', '再说', '怎么看', '怎么做')
         self.supports_routing_question = 'routing_question' in inspect.signature(workflow.execute).parameters
@@ -204,6 +212,11 @@ class AgentService:
 
     def _build_execution_digest(self, payload: dict[str, Any]) -> dict[str, Any]:
         evidence = dict(payload.get('evidence') or {})
+        data_authenticity = self.data_authenticity_service.summarize_evidence(
+            evidence,
+            required_source_types=self.data_authenticity_service.infer_required_source_types(evidence),
+            scope_label='Agent交付结果',
+        )
         unified_evidence = list(evidence.get('evidences') or [])
         evidence_types = []
         for item in unified_evidence:
@@ -230,6 +243,8 @@ class AgentService:
             'route_score': float(top_route.get('score')) if top_route and top_route.get('score') is not None else None,
             'trace_step_count': len(list(payload.get('trace') or [])),
             'plan_step_count': len(list(payload.get('plan') or [])),
+            'real_data_only': bool(data_authenticity.get('real_data_only')),
+            'trust_status': str(data_authenticity.get('trust_status') or 'limited'),
         }
 
     def _build_thread_memory(self, payload: dict[str, Any], thread: dict) -> dict[str, Any] | None:
@@ -535,6 +550,11 @@ class AgentService:
         payload['thread_summary'] = thread.get('thread_summary')
         payload['thread_memory'] = thread.get('thread_memory')
         payload['execution_digest'] = (thread.get('thread_memory') or {}).get('execution_digest')
+        payload['data_authenticity'] = self.data_authenticity_service.summarize_evidence(
+            dict(payload.get('evidence') or {}),
+            required_source_types=self.data_authenticity_service.infer_required_source_types(dict(payload.get('evidence') or {})),
+            scope_label='Agent交付结果',
+        )
         payload['thread_messages'] = [item.as_dict() for item in self._list_messages(thread['thread_id'], limit=8)]
         return payload
 

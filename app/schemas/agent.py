@@ -56,6 +56,8 @@ class AgentExecutionDigest(BaseModel):
     route_score: float | None = None
     trace_step_count: int = 0
     plan_step_count: int = 0
+    real_data_only: bool = False
+    trust_status: str = 'limited'
 
 
 class AgentThreadSummary(BaseModel):
@@ -106,4 +108,5 @@ class AgentResponse(BaseModel):
     thread_summary: str | None = None
     thread_memory: AgentThreadMemory | None = None
     execution_digest: AgentExecutionDigest | None = None
+    data_authenticity: dict[str, Any] = Field(default_factory=dict)
     thread_messages: list[AgentThreadMessage] = Field(default_factory=list)

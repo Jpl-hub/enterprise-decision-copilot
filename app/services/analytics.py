@@ -17,6 +17,7 @@ from app.data_access import (
     load_research_reports,
     load_targets,
 )
+from app.services.data_authenticity import DataAuthenticityService
 
 
 @dataclass(slots=True)
@@ -143,6 +144,7 @@ class AnalyticsService:
         self.macro = load_macro_indicators().copy()
         self.official_periodic_snapshots = load_official_periodic_snapshots().copy()
         self.multimodal_extracts = load_multimodal_extracts().copy()
+        self.data_authenticity_service = DataAuthenticityService()
 
     def _filled_multimodal_fields(self, payload: dict) -> int:
         filled = 0
@@ -766,7 +768,7 @@ class AnalyticsService:
         macro["period"] = macro["period"].astype(str)
         latest_period = sorted(macro["period"].unique().tolist(), key=_period_sort_key)[-1]
         latest = macro[macro["period"] == latest_period].copy()
-        items = latest[["indicator_name", "indicator_value", "unit"]].to_dict("records")
+        items = latest[["indicator_name", "indicator_value", "unit", "source_url"]].to_dict("records")
         return {"latest_period": latest_period, "items": items}
 
     def get_industry_overview(self) -> dict:
@@ -899,6 +901,26 @@ class AnalyticsService:
             for item in macro.get("items", [])[:3]
         ) or "宏观指标待补充。"
         trend = self.get_company_trend_digest(company_code)
+        evidence = {
+            "financial_source_url": row.get("source_url"),
+            "multimodal_digest": multimodal,
+            "research_reports": research.get("latest_rows", []),
+            "industry_reports": industry.get("latest_rows", []),
+            "macro_items": macro.get("items", []),
+            "trend_digest": trend,
+            "evidences": self._build_unified_evidences(
+                financial_source_url=row.get("source_url"),
+                multimodal=multimodal,
+                stock_reports=research.get("latest_rows", []),
+                industry_reports=industry.get("latest_rows", []),
+            ),
+            **freshness,
+        }
+        data_authenticity = self.data_authenticity_service.summarize_evidence(
+            evidence,
+            required_source_types=['financial', 'research', 'macro'],
+            scope_label=f"{row['company_name']}企业报告",
+        )
 
         return {
             "company_code": str(company_code),
@@ -941,21 +963,8 @@ class AnalyticsService:
             ],
             "strengths": strengths,
             "risks": risks,
-            "evidence": {
-                "financial_source_url": row.get("source_url"),
-                "multimodal_digest": multimodal,
-                "research_reports": research.get("latest_rows", []),
-                "industry_reports": industry.get("latest_rows", []),
-                "macro_items": macro.get("items", []),
-                "trend_digest": trend,
-                "evidences": self._build_unified_evidences(
-                    financial_source_url=row.get("source_url"),
-                    multimodal=multimodal,
-                    stock_reports=research.get("latest_rows", []),
-                    industry_reports=industry.get("latest_rows", []),
-                ),
-                **freshness,
-            },
+            "evidence": evidence,
+            "data_authenticity": data_authenticity,
         }
 
     def compare_companies(self, company_codes: list[str]) -> dict | None:
@@ -1321,6 +1330,12 @@ class AnalyticsService:
             f"盈利优势体现在 {profit_dimension['winner_company_name']}，"
             f"成长弹性则由 {growth_dimension['winner_company_name']} 更突出。"
         )
+        evidence = {"companies": evidence_rows, "freshness": freshness_summary}
+        data_authenticity = self.data_authenticity_service.summarize_evidence(
+            evidence,
+            required_source_types=['financial', 'research'],
+            scope_label='企业对比结果',
+        )
 
         return {
             "report_year": report_year,
@@ -1332,7 +1347,8 @@ class AnalyticsService:
             "scorecards": scorecards,
             "dimensions": dimensions,
             "battlecards": battlecards,
-            "evidence": {"companies": evidence_rows, "freshness": freshness_summary},
+            "evidence": evidence,
+            "data_authenticity": data_authenticity,
         }
 
     def get_dashboard_payload(self) -> dict:
@@ -1349,6 +1365,13 @@ class AnalyticsService:
                 "ranking": [],
                 "watchlist": [],
                 "macro": [],
+                "data_authenticity": self.data_authenticity_service.summarize_frames(
+                    financials=self.financials,
+                    research_reports=self.reports,
+                    industry_reports=self.industry_reports,
+                    macro=self.macro,
+                    scope_label='系统数据底座',
+                ),
             }
         snapshot = self.latest_snapshot()
         leader = snapshot.iloc[0]
@@ -1387,6 +1410,13 @@ class AnalyticsService:
             "ranking": ranking.to_dict("records"),
             "watchlist": watchlist[["company_code", "company_name", "risk_level", "risk_flags"]].to_dict("records"),
             "macro": macro,
+            "data_authenticity": self.data_authenticity_service.summarize_frames(
+                financials=self.financials,
+                research_reports=self.reports,
+                industry_reports=self.industry_reports,
+                macro=self.macro,
+                scope_label='系统数据底座',
+            ),
         }
 
     def find_company_matches(self, text: str) -> list[dict]:

@@ -79,3 +79,4 @@ class CompanyCompareResponse(BaseModel):
     dimensions: list[ComparisonDimension] = Field(default_factory=list)
     battlecards: list[ComparisonBattlecard] = Field(default_factory=list)
     evidence: dict[str, Any] = Field(default_factory=dict)
+    data_authenticity: dict[str, Any] = Field(default_factory=dict)

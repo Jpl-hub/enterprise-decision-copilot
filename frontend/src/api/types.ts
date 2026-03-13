@@ -189,6 +189,7 @@ export interface DashboardPayload {
   ranking: Array<Record<string, unknown>>;
   watchlist: Array<Record<string, unknown>>;
   macro: Array<Record<string, unknown>>;
+  data_authenticity?: Record<string, unknown>;
 }
 
 export interface EvidenceItem {
@@ -271,6 +272,7 @@ export interface CompanyReportResponse {
   evidence: {
     evidences?: UnifiedEvidence[];
   } & Record<string, unknown>;
+  data_authenticity?: Record<string, unknown>;
 }
 
 export interface DecisionBriefResponse {
@@ -453,6 +455,7 @@ export interface CompanyCompareResponse {
     companies?: CompareEvidenceCompany[];
     freshness?: CompareCompanyFreshnessDigest;
   } & Record<string, unknown>;
+  data_authenticity?: Record<string, unknown>;
 }
 
 export interface UniverseExchangeItem {
@@ -590,6 +593,8 @@ export interface AgentExecutionDigest {
   route_score?: number | null;
   trace_step_count: number;
   plan_step_count: number;
+  real_data_only?: boolean;
+  trust_status?: string;
 }
 
 export interface AgentRouteCandidate {
@@ -652,6 +657,7 @@ export interface AgentResponse {
   thread_summary?: string | null;
   thread_memory?: AgentThreadMemory | null;
   execution_digest?: AgentExecutionDigest | null;
+  data_authenticity?: Record<string, unknown>;
   thread_messages: AgentThreadMessage[];
 }
 

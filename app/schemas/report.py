@@ -19,3 +19,4 @@ class CompanyReportResponse(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
     evidence: dict[str, Any] = Field(default_factory=dict)
+    data_authenticity: dict[str, Any] = Field(default_factory=dict)
