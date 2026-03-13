@@ -1,5 +1,5 @@
 <template>
-  <section class="agent-workspace-panel notebook-agent-panel" :class="{ compact }">
+  <section class="agent-workspace-panel meeting-workspace" :class="{ compact }">
     <div class="agent-workspace-head" :class="{ 'headless-workspace-head': !eyebrow && !title }">
       <div v-if="eyebrow || title">
         <p v-if="eyebrow" class="section-tag">{{ eyebrow }}</p>
@@ -7,7 +7,7 @@
       </div>
     </div>
 
-    <div class="task-mode-toggle-row task-mode-toolbar">
+    <div class="workspace-toolbar">
       <div class="task-mode-pill-group">
         <button
           v-for="item in taskModes"
@@ -17,178 +17,205 @@
           :class="{ active: activeTaskMode === item.value }"
           @click="selectTaskMode(item.value)"
         >
-          <span>{{ item.label }}</span>
+          {{ item.label }}
         </button>
       </div>
-      <button class="button-ghost compact-action task-mode-toolbar-action" @click="resetThread">新建线程</button>
+      <div class="workspace-toolbar-actions">
+        <button class="button-ghost compact-action" @click="refreshHistory" :disabled="agentStore.loadingHistory">刷新历史</button>
+        <button class="button-ghost compact-action" @click="resetThread">新建线程</button>
+      </div>
     </div>
 
-    <div class="agent-workspace-grid" :class="{ 'boardroom-open': boardroomReady }">
-      <div class="agent-thread-column">
-        <div class="notebook-thread-block">
-          <AgentThreadPanel :messages="messagePreview" />
+    <section class="meeting-stage-shell">
+      <div class="meeting-stage-main">
+        <div class="meeting-stage-topline">
+          <div>
+            <span class="meeting-stage-kicker">Decision Room</span>
+            <strong>{{ stageTitle }}</strong>
+          </div>
+          <div class="meeting-stage-badges">
+            <span class="meeting-badge accent">{{ activeTaskLabel }}</span>
+            <span class="meeting-badge">{{ stageMeta }}</span>
+          </div>
         </div>
 
-        <div v-if="agentStore.error" class="error-banner">
-          {{ agentStore.error }}
+        <div class="meeting-screen">
+          <div class="meeting-screen-backdrop"></div>
+          <div class="meeting-host-card">
+            <div class="meeting-host-orb">
+              <span>{{ focusInitial }}</span>
+            </div>
+            <div class="meeting-host-copy">
+              <span class="meeting-host-label">主会场</span>
+              <strong>{{ props.companyName || agentStore.focusCompanyName || '企业分析会场' }}</strong>
+              <p>{{ stageSummary }}</p>
+            </div>
+          </div>
+
+          <div class="meeting-pulse-strip">
+            <article v-for="item in stageStats" :key="item.label" class="meeting-pulse-card">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
         </div>
 
-        <div v-if="agentStore.loading" class="answer-line-card pending-answer-card pending-chat-bubble">
-          <p>正在整理分析结果，稍等片刻...</p>
+        <div class="meeting-thinking-strip">
+          <article v-for="item in compactThinkingSteps" :key="item.title" class="meeting-thinking-chip" :class="{ live: agentStore.loading && item.active }">
+            <span>{{ item.title }}</span>
+            <strong>{{ item.detail }}</strong>
+          </article>
+        </div>
+      </div>
+
+      <aside class="meeting-seat-rail">
+        <div class="meeting-seat-rail-head">
+          <span>参会席位</span>
+          <strong>{{ visibleSeats.length }} 个</strong>
         </div>
 
-        <div class="agent-input-shell bottom-input-shell compact-bottom-input">
-          <input v-model="draft" class="text-input hero-input" :placeholder="placeholder" @keydown.enter="submit" />
-          <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading">发送</button>
+        <div class="meeting-seat-grid">
+          <article v-for="seat in visibleSeats" :key="seat.id" class="meeting-seat-card" :class="{ highlight: seat.highlight }">
+            <div class="meeting-seat-avatar">{{ seat.avatar }}</div>
+            <div class="meeting-seat-copy">
+              <div class="meeting-seat-top">
+                <strong>{{ seat.name }}</strong>
+                <span>{{ seat.meta }}</span>
+              </div>
+              <p>{{ seat.summary }}</p>
+            </div>
+          </article>
         </div>
 
-        <div class="notebook-starter-card compact-floating-starter" v-if="!hasConversation">
-          <div class="quick-prompt-row left-align compact-prompt-row">
-            <button v-for="item in starterPrompts" :key="item" class="button-ghost chip-button" @click="applyPrompt(item)">
-              {{ item }}
+        <div class="meeting-seat-dock">
+          <button v-for="item in starterPrompts" :key="item" class="meeting-dock-action" @click="applyPrompt(item)">
+            {{ item }}
+          </button>
+        </div>
+      </aside>
+    </section>
+
+    <div class="workspace-lower-grid">
+      <section class="chat-room-card">
+        <div class="chat-room-head">
+          <div>
+            <span class="chat-room-kicker">聊天室</span>
+            <strong>{{ agentStore.threadTitle || '新线程' }}</strong>
+          </div>
+          <div class="chat-room-actions">
+            <span class="chat-room-status">{{ agentStore.focusCompanyName || '未固定企业' }}</span>
+            <button v-if="hasReasoningArtifacts" class="chat-room-toggle" @click="showReasoningDetails = !showReasoningDetails">
+              {{ showReasoningDetails ? '收起推理' : '展开推理' }}
             </button>
           </div>
         </div>
-      </div>
 
-      <div v-if="boardroomReady || floatingPanels.length" class="agent-side-column">
-        <section v-if="boardroomReady" class="boardroom-stage-card">
-          <div class="boardroom-stage-head">
-            <div>
-              <span class="boardroom-stage-kicker">决策会议室</span>
-              <strong>{{ boardroomSynthesis?.primary_call || '继续跟踪' }}</strong>
-            </div>
-            <span class="boardroom-stage-score">可信度 {{ boardroomSynthesis?.confidence?.toFixed(2) || '0.00' }}</span>
-          </div>
-
-          <div class="boardroom-hero-card">
-            <strong>{{ boardroomSynthesis?.consensus_summary }}</strong>
-            <p v-if="boardroomPlaybook?.current_engine">计算底座：{{ boardroomPlaybook.current_engine }}</p>
-          </div>
-
-          <div class="boardroom-panelist-grid">
-            <article v-for="item in boardroomPanelists" :key="item.agent_id" class="boardroom-panelist-card">
-              <div class="boardroom-panelist-top">
-                <strong>{{ item.role_label }}</strong>
-                <span>{{ item.confidence.toFixed(2) }}</span>
-              </div>
-              <p>{{ item.stance }}</p>
-              <p v-if="item.evidence_focus.length" class="boardroom-subline">证据焦点：{{ item.evidence_focus.join('；') }}</p>
-              <p v-if="item.sql_focus" class="boardroom-subline">SQL 焦点：{{ item.sql_focus }}</p>
-              <p class="boardroom-subline danger">挑战：{{ item.challenge }}</p>
-            </article>
-          </div>
-
-          <div class="boardroom-round-stack" v-if="boardroomRounds.length">
-            <article v-for="round in boardroomRounds" :key="round.round" class="answer-line-card boardroom-round-card">
-              <strong>第 {{ round.round }} 轮 · {{ round.topic }}</strong>
-              <p v-for="note in round.speaker_notes" :key="`${round.round}-${note.agent_id}`">
-                {{ note.agent_id }}：{{ note.statement }}
-              </p>
-              <p class="boardroom-subline">收敛结果：{{ round.consensus_delta }}</p>
-            </article>
-          </div>
-
-          <div class="boardroom-action-grid" v-if="boardroomSynthesis?.action_board?.length">
-            <div class="answer-line-card">
-              <strong>管理层动作板</strong>
-              <p v-for="item in boardroomSynthesis.action_board" :key="item">{{ item }}</p>
-            </div>
-            <div class="answer-line-card" v-if="boardroomSynthesis.red_lines?.length">
-              <strong>红线约束</strong>
-              <p v-for="item in boardroomSynthesis.red_lines" :key="item">{{ item }}</p>
-            </div>
-          </div>
-
-          <div class="answer-line-card" v-if="boardroomPlaybook?.missions?.length">
-            <strong>SQL 动作板</strong>
-            <p v-for="item in boardroomPlaybook.missions" :key="item.mission_id">
-              {{ item.label }}：{{ item.goal }}
-            </p>
-          </div>
-
-          <div class="answer-line-card" v-if="boardroomPlaybook?.queries?.length">
-            <strong>查询模板</strong>
-            <p v-for="item in boardroomPlaybook.queries" :key="item.query_id">
-              {{ item.title }}：<code>{{ item.sql }}</code>
-            </p>
-          </div>
-        </section>
-
-        <div v-if="secondaryPanels.length" class="agent-insight-stack">
-          <section v-for="panel in secondaryPanels" :key="panel.key" class="agent-insight-card" :class="{ active: activeFloatingPanel === panel.key }">
-          <button type="button" class="agent-insight-toggle" @click="toggleFloatingPanel(panel.key)">
-            <strong>{{ panel.label }}</strong>
-            <span>{{ activeFloatingPanel === panel.key ? '收起' : '展开' }}</span>
-          </button>
-
-          <div v-if="activeFloatingPanel === panel.key" class="agent-insight-body">
-            <div v-if="panel.key === 'summary' && agentStore.latest" class="floating-panel-body">
-              <div class="agent-mode-strip">
-                <span class="agent-mode-pill accent">{{ agentStore.latest.stage_label }}</span>
-                <span v-for="item in agentStore.latest.deliverables.slice(0, compact ? 2 : 3)" :key="item" class="agent-mode-pill subtle">{{ item }}</span>
-              </div>
-              <div class="agent-output-grid" v-if="outputCards.length">
-                <div v-for="item in outputCards" :key="item.label" class="agent-output-card">
-                  <span>{{ item.label }}</span>
-                  <strong>{{ item.value }}</strong>
-                </div>
-              </div>
-              <div class="answer-hero-card">
-                <strong>{{ agentStore.latest.title }}</strong>
-                <p>{{ agentStore.latest.summary }}</p>
-              </div>
-              <div v-for="item in agentStore.latest.highlights.slice(0, compact ? 3 : 5)" :key="item" class="answer-line-card">
-                <p>{{ item }}</p>
-              </div>
-              <div v-if="executionDigestCards.length" class="agent-output-grid execution-digest-grid">
-                <div v-for="item in executionDigestCards" :key="item.label" class="agent-output-card">
-                  <span>{{ item.label }}</span>
-                  <strong>{{ item.value }}</strong>
-                </div>
-              </div>
-              <div v-if="agentStore.latest.execution_digest?.deliverables?.length" class="answer-line-card">
-                <p>交付清单：{{ agentStore.latest.execution_digest.deliverables.join('；') }}</p>
-              </div>
-            </div>
-
-            <div v-else-if="panel.key === 'plan' && agentStore.latest?.plan?.length" class="floating-panel-body">
-              <TracePanel :trace="agentStore.latest.plan" />
-            </div>
-
-            <div v-else-if="panel.key === 'route' && routeCandidates.length" class="floating-panel-body">
-              <div class="agent-route-list">
-                <article v-for="item in routeCandidates" :key="`${item.intent}-${item.score}`" class="agent-route-card">
-                  <div class="agent-route-top">
-                    <div>
-                      <span class="agent-route-label">{{ item.label }}</span>
-                      <strong class="agent-route-score">评分 {{ item.score.toFixed(1) }}</strong>
-                    </div>
-                    <span class="agent-route-chip">{{ item.intent }}</span>
-                  </div>
-                  <p class="agent-route-reasons">{{ item.reasons.join('；') || '当前按默认链路进入。' }}</p>
-                </article>
-              </div>
-            </div>
-
-            <div v-else-if="panel.key === 'followup' && followUpQuestions.length" class="floating-panel-body">
-              <div class="follow-up-stack">
-                <button v-for="item in followUpQuestions" :key="item" class="follow-up-card" @click="applyPrompt(item)">
-                  {{ item }}
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </section>
+        <div v-if="hasReasoningArtifacts" class="chat-reasoning-summary">
+          <span v-for="item in reasoningSummaryChips" :key="item">{{ item }}</span>
         </div>
-      </div>
+
+        <div v-if="showReasoningDetails && hasReasoningArtifacts" class="chat-reasoning-panel">
+          <div class="chat-reasoning-column">
+            <div class="chat-reasoning-head">
+              <span>系统推演</span>
+              <strong>{{ agentStore.latest?.trace?.length || 0 }} 步</strong>
+            </div>
+            <TracePanel :trace="agentStore.latest?.trace" />
+          </div>
+          <div class="chat-reasoning-column">
+            <div class="chat-reasoning-head">
+              <span>执行路线</span>
+              <strong>{{ agentStore.latest?.plan?.length || 0 }} 步</strong>
+            </div>
+            <TracePanel :trace="agentStore.latest?.plan" />
+          </div>
+        </div>
+
+        <div class="chat-scroll-shell">
+          <AgentThreadPanel :messages="messagePreview" />
+        </div>
+
+        <div v-if="agentStore.error" class="error-banner">{{ agentStore.error }}</div>
+
+        <div class="chat-input-row">
+          <input v-model="draft" class="text-input hero-input" :placeholder="placeholder" @keydown.enter="submit" />
+          <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading">发送</button>
+        </div>
+      </section>
+
+      <aside class="workspace-right-rail">
+        <section class="right-rail-card thread-history-card">
+          <div class="right-rail-head">
+            <div>
+              <span>历史线程</span>
+              <strong>最近会话</strong>
+            </div>
+            <RouterLink to="/threads">全部记录</RouterLink>
+          </div>
+
+          <div v-if="agentStore.loadingHistory" class="right-rail-empty">正在加载历史线程...</div>
+          <div v-else-if="!agentStore.history.length" class="right-rail-empty">还没有历史线程，先开始一次分析。</div>
+          <div v-else class="thread-history-list">
+            <button
+              v-for="item in historyItems"
+              :key="item.thread_id"
+              type="button"
+              class="thread-history-item"
+              :class="{ active: agentStore.threadId === item.thread_id }"
+              @click="openThread(item.thread_id)"
+            >
+              <div class="thread-history-top">
+                <strong>{{ item.title }}</strong>
+                <span>{{ formatDate(item.updated_at) }}</span>
+              </div>
+              <p>{{ item.thread_summary || item.last_message || '本线程还没有摘要。' }}</p>
+            </button>
+          </div>
+        </section>
+
+        <section class="right-rail-card insight-card">
+          <div class="right-rail-head">
+            <div>
+              <span>当前摘要</span>
+              <strong>{{ insightTitle }}</strong>
+            </div>
+            <span class="right-rail-status">{{ insightStatus }}</span>
+          </div>
+
+          <div class="insight-hero">
+            <p>{{ insightSummary }}</p>
+          </div>
+
+          <div class="insight-chip-grid">
+            <article v-for="item in insightMetrics" :key="item.label" class="insight-chip-card">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          </div>
+        </section>
+
+        <section v-if="followUpQuestions.length" class="right-rail-card followup-card">
+          <div class="right-rail-head">
+            <div>
+              <span>推荐追问</span>
+              <strong>下一步怎么问</strong>
+            </div>
+          </div>
+
+          <div class="followup-list">
+            <button v-for="item in followUpQuestions" :key="item" class="followup-item" @click="applyPrompt(item)">
+              {{ item }}
+            </button>
+          </div>
+        </section>
+      </aside>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { RouterLink } from 'vue-router';
 
 import AgentThreadPanel from './AgentThreadPanel.vue';
 import TracePanel from './TracePanel.vue';
@@ -215,16 +242,62 @@ const taskModes = [
   { value: 'company_diagnosis', label: '经营分析' },
   { value: 'company_risk_forecast', label: '风险判断' },
   { value: 'company_decision_brief', label: '决策建议' },
-  { value: 'executive_boardroom', label: '决策会议室' },
+  { value: 'executive_boardroom', label: '协同会商' },
   { value: 'industry_trend', label: '行业趋势' },
   { value: 'data_quality', label: '数据治理' },
+];
+
+const loadingBlueprintMap: Record<string, Array<{ title: string; detail: string; active: boolean }>> = {
+  company_diagnosis: [
+    { title: '问题拆解', detail: '锁定问题范围', active: false },
+    { title: '证据读取', detail: '汇总财报与研报', active: true },
+    { title: '形成结论', detail: '输出经营判断', active: false },
+  ],
+  company_risk_forecast: [
+    { title: '风险识别', detail: '提取风险因子', active: false },
+    { title: '概率估计', detail: '计算高风险概率', active: true },
+    { title: '给出动作', detail: '整理监测建议', active: false },
+  ],
+  executive_boardroom: [
+    { title: '组局', detail: '拉起多席位会商', active: false },
+    { title: '碰撞', detail: '收敛分歧点', active: true },
+    { title: '落板', detail: '生成动作与红线', active: false },
+  ],
+  industry_trend: [
+    { title: '抓主题', detail: '读取行业变化', active: false },
+    { title: '做映射', detail: '定位公司影响', active: true },
+    { title: '给建议', detail: '输出趋势判断', active: false },
+  ],
+  data_quality: [
+    { title: '查覆盖', detail: '检查时效与缺口', active: false },
+    { title: '扫异常', detail: '识别数据问题', active: true },
+    { title: '排优先级', detail: '给出治理动作', active: false },
+  ],
+};
+
+const taskModeLabels: Record<string, string> = {
+  company_diagnosis: '经营分析',
+  company_risk_forecast: '风险判断',
+  company_decision_brief: '决策建议',
+  executive_boardroom: '协同会商',
+  industry_trend: '行业趋势',
+  data_quality: '数据治理',
+};
+
+const previewSeats = [
+  { id: 'finance', name: '财务席位', summary: '盯利润、现金流、资本开支。', meta: '数据核算', avatar: '财', highlight: false },
+  { id: 'market', name: '市场席位', summary: '盯客户、渠道和增长空间。', meta: '增长判断', avatar: '市', highlight: true },
+  { id: 'risk', name: '风险席位', summary: '盯坏情景、红线和触发点。', meta: '红线约束', avatar: '险', highlight: false },
+  { id: 'avatar', name: '数字人席位', summary: '预留实时会话和数字人挂载位。', meta: '未来接入', avatar: '数', highlight: false },
 ];
 
 const agentStore = useAgentThreadStore();
 const draft = ref(props.seedQuestion);
 const manualTaskMode = ref<string | null>(null);
-const activeFloatingPanel = ref<'summary' | 'plan' | 'route' | 'followup' | 'boardroom' | null>(null);
+const showReasoningDetails = ref(false);
+
 const activeTaskMode = computed(() => manualTaskMode.value || agentStore.taskMode || 'company_diagnosis');
+const activeTaskLabel = computed(() => taskModeLabels[activeTaskMode.value] || '企业分析');
 
 const basePrompts = computed(() => {
   const companyName = props.companyName || '这家公司';
@@ -246,7 +319,7 @@ const basePrompts = computed(() => {
     ],
     executive_boardroom: [
       `给${companyName}开一个管理层决策会议室`,
-      `让财务、市场、风险和数据治理多个agent一起会诊${companyName}`,
+      `让财务、市场、风险和数据治理多个 agent 一起会诊${companyName}`,
       `把${companyName}做成一个适合答辩展示的多智能体协同场景`,
     ],
     industry_trend: [
@@ -265,78 +338,133 @@ const basePrompts = computed(() => {
 
 const starterPrompts = computed(() => basePrompts.value.slice(0, props.compact ? 2 : 3));
 const followUpQuestions = computed(() => agentStore.latest?.suggested_questions?.slice(0, props.compact ? 3 : 4) || []);
-const routeCandidates = computed(() => agentStore.latest?.route_candidates?.slice(0, props.compact ? 2 : 3) || []);
-const hasConversation = computed(() => agentStore.messages.length > 0);
+const routeCandidates = computed(() => agentStore.latest?.route_candidates?.slice(0, 2) || []);
 const messagePreview = computed(() => props.compact ? agentStore.messages.slice(-4) : agentStore.messages);
+const historyItems = computed(() => agentStore.history.slice(0, props.compact ? 5 : 6));
+
 const boardroomPanelists = computed(() => (agentStore.latest?.panelists || []) as AgentBoardroomPanelist[]);
 const boardroomRounds = computed(() => (agentStore.latest?.debate_rounds || []) as AgentBoardroomDebateRound[]);
 const boardroomSynthesis = computed(() => (agentStore.latest?.synthesis || null) as AgentBoardroomSynthesis | null);
 const boardroomPlaybook = computed(() => (agentStore.latest?.sql_playbook || null) as AgentSQLPlaybook | null);
 const boardroomReady = computed(() => boardroomPanelists.value.length > 0 || boardroomRounds.value.length > 0 || !!boardroomSynthesis.value);
 
-const floatingPanels = computed(() => {
-  const panels: Array<{ key: 'summary' | 'plan' | 'route' | 'followup' | 'boardroom'; label: string }> = [];
-  if (agentStore.latest) panels.push({ key: 'summary', label: '本轮结论' });
-  if (boardroomReady.value) panels.push({ key: 'boardroom', label: '会议室' });
-  if (agentStore.latest?.plan?.length) panels.push({ key: 'plan', label: '执行步骤' });
-  if (routeCandidates.value.length) panels.push({ key: 'route', label: '分析路径' });
-  if (followUpQuestions.value.length) panels.push({ key: 'followup', label: '推荐追问' });
-  return panels;
-});
-const secondaryPanels = computed(() => floatingPanels.value.filter((item) => item.key !== 'boardroom'));
-
-const outputCards = computed(() => {
-  const latest = agentStore.latest;
-  if (!latest) return [];
-  const cards = [
-    { label: '任务模式', value: latest.task_label },
-    { label: '当前阶段', value: latest.stage_label },
-  ];
-  const evidence = latest.evidence || {};
-  if (latest.task_mode === 'company_risk_forecast') {
-    const model = evidence.model_prediction as Record<string, unknown> | undefined;
-    const probability = typeof model?.high_risk_probability === 'number' ? `${(model.high_risk_probability * 100).toFixed(1)}%` : '同步中';
-    cards.push({ label: '高风险概率', value: probability });
-  } else if (latest.task_mode === 'company_compare') {
-    const companies = (evidence.companies as unknown[] | undefined)?.length || 0;
-    cards.push({ label: '对比企业', value: `${companies} 家` });
-  } else if (latest.task_mode === 'executive_boardroom') {
-    cards.push({ label: '与会角色', value: `${boardroomPanelists.value.length} 个` });
-    cards.push({ label: '辩论轮次', value: `${boardroomRounds.value.length} 轮` });
-  } else if (latest.task_mode === 'data_quality') {
-    const anomalies = (evidence.top_anomalies as unknown[] | undefined)?.length || 0;
-    cards.push({ label: '异常条目', value: `${anomalies} 条` });
-  } else {
-    cards.push({ label: '结论要点', value: `${latest.highlights.length} 条` });
-  }
-  return cards;
+const focusInitial = computed(() => {
+  const name = props.companyName || agentStore.focusCompanyName || '企';
+  return name.slice(0, 1);
 });
 
-const executionDigestCards = computed(() => {
-  const digest = agentStore.latest?.execution_digest;
-  if (!digest) return [];
-  const cards = [
-    { label: '证据数量', value: `${digest.evidence_count} 条` },
-    { label: '执行步骤', value: `${digest.plan_step_count} 步` },
-    { label: '轨迹节点', value: `${digest.trace_step_count} 个` },
-  ];
-  if (digest.route_label) {
-    cards.push({
-      label: '主路由',
-      value: digest.route_score != null ? `${digest.route_label} (${digest.route_score.toFixed(1)})` : digest.route_label,
-    });
-  }
-  if (digest.evidence_types?.length) {
-    cards.push({ label: '证据类型', value: digest.evidence_types.join(' / ') });
-  }
-  return cards;
+const stageTitle = computed(() => {
+  if (boardroomReady.value) return boardroomSynthesis.value?.primary_call || '多席位协同会商中';
+  return '把页面做成会议，不是做成一篇长文档';
 });
+
+const stageMeta = computed(() => {
+  if (boardroomReady.value) return `可信度 ${boardroomSynthesis.value?.confidence?.toFixed(2) || '0.00'}`;
+  return '腾讯会议式布局';
+});
+
+const stageSummary = computed(() => {
+  if (boardroomReady.value) {
+    return boardroomSynthesis.value?.consensus_summary || '多个席位正在围绕同一企业汇总判断。';
+  }
+  return '主舞台负责展示当前会商主题、主讲席位和关键动作，后面接数字人或 WebSocket 实时会话时直接扩展这里。';
+});
+
+const stageStats = computed(() => {
+  if (boardroomReady.value) {
+    return [
+      { label: '与会角色', value: `${boardroomPanelists.value.length} 个` },
+      { label: '辩论轮次', value: `${boardroomRounds.value.length} 轮` },
+      { label: '动作任务', value: `${boardroomPlaybook.value?.missions?.length || 0} 项` },
+    ];
+  }
+  return [
+    { label: '会场模式', value: activeTaskLabel.value },
+    { label: '历史线程', value: `${agentStore.history.length} 条` },
+    { label: '问题入口', value: '聊天室' },
+  ];
+});
+
+const visibleSeats = computed(() => {
+  if (!boardroomReady.value) return previewSeats;
+  return boardroomPanelists.value.slice(0, 4).map((item, index) => ({
+    id: item.agent_id,
+    name: item.role_label,
+    summary: item.stance,
+    meta: `${item.confidence.toFixed(2)}${item.sql_focus ? ` · ${item.sql_focus}` : ''}`,
+    avatar: item.role_label.slice(0, 1),
+    highlight: index === 0,
+  }));
+});
+
+const compactThinkingSteps = computed(() => {
+  if (agentStore.latest?.trace?.length) {
+    return agentStore.latest.trace.slice(0, 3).map((item, index) => ({
+      title: item.step,
+      detail: item.detail,
+      active: index === 1,
+    }));
+  }
+  return loadingBlueprintMap[activeTaskMode.value] || loadingBlueprintMap.company_diagnosis;
+});
+
+const reasoningSummaryChips = computed(() => {
+  const chips: string[] = [];
+  if (agentStore.latest?.stage_label) chips.push(agentStore.latest.stage_label);
+  if (agentStore.latest?.deliverables?.length) chips.push(...agentStore.latest.deliverables.slice(0, 2));
+  if (routeCandidates.value.length) chips.push(`候选路径 ${routeCandidates.value.length} 条`);
+  if (agentStore.latest?.execution_digest?.evidence_count != null) chips.push(`证据 ${agentStore.latest.execution_digest.evidence_count} 条`);
+  return chips.slice(0, 5);
+});
+
+const hasReasoningArtifacts = computed(() => Boolean(
+  agentStore.latest?.trace?.length ||
+  agentStore.latest?.plan?.length ||
+  routeCandidates.value.length ||
+  agentStore.latest?.execution_digest,
+));
+
+const insightTitle = computed(() => agentStore.latest?.title || agentStore.threadTitle || '等待本轮摘要');
+const insightStatus = computed(() => agentStore.latest?.stage_label || activeTaskLabel.value);
+const insightSummary = computed(() => {
+  if (agentStore.latest?.summary) return agentStore.latest.summary;
+  if (agentStore.threadSummary) return agentStore.threadSummary;
+  return '右侧只保留必要的摘要、指标和推荐追问，不再堆满说明文字。';
+});
+
+const insightMetrics = computed(() => {
+  const cards: Array<{ label: string; value: string }> = [];
+  if (agentStore.latest?.execution_digest) {
+    cards.push({ label: '证据', value: `${agentStore.latest.execution_digest.evidence_count} 条` });
+    cards.push({ label: '步骤', value: `${agentStore.latest.execution_digest.plan_step_count} 步` });
+  } else if (agentStore.threadMemory?.key_signals?.length) {
+    cards.push({ label: '关键点', value: `${agentStore.threadMemory.key_signals.length} 条` });
+  }
+  if (boardroomReady.value) {
+    cards.push({ label: '席位', value: `${boardroomPanelists.value.length} 个` });
+  }
+  if (agentStore.history.length) {
+    cards.push({ label: '历史', value: `${agentStore.history.length} 条` });
+  }
+  return cards.slice(0, 4);
+});
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 function resetThread() {
   manualTaskMode.value = null;
   agentStore.resetThread(props.companyCode, props.companyName);
   draft.value = props.seedQuestion || basePrompts.value[0];
-  activeFloatingPanel.value = null;
+  showReasoningDetails.value = false;
 }
 
 function selectTaskMode(taskMode: string) {
@@ -350,13 +478,20 @@ function applyPrompt(text: string) {
   void submit();
 }
 
-function toggleFloatingPanel(key: 'summary' | 'plan' | 'route' | 'followup' | 'boardroom') {
-  activeFloatingPanel.value = activeFloatingPanel.value === key ? null : key;
+async function refreshHistory() {
+  await agentStore.loadHistory();
+}
+
+async function openThread(threadId: string) {
+  showReasoningDetails.value = false;
+  manualTaskMode.value = null;
+  await agentStore.openThread(threadId);
 }
 
 async function submit() {
   const question = draft.value.trim();
   if (!question) return;
+  showReasoningDetails.value = false;
   await agentStore.ask(question, {
     companyCode: props.companyCode,
     companyName: props.companyName,
@@ -366,165 +501,580 @@ async function submit() {
 }
 
 watch(() => props.seedQuestion, (value) => {
-  if (value) {
-    draft.value = value;
-  }
+  if (value) draft.value = value;
 }, { immediate: true });
 
 watch(() => [props.companyCode, props.companyName], ([companyCode, companyName]) => {
   manualTaskMode.value = null;
-  if (companyCode || companyName) {
-    agentStore.setFocus(companyCode, companyName);
+  if (companyCode || companyName) agentStore.setFocus(companyCode, companyName);
+}, { immediate: true });
+
+onMounted(async () => {
+  if (!agentStore.history.length && !agentStore.loadingHistory) {
+    await refreshHistory();
   }
 });
-
-watch(floatingPanels, (panels) => {
-  if (!panels.length || !panels.some((item) => item.key === activeFloatingPanel.value)) {
-    activeFloatingPanel.value = null;
-  } else if (activeFloatingPanel.value === 'boardroom') {
-    activeFloatingPanel.value = secondaryPanels.value[0]?.key || null;
-  }
-}, { immediate: true });
 </script>
 
 <style scoped>
-.agent-workspace-grid {
+.meeting-workspace,
+.workspace-toolbar,
+.workspace-toolbar-actions,
+.meeting-stage-shell,
+.meeting-stage-main,
+.meeting-seat-rail,
+.meeting-seat-grid,
+.meeting-seat-dock,
+.meeting-stage-badges,
+.meeting-pulse-strip,
+.meeting-thinking-strip,
+.workspace-lower-grid,
+.workspace-right-rail,
+.thread-history-list,
+.followup-list,
+.insight-chip-grid,
+.chat-reasoning-panel,
+.chat-reasoning-column {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.92fr);
+  gap: 16px;
+}
+
+.meeting-workspace {
   gap: 18px;
-  align-items: start;
 }
 
-.agent-thread-column,
-.agent-side-column,
-.boardroom-stage-card {
-  display: grid;
-  gap: 12px;
+.workspace-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
-.boardroom-stage-card {
+.workspace-toolbar-actions {
+  grid-auto-flow: column;
+}
+
+.meeting-stage-shell,
+.chat-room-card,
+.right-rail-card {
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.meeting-stage-shell {
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.62fr);
   padding: 18px;
-  border-radius: 24px;
-  border: 1px solid rgba(214, 227, 241, 0.26);
-  background: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(12px);
+  background:
+    radial-gradient(circle at top left, rgba(72, 255, 183, 0.18), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(255, 164, 96, 0.12), transparent 24%),
+    linear-gradient(135deg, #0b1627, #162c4a 54%, #213f66);
+  border: 1px solid rgba(159, 198, 235, 0.18);
+  box-shadow: 0 26px 80px rgba(7, 14, 26, 0.28);
 }
 
-.boardroom-stage-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: start;
-}
-
-.boardroom-stage-kicker {
-  display: inline-flex;
-  margin-bottom: 6px;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(231, 238, 248, 0.78);
-  font-weight: 700;
-}
-
-.boardroom-stage-head strong,
-.boardroom-stage-score {
-  color: #f7fbff;
-}
-
-.boardroom-stage-head strong {
-  display: block;
-  font-size: 22px;
-  line-height: 1.12;
-}
-
-.boardroom-stage-score {
-  flex-shrink: 0;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(8, 21, 47, 0.44);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.boardroom-hero-card {
-  padding: 18px 20px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, rgba(8, 21, 47, 0.95), rgba(28, 57, 108, 0.9));
-  color: #f4f7fb;
-}
-
-.boardroom-hero-card p,
-.boardroom-hero-card strong {
-  margin: 0;
-}
-
-.boardroom-hero-card p {
-  margin-top: 8px;
-  color: rgba(244, 247, 251, 0.78);
-}
-
-.boardroom-panelist-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.boardroom-panelist-card {
-  padding: 16px;
-  border-radius: 18px;
-  background: rgba(9, 26, 58, 0.04);
-  border: 1px solid rgba(10, 31, 68, 0.08);
-}
-
-.boardroom-panelist-top {
+.meeting-stage-topline,
+.meeting-seat-rail-head,
+.chat-room-head,
+.right-rail-head,
+.thread-history-top,
+.meeting-seat-top,
+.chat-reasoning-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
 }
 
-.boardroom-panelist-top span {
+.meeting-stage-kicker,
+.chat-room-kicker,
+.right-rail-head span:first-child,
+.meeting-seat-rail-head span {
+  display: inline-flex;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.meeting-stage-kicker,
+.meeting-seat-rail-head span {
+  color: rgba(222, 234, 248, 0.72);
+}
+
+.chat-room-kicker,
+.right-rail-head span:first-child {
+  color: #687a92;
+}
+
+.meeting-stage-topline strong,
+.chat-room-head strong,
+.right-rail-head strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1.12;
+}
+
+.meeting-stage-topline strong {
+  color: #f3f8ff;
+}
+
+.meeting-stage-badges {
+  grid-auto-flow: column;
+  align-items: center;
+}
+
+.meeting-badge {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  color: #dce8f5;
+}
+
+.meeting-badge.accent {
+  background: rgba(78, 142, 255, 0.18);
+  color: #fff;
+}
+
+.meeting-screen {
+  position: relative;
+  min-height: 360px;
+  padding: 28px;
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(245, 249, 255, 0.04), rgba(9, 21, 39, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.meeting-screen-backdrop {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at center, rgba(83, 198, 255, 0.28), transparent 24%),
+    radial-gradient(circle at 70% 28%, rgba(76, 255, 160, 0.18), transparent 18%),
+    radial-gradient(circle at 32% 74%, rgba(255, 176, 109, 0.16), transparent 16%);
+  filter: blur(18px);
+}
+
+.meeting-host-card,
+.meeting-pulse-strip,
+.meeting-thinking-strip {
+  position: relative;
+  z-index: 1;
+}
+
+.meeting-host-card {
+  display: grid;
+  place-items: center;
+  gap: 20px;
+  padding-top: 10px;
+}
+
+.meeting-host-orb {
+  display: grid;
+  place-items: center;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, #8be3ff, #2d73ff 52%, #102349 78%);
+  border: 8px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 16px rgba(115, 181, 255, 0.08), 0 20px 44px rgba(0, 0, 0, 0.34);
+  color: #fff;
+  font-size: 54px;
+  font-weight: 800;
+}
+
+.meeting-host-copy {
+  max-width: 620px;
+  text-align: center;
+}
+
+.meeting-host-label {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #d9e7f7;
+  font-size: 12px;
+}
+
+.meeting-host-copy strong {
+  display: block;
+  font-size: 34px;
+  line-height: 1.12;
+  color: #f4f8ff;
+}
+
+.meeting-host-copy p {
+  margin: 12px 0 0;
+  color: rgba(226, 236, 247, 0.84);
+  line-height: 1.7;
+}
+
+.meeting-pulse-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 28px;
+}
+
+.meeting-pulse-card,
+.meeting-thinking-chip,
+.meeting-seat-card,
+.meeting-dock-action,
+.thread-history-item,
+.insight-chip-card,
+.followup-item,
+.chat-reasoning-panel,
+.chat-reasoning-column {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.meeting-pulse-card {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.meeting-pulse-card span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: rgba(218, 230, 245, 0.72);
+}
+
+.meeting-pulse-card strong {
+  font-size: 22px;
+  color: #fff;
+}
+
+.meeting-thinking-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.meeting-thinking-chip {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(248, 251, 255, 0.06);
+}
+
+.meeting-thinking-chip.live {
+  background: rgba(78, 142, 255, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(146, 195, 255, 0.32);
+}
+
+.meeting-thinking-chip span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: rgba(214, 228, 242, 0.68);
+}
+
+.meeting-thinking-chip strong {
+  color: #f4f8ff;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.meeting-seat-rail {
+  align-content: start;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(6, 13, 24, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.meeting-seat-rail-head strong {
+  color: #fff;
+}
+
+.meeting-seat-grid {
+  max-height: 408px;
+  overflow: auto;
+}
+
+.meeting-seat-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.meeting-seat-card.highlight {
+  background: linear-gradient(135deg, rgba(61, 109, 224, 0.22), rgba(63, 193, 167, 0.14));
+}
+
+.meeting-seat-avatar {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.meeting-seat-copy p {
+  margin: 8px 0 0;
+  color: rgba(227, 236, 246, 0.82);
+  line-height: 1.55;
+}
+
+.meeting-seat-top strong {
+  color: #f4f8ff;
+}
+
+.meeting-seat-top span {
+  font-size: 12px;
+  color: rgba(214, 228, 242, 0.68);
+}
+
+.meeting-seat-dock {
+  grid-template-columns: 1fr;
+}
+
+.meeting-dock-action {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f8ff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-lower-grid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(310px, 0.75fr);
+  align-items: start;
+}
+
+.chat-room-card,
+.right-rail-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 252, 0.98));
+  border: 1px solid rgba(10, 31, 68, 0.08);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.07);
+}
+
+.chat-room-card {
+  padding: 18px;
+}
+
+.chat-room-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chat-room-status {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.boardroom-subline {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
+.chat-room-toggle {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(10, 31, 68, 0.08);
+  background: #f3f7fb;
+  color: var(--text-primary);
+  cursor: pointer;
 }
 
-.boardroom-subline.danger {
-  color: #8c4d13;
-}
-
-.boardroom-round-stack {
-  display: grid;
+.chat-reasoning-summary {
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
-.boardroom-round-card strong {
-  display: block;
-  margin-bottom: 8px;
+.chat-reasoning-summary span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #edf4fb;
+  color: #32557d;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.boardroom-action-grid {
+.chat-reasoning-panel {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 14px;
+  border-radius: 22px;
+  background: #f6f9fc;
+}
+
+.chat-reasoning-column {
+  padding: 14px;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.chat-reasoning-head span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chat-scroll-shell {
+  height: 420px;
+  overflow: auto;
+  padding: 12px 6px 12px 0;
+  border-radius: 22px;
+  border: 1px solid rgba(10, 31, 68, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(37, 89, 160, 0.08), transparent 20%),
+    linear-gradient(180deg, #f9fbfd, #f3f6fa);
+}
+
+.chat-scroll-shell :deep(.thread-timeline) {
+  padding: 16px;
+}
+
+.chat-input-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: minmax(0, 1fr) 108px;
   gap: 12px;
+  align-items: center;
 }
 
-code {
-  white-space: pre-wrap;
-  word-break: break-word;
+.workspace-right-rail {
+  position: sticky;
+  top: 16px;
 }
 
-@media (max-width: 1180px) {
-  .agent-workspace-grid {
+.right-rail-card {
+  padding: 18px;
+}
+
+.right-rail-head strong {
+  font-size: 20px;
+}
+
+.right-rail-head a,
+.right-rail-status {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.thread-history-list {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.thread-history-item {
+  padding: 14px;
+  border-radius: 18px;
+  background: #f8fbfd;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.thread-history-item:hover,
+.thread-history-item.active,
+.followup-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(31, 78, 146, 0.2);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.thread-history-top span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.thread-history-item p,
+.insight-hero p,
+.right-rail-empty {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.insight-hero {
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f4f8fc, #edf3f9);
+}
+
+.insight-chip-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.insight-chip-card {
+  padding: 14px;
+  border-radius: 16px;
+  background: #f8fbfd;
+}
+
+.insight-chip-card span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.insight-chip-card strong {
+  color: var(--text-primary);
+}
+
+.followup-list {
+  grid-template-columns: 1fr;
+}
+
+.followup-item {
+  padding: 14px;
+  border-radius: 16px;
+  background: #f8fbfd;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+@media (max-width: 1280px) {
+  .meeting-stage-shell,
+  .workspace-lower-grid,
+  .chat-reasoning-panel {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-right-rail {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-toolbar-actions {
+    grid-auto-flow: row;
+  }
+
+  .meeting-stage-topline,
+  .meeting-seat-rail-head,
+  .chat-room-head,
+  .right-rail-head,
+  .thread-history-top,
+  .meeting-seat-top,
+  .chat-reasoning-head {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .meeting-pulse-strip,
+  .meeting-thinking-strip,
+  .insight-chip-grid,
+  .chat-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-scroll-shell,
+  .thread-history-list,
+  .meeting-seat-grid {
+    max-height: none;
+    height: auto;
   }
 }
 </style>

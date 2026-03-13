@@ -84,6 +84,7 @@ export const useAgentThreadStore = defineStore('agent-thread', {
         this.taskMode = response.task_mode || this.taskMode;
         this.latest = response;
         this.messages = response.thread_messages;
+        await this.loadHistory();
         return response;
       } catch (error) {
         this.error = error instanceof Error ? error.message : 'Agent 请求失败';
