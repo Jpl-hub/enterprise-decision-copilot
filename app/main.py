@@ -38,7 +38,13 @@ async def lifespan(app: FastAPI):
 
 
 
+def _ensure_runtime_dirs(cache_dir: Path | None = None) -> None:
+    target_cache_dir = cache_dir or settings.cache_dir
+    target_cache_dir.mkdir(parents=True, exist_ok=True)
+
+
 def create_app() -> FastAPI:
+    _ensure_runtime_dirs()
     app = FastAPI(
         title=settings.app_name,
         lifespan=lifespan,

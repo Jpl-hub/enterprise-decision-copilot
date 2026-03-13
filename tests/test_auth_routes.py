@@ -2,11 +2,12 @@ import asyncio
 import shutil
 import uuid
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import httpx
 
 from app.config import settings
-from app.main import create_app
+from app.main import _ensure_runtime_dirs, create_app
 from app.services.auth import AuthService
 
 
@@ -57,3 +58,15 @@ def test_auth_routes_use_http_only_cookie_session() -> None:
         asyncio.run(exercise_routes())
     finally:
         shutil.rmtree(db_path.parent, ignore_errors=True)
+
+
+def test_runtime_cache_dir_is_created_for_clean_environment() -> None:
+    with TemporaryDirectory() as temp_dir:
+        cache_dir = Path(temp_dir) / "cache"
+
+        assert cache_dir.exists() is False
+
+        _ensure_runtime_dirs(cache_dir)
+
+        assert cache_dir.exists() is True
+        assert cache_dir.is_dir() is True
