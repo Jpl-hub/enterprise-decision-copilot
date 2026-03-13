@@ -9,6 +9,8 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 class Settings(BaseSettings):
     app_name: str = "企航数策 Agent"
     target_industry: str = "医药生物"
+    target_pool_mode: str = "core"
+    target_pool_path: str = ""
     llm_base_url: str = "https://api.siliconflow.cn/v1"
     llm_api_key: str = ""
     llm_model: str = "Qwen/Qwen2.5-72B-Instruct"

@@ -75,6 +75,8 @@ docker compose up --build
 
 - `APP_NAME`：应用名称
 - `TARGET_INDUSTRY`：默认目标行业
+- `TARGET_POOL_MODE`：`core` 使用 6 家核心池，`expanded` 优先使用 `data/targets_expanded.csv`
+- `TARGET_POOL_PATH`：自定义目标池 CSV 路径，优先级高于 `TARGET_POOL_MODE`
 - `CORS_ORIGINS`：允许的前端来源，逗号分隔
 - `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`
 - `VISION_LLM_BASE_URL` / `VISION_LLM_API_KEY` / `VISION_LLM_MODEL`
@@ -113,6 +115,38 @@ npm run build
 
 - 后端自动执行 `pytest -q`
 - 前端自动执行 `npm run build`
+
+## 目标池扩展
+
+当前仓库默认核心演示池是 6 家医药生物企业，适合做稳定演示。为了支持比赛答辩和更强的横向比较，项目已补充“扩展目标池”能力。
+
+基于当前仓库数据，已可生成一版 12 家扩展池：
+
+- 核心 6 家：恒瑞医药、迈瑞医疗、爱尔眼科、益丰药房、联影医疗、药明康德
+- 新增 6 家：爱美客、博雅生物、昆药集团、华润三九、天坛生物、凯莱英
+
+生成命令：
+
+```bash
+python scripts/expand_target_pool.py --coverage-source financial --max-total 12 --min-feature-years 2
+```
+
+更严格的官方财报口径：
+
+```bash
+python scripts/expand_target_pool.py --coverage-source official --max-total 12 --min-feature-years 1
+```
+
+生成后可通过环境变量切换：
+
+```bash
+TARGET_POOL_MODE=expanded
+```
+
+输出文件：
+
+- `data/targets_expanded.csv`
+- `data/quality/targets_expanded_summary.json`
 
 ## 数据说明
 
