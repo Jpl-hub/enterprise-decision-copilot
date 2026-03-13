@@ -42,6 +42,20 @@ class AgentThreadMemory(BaseModel):
     key_signals: list[str] = Field(default_factory=list)
     next_steps: list[str] = Field(default_factory=list)
     evidence_focus: list[str] = Field(default_factory=list)
+    execution_digest: 'AgentExecutionDigest | None' = None
+
+
+class AgentExecutionDigest(BaseModel):
+    stage_label: str | None = None
+    skill_label: str | None = None
+    task_label: str | None = None
+    deliverables: list[str] = Field(default_factory=list)
+    evidence_count: int = 0
+    evidence_types: list[str] = Field(default_factory=list)
+    route_label: str | None = None
+    route_score: float | None = None
+    trace_step_count: int = 0
+    plan_step_count: int = 0
 
 
 class AgentThreadSummary(BaseModel):
@@ -91,4 +105,5 @@ class AgentResponse(BaseModel):
     focus: AgentFocus | None = None
     thread_summary: str | None = None
     thread_memory: AgentThreadMemory | None = None
+    execution_digest: AgentExecutionDigest | None = None
     thread_messages: list[AgentThreadMessage] = Field(default_factory=list)

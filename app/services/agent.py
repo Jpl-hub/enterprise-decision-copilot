@@ -202,6 +202,36 @@ class AgentService:
             return [str(item.get('indicator_name') or '').strip() for item in macro_items[:3] if str(item.get('indicator_name') or '').strip()]
         return []
 
+    def _build_execution_digest(self, payload: dict[str, Any]) -> dict[str, Any]:
+        evidence = dict(payload.get('evidence') or {})
+        unified_evidence = list(evidence.get('evidences') or [])
+        evidence_types = []
+        for item in unified_evidence:
+            evidence_type = str(item.get('evidence_type') or '').strip()
+            if evidence_type and evidence_type not in evidence_types:
+                evidence_types.append(evidence_type)
+        if not evidence_types:
+            if evidence.get('semantic_stock_reports') or evidence.get('research_reports'):
+                evidence_types.append('text')
+            if evidence.get('multimodal_digest'):
+                evidence_types.append('image')
+            if evidence.get('financial_source_url'):
+                evidence_types.append('pdf_anchor')
+        route_candidates = list(payload.get('route_candidates') or [])
+        top_route = route_candidates[0] if route_candidates else {}
+        return {
+            'stage_label': str(payload.get('stage_label') or '').strip() or None,
+            'skill_label': str(payload.get('skill_label') or '').strip() or None,
+            'task_label': str(payload.get('task_label') or '').strip() or None,
+            'deliverables': [str(item).strip() for item in list(payload.get('deliverables') or []) if str(item).strip()],
+            'evidence_count': len(unified_evidence),
+            'evidence_types': evidence_types[:4],
+            'route_label': str(top_route.get('label') or '').strip() or None,
+            'route_score': float(top_route.get('score')) if top_route and top_route.get('score') is not None else None,
+            'trace_step_count': len(list(payload.get('trace') or [])),
+            'plan_step_count': len(list(payload.get('plan') or [])),
+        }
+
     def _build_thread_memory(self, payload: dict[str, Any], thread: dict) -> dict[str, Any] | None:
         if payload.get('stage_label') == '需要重试':
             return thread.get('thread_memory')
@@ -218,6 +248,7 @@ class AgentService:
             'key_signals': key_signals,
             'next_steps': next_steps,
             'evidence_focus': evidence_focus,
+            'execution_digest': self._build_execution_digest(payload),
         }
         if not any([memory['conclusion'], memory['key_signals'], memory['next_steps'], memory['evidence_focus']]):
             return thread.get('thread_memory')
@@ -503,6 +534,7 @@ class AgentService:
         }
         payload['thread_summary'] = thread.get('thread_summary')
         payload['thread_memory'] = thread.get('thread_memory')
+        payload['execution_digest'] = (thread.get('thread_memory') or {}).get('execution_digest')
         payload['thread_messages'] = [item.as_dict() for item in self._list_messages(thread['thread_id'], limit=8)]
         return payload
 

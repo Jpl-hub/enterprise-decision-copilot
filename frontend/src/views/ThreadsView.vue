@@ -56,6 +56,9 @@
               <p v-if="agentStore.threadMemory?.key_signals?.length">关键点：{{ agentStore.threadMemory.key_signals.join('；') }}</p>
               <p v-if="agentStore.threadMemory?.evidence_focus?.length">证据焦点：{{ agentStore.threadMemory.evidence_focus.join('、') }}</p>
               <p v-if="agentStore.threadMemory?.next_steps?.length">下一步：{{ agentStore.threadMemory.next_steps.join('；') }}</p>
+              <p v-if="agentStore.threadMemory?.execution_digest?.skill_label">技能路径：{{ agentStore.threadMemory.execution_digest.skill_label }}</p>
+              <p v-if="agentStore.threadMemory?.execution_digest?.deliverables?.length">交付物：{{ agentStore.threadMemory.execution_digest.deliverables.join('；') }}</p>
+              <p v-if="agentStore.threadMemory?.execution_digest">执行摘要：{{ formatExecutionDigest(agentStore.threadMemory.execution_digest) }}</p>
             </div>
             <AgentThreadPanel :messages="agentStore.messages" />
           </div>
@@ -72,6 +75,7 @@ import { RouterLink, useRouter } from 'vue-router';
 import AgentThreadPanel from '../components/AgentThreadPanel.vue';
 import PagePanel from '../components/PagePanel.vue';
 import { useAgentThreadStore } from '../stores/agentThread';
+import type { AgentExecutionDigest } from '../api/types';
 
 const agentStore = useAgentThreadStore();
 const router = useRouter();
@@ -85,6 +89,15 @@ function formatDate(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatExecutionDigest(digest: AgentExecutionDigest) {
+  const bits = [
+    digest.stage_label ? `阶段 ${digest.stage_label}` : '',
+    digest.evidence_count ? `${digest.evidence_count} 条证据` : '',
+    digest.route_label ? `主路由 ${digest.route_label}` : '',
+  ].filter(Boolean);
+  return bits.join('；');
 }
 
 async function refreshHistory() {

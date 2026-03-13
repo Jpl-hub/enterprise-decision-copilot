@@ -75,6 +75,15 @@
               <div v-for="item in agentStore.latest.highlights.slice(0, compact ? 3 : 5)" :key="item" class="answer-line-card">
                 <p>{{ item }}</p>
               </div>
+              <div v-if="executionDigestCards.length" class="agent-output-grid execution-digest-grid">
+                <div v-for="item in executionDigestCards" :key="item.label" class="agent-output-card">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                </div>
+              </div>
+              <div v-if="agentStore.latest.execution_digest?.deliverables?.length" class="answer-line-card">
+                <p>交付清单：{{ agentStore.latest.execution_digest.deliverables.join('；') }}</p>
+              </div>
             </div>
 
             <div v-else-if="panel.key === 'plan' && agentStore.latest?.plan?.length" class="floating-panel-body">
@@ -214,6 +223,26 @@ const outputCards = computed(() => {
     cards.push({ label: '异常条目', value: `${anomalies} 条` });
   } else {
     cards.push({ label: '结论要点', value: `${latest.highlights.length} 条` });
+  }
+  return cards;
+});
+
+const executionDigestCards = computed(() => {
+  const digest = agentStore.latest?.execution_digest;
+  if (!digest) return [];
+  const cards = [
+    { label: '证据数量', value: `${digest.evidence_count} 条` },
+    { label: '执行步骤', value: `${digest.plan_step_count} 步` },
+    { label: '轨迹节点', value: `${digest.trace_step_count} 个` },
+  ];
+  if (digest.route_label) {
+    cards.push({
+      label: '主路由',
+      value: digest.route_score != null ? `${digest.route_label} (${digest.route_score.toFixed(1)})` : digest.route_label,
+    });
+  }
+  if (digest.evidence_types?.length) {
+    cards.push({ label: '证据类型', value: digest.evidence_types.join(' / ') });
   }
   return cards;
 });

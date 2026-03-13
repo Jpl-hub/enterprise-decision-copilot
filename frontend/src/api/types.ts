@@ -576,6 +576,20 @@ export interface AgentThreadMemory {
   key_signals: string[];
   next_steps: string[];
   evidence_focus: string[];
+  execution_digest?: AgentExecutionDigest | null;
+}
+
+export interface AgentExecutionDigest {
+  stage_label?: string | null;
+  skill_label?: string | null;
+  task_label?: string | null;
+  deliverables: string[];
+  evidence_count: number;
+  evidence_types: string[];
+  route_label?: string | null;
+  route_score?: number | null;
+  trace_step_count: number;
+  plan_step_count: number;
 }
 
 export interface AgentRouteCandidate {
@@ -637,6 +651,7 @@ export interface AgentResponse {
   focus?: AgentFocus | null;
   thread_summary?: string | null;
   thread_memory?: AgentThreadMemory | null;
+  execution_digest?: AgentExecutionDigest | null;
   thread_messages: AgentThreadMessage[];
 }
 

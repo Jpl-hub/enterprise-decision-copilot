@@ -417,6 +417,9 @@ def test_agent_response_exposes_thread_summary() -> None:
     assert payload['thread_summary']
     assert payload['thread_memory']
     assert payload['thread_memory']['conclusion']
+    assert payload['thread_memory']['execution_digest']
+    assert payload['execution_digest']
+    assert payload['execution_digest']['deliverables']
     assert '企业诊断' in payload['thread_summary']
 
 
@@ -444,8 +447,10 @@ def test_agent_thread_history_and_detail_expose_thread_summary() -> None:
 
     assert history['items'][0]['thread_summary']
     assert history['items'][0]['thread_memory']
+    assert history['items'][0]['thread_memory']['execution_digest']
     assert detail['thread_summary']
     assert detail['thread_memory']
+    assert detail['thread_memory']['execution_digest']
     assert detail['thread_summary'] == history['items'][0]['thread_summary']
 
 
