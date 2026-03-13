@@ -30,6 +30,46 @@
         </article>
       </section>
 
+      <section v-if="payload" class="mission-visual-grid">
+        <article class="mission-panel">
+          <div class="mission-panel-head">
+            <span>任务泳道热力图</span>
+            <div class="mission-filter-row">
+              <button
+                v-for="lane in payload.mission_lanes"
+                :key="lane.lane_id"
+                class="mission-filter-chip"
+                :class="{ active: selectedLaneId === lane.lane_id }"
+                @click="selectedLaneId = lane.lane_id"
+              >
+                {{ lane.name }}
+              </button>
+            </div>
+          </div>
+          <EChartPanel :option="laneChartOption" height="320px" @chart-click="handleLaneChartClick" />
+        </article>
+
+        <article class="mission-panel mission-focus-panel" v-if="selectedLane">
+          <div class="mission-panel-head">
+            <span>焦点泳道</span>
+            <strong>{{ selectedLane.name }}</strong>
+          </div>
+          <p class="mission-focus-copy">{{ selectedLane.summary }}</p>
+          <div class="mission-focus-readiness">
+            <span class="mission-status-pill" :class="selectedLane.status">{{ statusLabel(selectedLane.status) }}</span>
+            <strong>{{ (selectedLane.readiness_score * 100).toFixed(0) }}</strong>
+          </div>
+          <div class="mission-focus-box">
+            <span>当前焦点</span>
+            <p>{{ selectedLane.current_focus }}</p>
+          </div>
+          <div class="mission-focus-box">
+            <span>下一步动作</span>
+            <p v-for="item in selectedLane.next_actions" :key="item">{{ item }}</p>
+          </div>
+        </article>
+      </section>
+
       <section class="mission-grid" v-if="payload">
         <article v-for="lane in payload.mission_lanes" :key="lane.lane_id" class="mission-lane-card">
           <div class="mission-lane-top">
@@ -91,14 +131,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { api } from '../api/client';
 import type { AIMissionControlResponse } from '../api/types';
+import EChartPanel from '../components/EChartPanel.vue';
 
 const payload = ref<AIMissionControlResponse | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
+const selectedLaneId = ref('');
 
 function statusLabel(status: string) {
   if (status === 'active') return '运行中';
@@ -106,15 +148,69 @@ function statusLabel(status: string) {
   return '预热中';
 }
 
+const selectedLane = computed(() => payload.value?.mission_lanes.find((item) => item.lane_id === selectedLaneId.value) || payload.value?.mission_lanes?.[0] || null);
+
+const laneChartOption = computed(() => {
+  const lanes = payload.value?.mission_lanes || [];
+  return {
+    tooltip: { trigger: 'axis' },
+    grid: { left: 24, right: 24, top: 24, bottom: 70, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: lanes.map((item) => item.name),
+      axisLabel: { color: '#64748b', interval: 0, rotate: 18 },
+      axisLine: { lineStyle: { color: '#cbd5e1' } },
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: 100,
+      axisLabel: { color: '#64748b' },
+      splitLine: { lineStyle: { color: '#e2e8f0' } },
+    },
+    series: [
+      {
+        type: 'bar',
+        data: lanes.map((item) => Number((item.readiness_score * 100).toFixed(0))),
+        itemStyle: {
+          color: (params: { dataIndex: number }) => {
+            const lane = lanes[params.dataIndex];
+            if (!lane) return '#173f78';
+            if (lane.status === 'active') return '#166534';
+            if (lane.status === 'building') return '#d97706';
+            return '#2563eb';
+          },
+          borderRadius: [10, 10, 0, 0],
+        },
+      },
+    ],
+  };
+});
+
+function handleLaneChartClick(params: Record<string, unknown>) {
+  const laneName = String(params.name || '');
+  const lane = payload.value?.mission_lanes.find((item) => item.name === laneName);
+  if (lane) {
+    selectedLaneId.value = lane.lane_id;
+  }
+}
+
 onMounted(async () => {
   loading.value = true;
   error.value = null;
   try {
     payload.value = await api.getAIMissionControl();
+    selectedLaneId.value = payload.value.mission_lanes[0]?.lane_id || '';
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加载项目总控台失败';
   } finally {
     loading.value = false;
+  }
+});
+
+watch(payload, (value) => {
+  if (value?.mission_lanes?.length && !value.mission_lanes.some((item) => item.lane_id === selectedLaneId.value)) {
+    selectedLaneId.value = value.mission_lanes[0].lane_id;
   }
 });
 </script>
@@ -224,6 +320,46 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
+}
+
+.mission-visual-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 18px;
+}
+
+.mission-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mission-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mission-filter-chip:hover {
+  border-color: #0f172a;
+  color: #0f172a;
+}
+
+.mission-filter-chip.active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
 }
 
 .mission-metric-card {
@@ -377,6 +513,10 @@ onMounted(async () => {
   border-radius: 28px;
 }
 
+.mission-focus-panel {
+  align-content: start;
+}
+
 .mission-panel-head {
   display: flex;
   justify-content: space-between;
@@ -387,6 +527,53 @@ onMounted(async () => {
 .mission-panel-head a {
   font-size: 13px;
   color: #475569;
+}
+
+.mission-focus-copy {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #475569;
+}
+
+.mission-focus-readiness {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.mission-focus-readiness strong {
+  font-family: 'DM Mono', monospace;
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.mission-focus-box {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.mission-focus-box span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.mission-focus-box p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #334155;
 }
 
 .mission-line-item + .mission-line-item {
@@ -417,6 +604,7 @@ onMounted(async () => {
 
 @media (max-width: 980px) {
   .mission-hero,
+  .mission-visual-grid,
   .mission-metric-strip,
   .mission-grid,
   .mission-lower-grid,

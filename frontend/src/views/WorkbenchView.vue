@@ -94,6 +94,44 @@
               <p>{{ latestDisclosureDate || '披露日期同步中' }}</p>
             </div>
           </div>
+
+          <div class="v-visual-stage" v-if="allEvidence.length || multimodalMetrics.length || riskContributionRows.length">
+            <div class="v-visual-stage-head">
+              <div>
+                <span class="v-stage-kicker">可视化操作台</span>
+                <strong>别只看结论，直接切换到经营信号图</strong>
+              </div>
+              <div class="v-visual-tab-row">
+                <button class="v-visual-tab" :class="{ active: visualMode === 'evidence' }" @click="visualMode = 'evidence'">证据构成</button>
+                <button class="v-visual-tab" :class="{ active: visualMode === 'multimodal' }" @click="visualMode = 'multimodal'">财报字段</button>
+                <button class="v-visual-tab" :class="{ active: visualMode === 'risk' }" @click="visualMode = 'risk'">风险驱动</button>
+              </div>
+            </div>
+            <div class="v-visual-stage-grid">
+              <div class="v-visual-chart-card">
+                <EChartPanel :option="visualChartOption" height="320px" />
+              </div>
+              <div class="v-visual-insight-card">
+                <span>当前读法</span>
+                <strong>{{ visualMode === 'evidence' ? '证据覆盖' : visualMode === 'multimodal' ? '财报结构' : '风险因子' }}</strong>
+                <p>{{ visualInsight }}</p>
+                <div class="v-visual-stat-stack">
+                  <div class="v-visual-stat">
+                    <span>直接证据</span>
+                    <strong>{{ allEvidence.length }} 条</strong>
+                  </div>
+                  <div class="v-visual-stat">
+                    <span>多模态字段</span>
+                    <strong>{{ multimodalMetrics.length }} 项</strong>
+                  </div>
+                  <div class="v-visual-stat">
+                    <span>模型驱动项</span>
+                    <strong>{{ riskContributionRows.length }} 个</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           
           <div class="v-judgement-grid">
             <div class="v-judgement-col">
@@ -122,12 +160,23 @@
         <section id="evidence-section" class="v-doc-section v-evidence-section" v-if="allEvidence.length">
           <div class="v-section-heading-row">
             <h2 class="v-section-title">02 / 关键证据锚点</h2>
-            <span class="v-section-count">{{ allEvidence.length }} 条直接证据</span>
+            <span class="v-section-count">{{ filteredEvidence.length }} / {{ allEvidence.length }} 条直接证据</span>
           </div>
           <p class="v-section-desc">优先展示可直接回链的财报原件、图表页锚点与研报片段，避免判断与证据脱节。</p>
+          <div class="v-evidence-filter-row">
+            <button
+              v-for="item in evidenceTypeOptions"
+              :key="item.value"
+              class="v-evidence-filter-chip"
+              :class="{ active: evidenceTypeFilter === item.value }"
+              @click="selectEvidenceType(item.value)"
+            >
+              {{ item.label }}
+            </button>
+          </div>
           
           <div class="v-evidence-grid">
-            <div v-for="(ev, idx) in allEvidence" :key="`${ev.evidence_type}-${ev.source_url || ev.image_url || ev.page_label || idx}`" class="v-evidence-card">
+            <div v-for="(ev, idx) in filteredEvidence" :key="`${ev.evidence_type}-${ev.source_url || ev.image_url || ev.page_label || idx}`" class="v-evidence-card">
               <div class="v-evidence-meta">
                 <span class="v-ev-type">{{ formatEvidenceType(ev.evidence_type) }}</span>
                 <span class="v-ev-source" v-if="ev.institution">{{ ev.institution }}</span>
@@ -147,6 +196,9 @@
                 </a>
               </div>
             </div>
+          </div>
+          <div v-if="!filteredEvidence.length" class="v-evidence-empty">
+            当前筛选条件下没有可直接回链的证据，换个证据类型继续查看。
           </div>
         </section>
 
@@ -187,11 +239,14 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../api/client';
+import EChartPanel from '../components/EChartPanel.vue';
 import type {
   CompanyReportResponse,
   DecisionBriefResponse,
+  MultimodalMetricItem,
+  RiskContributionItem,
   RiskForecastResponse,
-  UnifiedEvidence
+  UnifiedEvidence,
 } from '../api/types';
 import { useAgentThreadStore } from '../stores/agentThread';
 import { useDashboardStore } from '../stores/dashboard';
@@ -209,6 +264,8 @@ const brief = ref<DecisionBriefResponse | null>(null);
 const risk = ref<RiskForecastResponse | null>(null);
 
 const isLoading = ref(false);
+const visualMode = ref<'evidence' | 'multimodal' | 'risk'>('evidence');
+const evidenceTypeFilter = ref<'all' | 'text' | 'image' | 'link' | 'pdf_anchor'>('all');
 
 const currentCompanyName = computed(() => {
   return store.targets.find(t => String(t.company_code) === selectedCode.value)?.company_name || 
@@ -293,6 +350,141 @@ const allEvidence = computed<UnifiedEvidence[]>(() => {
   });
 });
 
+const evidenceTypeOptions = computed(() => {
+  const mapping: Record<string, string> = {
+    text: '研报片段',
+    image: '图表截图',
+    link: '外部链接',
+    pdf_anchor: '财报定位',
+  };
+  const counts = allEvidence.value.reduce<Record<string, number>>((acc, item) => {
+    acc[item.evidence_type] = (acc[item.evidence_type] || 0) + 1;
+    return acc;
+  }, {});
+  return [
+    { value: 'all', label: `全部 ${allEvidence.value.length}` },
+    ...Object.entries(counts).map(([key, value]) => ({
+      value: key,
+      label: `${mapping[key] || key} ${value}`,
+    })),
+  ];
+});
+
+const filteredEvidence = computed(() => {
+  if (evidenceTypeFilter.value === 'all') return allEvidence.value;
+  return allEvidence.value.filter((item) => item.evidence_type === evidenceTypeFilter.value);
+});
+
+const multimodalMetrics = computed(() => {
+  const digest = report.value?.evidence?.multimodal_digest as { metrics?: MultimodalMetricItem[] } | undefined;
+  const metrics = digest?.metrics;
+  if (!Array.isArray(metrics)) return [];
+  return metrics
+    .filter((item) => typeof item?.value === 'number' && Number.isFinite(item.value))
+    .slice(0, 6)
+    .map((item) => ({
+      label: String(item.label || item.field || '指标'),
+      value: Number(item.value),
+      display: String(item.display_value || item.value),
+    }));
+});
+
+const riskContributionRows = computed(() => {
+  const contributions = risk.value?.model_prediction?.top_contributions;
+  if (!Array.isArray(contributions)) return [];
+  return (contributions as RiskContributionItem[])
+    .slice(0, 6)
+    .map((item) => ({
+      label: item.feature,
+      value: Math.abs(Number(item.contribution || 0)),
+      direction: item.direction,
+    }));
+});
+
+const visualInsight = computed(() => {
+  if (visualMode.value === 'multimodal' && multimodalMetrics.value.length) {
+    return `当前多模态页锚点里最有代表性的 ${multimodalMetrics.value.length} 个财务字段已经可视化，可以直接拿来讲财报结构。`;
+  }
+  if (visualMode.value === 'risk' && riskContributionRows.value.length) {
+    return `风险模型当前把 ${riskContributionRows.value[0].label} 识别为最强驱动项之一，说明这轮判断已经不只是主观描述。`;
+  }
+  return `当前证据池里共有 ${allEvidence.value.length} 条可回链证据，先看证据构成，再决定继续追哪条分析线。`;
+});
+
+const visualChartOption = computed(() => {
+  if (visualMode.value === 'multimodal' && multimodalMetrics.value.length) {
+    return {
+      tooltip: { trigger: 'axis' },
+      grid: { left: 24, right: 16, top: 24, bottom: 40, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: multimodalMetrics.value.map((item) => item.label),
+        axisLabel: { color: '#64748b', interval: 0, rotate: 18 },
+        axisLine: { lineStyle: { color: '#cbd5e1' } },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: '#64748b' },
+        splitLine: { lineStyle: { color: '#e2e8f0' } },
+      },
+      series: [
+        {
+          type: 'bar',
+          data: multimodalMetrics.value.map((item) => item.value),
+          itemStyle: { color: '#173f78', borderRadius: [10, 10, 0, 0] },
+        },
+      ],
+    };
+  }
+  if (visualMode.value === 'risk' && riskContributionRows.value.length) {
+    return {
+      tooltip: { trigger: 'axis' },
+      grid: { left: 110, right: 20, top: 18, bottom: 18, containLabel: true },
+      xAxis: {
+        type: 'value',
+        axisLabel: { color: '#64748b' },
+        splitLine: { lineStyle: { color: '#e2e8f0' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: riskContributionRows.value.map((item) => item.label),
+        axisLabel: { color: '#475569' },
+      },
+      series: [
+        {
+          type: 'bar',
+          data: riskContributionRows.value.map((item) => item.value),
+          itemStyle: { color: '#d97706', borderRadius: [0, 10, 10, 0] },
+        },
+      ],
+    };
+  }
+  const counts = [
+    { name: '研报片段', value: allEvidence.value.filter((item) => item.evidence_type === 'text').length },
+    { name: '图表截图', value: allEvidence.value.filter((item) => item.evidence_type === 'image').length },
+    { name: '财报定位', value: allEvidence.value.filter((item) => item.evidence_type === 'pdf_anchor').length },
+    { name: '外部链接', value: allEvidence.value.filter((item) => item.evidence_type === 'link').length },
+  ].filter((item) => item.value > 0);
+  return {
+    tooltip: { trigger: 'item' },
+    legend: { bottom: 0, textStyle: { color: '#64748b' } },
+    series: [
+      {
+        type: 'pie',
+        radius: ['48%', '72%'],
+        center: ['50%', '44%'],
+        label: { formatter: '{b}\n{c}', color: '#334155' },
+        data: counts,
+        itemStyle: {
+          borderColor: '#ffffff',
+          borderWidth: 3,
+        },
+      },
+    ],
+    color: ['#173f78', '#4f46e5', '#d97706', '#0f766e'],
+  };
+});
+
 function formatEvidenceType(type: string) {
   switch (type) {
     case 'image': return '多模态图表';
@@ -301,6 +493,10 @@ function formatEvidenceType(type: string) {
     case 'text': return '研报片段';
     default: return '事实证据';
   }
+}
+
+function selectEvidenceType(value: string) {
+  evidenceTypeFilter.value = value as typeof evidenceTypeFilter.value;
 }
 
 function formatDate(val?: string | null) {
@@ -312,6 +508,13 @@ function scrollToSection(sectionId: string) {
   if (typeof document === 'undefined') return;
   document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+watch(allEvidence, () => {
+  const currentFilter = evidenceTypeFilter.value;
+  if (currentFilter !== 'all' && !allEvidence.value.some((item) => item.evidence_type === currentFilter)) {
+    evidenceTypeFilter.value = 'all';
+  }
+}, { immediate: true });
 
 async function loadAll() {
   if (!selectedCode.value) return;
@@ -666,6 +869,137 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
+.v-visual-stage {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 32px;
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.v-visual-stage-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.v-stage-kicker {
+  display: inline-flex;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-visual-stage-head strong {
+  display: block;
+  font-size: 26px;
+  line-height: 1.12;
+  color: var(--text-primary);
+}
+
+.v-visual-tab-row,
+.v-evidence-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.v-visual-tab,
+.v-evidence-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: #ffffff;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.v-visual-tab:hover,
+.v-evidence-filter-chip:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.v-visual-tab.active,
+.v-evidence-filter-chip.active {
+  background: var(--text-primary);
+  color: #ffffff;
+  border-color: var(--text-primary);
+}
+
+.v-visual-stage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.72fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.v-visual-chart-card,
+.v-visual-insight-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+}
+
+.v-visual-insight-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.v-visual-insight-card span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.v-visual-insight-card strong {
+  font-size: 24px;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.v-visual-insight-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.v-visual-stat-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.v-visual-stat {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg-surface-highlight);
+}
+
+.v-visual-stat strong {
+  font-size: 18px;
+}
+
 .v-judgement-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -864,6 +1198,14 @@ onMounted(() => {
   text-decoration: underline;
 }
 
+.v-evidence-empty {
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+}
+
 @media (max-width: 768px) {
   .v-doc-nav {
     flex-direction: column;
@@ -883,6 +1225,9 @@ onMounted(() => {
   .v-signal-grid,
   .v-evidence-highlight-grid,
   .v-analysis-section-grid {
+    grid-template-columns: 1fr;
+  }
+  .v-visual-stage-grid {
     grid-template-columns: 1fr;
   }
   .v-btn-outline,
