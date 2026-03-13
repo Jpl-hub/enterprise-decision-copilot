@@ -9,6 +9,7 @@ from app.schemas.quality import (
     DataGovernanceSummaryResponse,
     DataPreparationSummaryResponse,
     DataQualitySummaryResponse,
+    DataTrustSummaryResponse,
     RetrievalEvaluationSummaryResponse,
     ManualReviewRequest,
     ManualReviewSubmitResponse,
@@ -46,6 +47,13 @@ async def get_governance_summary(
     quality_service: DataQualityService = Depends(get_quality_service),
 ) -> dict:
     return quality_service.get_governance_summary()
+
+
+@router.get("/trust-center", response_model=DataTrustSummaryResponse)
+async def get_trust_center_summary(
+    quality_service: DataQualityService = Depends(get_quality_service),
+) -> dict:
+    return quality_service.get_trust_center_summary()
 
 
 @router.get("/retrieval-evaluation", response_model=RetrievalEvaluationSummaryResponse)

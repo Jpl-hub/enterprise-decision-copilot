@@ -11,6 +11,7 @@ from app.api.routes.quality import (
     get_preparation_summary,
     get_quality_summary,
     get_retrieval_evaluation_summary,
+    get_trust_center_summary,
     submit_manual_review,
     sync_auto_reviews,
 )
@@ -27,7 +28,10 @@ def build_quality_service(base_dir: Path) -> DataQualityService:
     inventory = base_dir / "report_inventory.csv"
     review_queue = base_dir / "manual_review_queue.csv"
     multimodal_dir = base_dir / "official_extract_multimodal"
+    source_registry = base_dir / "source_registry.csv"
+    script_dir = base_dir / "scripts"
     multimodal_dir.mkdir(parents=True, exist_ok=True)
+    script_dir.mkdir(parents=True, exist_ok=True)
 
     pd.DataFrame(
         [
@@ -77,6 +81,21 @@ def build_quality_service(base_dir: Path) -> DataQualityService:
         encoding="utf-8",
     )
 
+    source_registry.write_text(
+        "source_type,source_name,domain,entry_url,usage_scope,compliance_note,priority\n"
+        "financial,SSE regular reports,query.sse.com.cn,https://www.sse.com.cn/disclosure/listedinfo/regular/,定期报告,公开披露,P0\n"
+        "financial,SZSE regular reports,www.szse.cn,https://www.szse.cn/disclosure/listed/fixed/index.html,定期报告,公开披露,P0\n"
+        "financial,BSE announcements,www.bse.cn,https://www.bse.cn/disclosure/announcement.html,定期报告,公开披露,P0\n"
+        "research,Eastmoney stock reports,data.eastmoney.com,https://data.eastmoney.com/report/stock.jshtml,个股研报,公开接口,P0\n"
+        "research,Eastmoney industry reports,data.eastmoney.com,https://data.eastmoney.com/report/industry.jshtml,行业研报,公开接口,P1\n"
+        "macro,NBS stats,stats.gov.cn,https://www.stats.gov.cn/sj/,宏观指标,公开披露,P0\n",
+        encoding="utf-8-sig",
+    )
+    (script_dir / "legacy_bootstrap.py").write_text(
+        "URL = 'https://legacy.example.com/raw.pdf'\n",
+        encoding="utf-8",
+    )
+
     (multimodal_dir / "300760_2024.json").write_text(
         json.dumps(
             {
@@ -108,6 +127,8 @@ def build_quality_service(base_dir: Path) -> DataQualityService:
         inventory_path=inventory,
         review_queue_path=review_queue,
         multimodal_extract_dir=multimodal_dir,
+        source_registry_path=source_registry,
+        script_dir=script_dir,
     )
 
 
@@ -263,6 +284,32 @@ def test_quality_route_returns_governance_payload() -> None:
     assert payload["company_coverage"]
     assert payload["field_quality"]
     assert payload["evidence_mapping"]
+
+
+def test_quality_service_returns_trust_center_summary() -> None:
+    base_dir = create_test_dir()
+    try:
+        service = build_quality_service(base_dir)
+        payload = service.get_trust_center_summary()
+    finally:
+        shutil.rmtree(base_dir, ignore_errors=True)
+
+    assert payload["source_alignment"]["registry_source_count"] == 6
+    assert payload["source_alignment"]["legacy_script_issue_count"] == 1
+    assert payload["observed_domains"]
+    assert any(item["domain"] == "data.eastmoney.com" for item in payload["observed_domains"])
+    assert payload["freshness_watchlist"]
+    assert payload["findings"]
+    assert payload["next_actions"]
+
+
+def test_quality_route_returns_trust_center_payload() -> None:
+    payload = asyncio.run(get_trust_center_summary(quality_service=DataQualityService()))
+
+    assert payload["source_alignment"]["registry_source_count"] >= 6
+    assert payload["observed_domains"]
+    assert payload["freshness_watchlist"]
+    assert payload["next_actions"]
 
 
 def test_quality_service_returns_retrieval_evaluation_summary() -> None:

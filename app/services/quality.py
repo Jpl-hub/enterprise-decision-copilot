@@ -4,8 +4,9 @@ import csv
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from math import log2
+from pathlib import Path
+from urllib.parse import urlparse
 
 import pandas as pd
 
@@ -45,6 +46,8 @@ class DataQualityService:
         inventory_path: Path | None = None,
         review_queue_path: Path | None = None,
         multimodal_extract_dir: Path | None = None,
+        source_registry_path: Path | None = None,
+        script_dir: Path | None = None,
     ) -> None:
         quality_dir = settings.data_dir / "quality"
         raw_official_dir = settings.raw_dir / "official"
@@ -54,6 +57,8 @@ class DataQualityService:
         self.inventory_path = inventory_path or (raw_official_dir / "report_inventory.csv")
         self.review_queue_path = review_queue_path or (review_dir / "manual_review_queue.csv")
         self.multimodal_extract_dir = multimodal_extract_dir or (settings.cache_dir / "official_extract_multimodal")
+        self.source_registry_path = source_registry_path
+        self.script_dir = script_dir or (Path(__file__).resolve().parents[2] / "scripts")
         self.retrieval_eval_cases_path = settings.data_dir / "evals" / "retrieval_eval_cases.json"
         self.review_queue_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -74,6 +79,8 @@ class DataQualityService:
         return payload if isinstance(payload, list) else []
 
     def _load_source_registry_frame(self) -> pd.DataFrame:
+        if self.source_registry_path and self.source_registry_path.exists():
+            return self._read_csv(self.source_registry_path)
         candidates = [
             settings.processed_dir / "source_registry.csv",
             settings.data_dir / "lake" / "silver" / "source_registry" / "part-0000.csv",
@@ -92,6 +99,16 @@ class DataQualityService:
         if value is None or pd.isna(value):
             return []
         return [item for item in str(value).split(",") if item and item.lower() != "nan"]
+
+    def _extract_domain(self, value: object) -> str | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        if "://" not in text and "/" not in text and "." in text:
+            return text.lower()
+        parsed = urlparse(text if "://" in text else f"https://{text}")
+        host = str(parsed.netloc or "").strip().lower()
+        return host or None
 
     def _pending_key(self, row: dict) -> tuple[str, int, str]:
         return (
@@ -116,6 +133,136 @@ class DataQualityService:
             return int(value)
         except (TypeError, ValueError):
             return default
+
+    def _parse_iso_datetime(self, value: object) -> datetime | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        for candidate in (text, text.replace("Z", "+00:00")):
+            try:
+                parsed = datetime.fromisoformat(candidate)
+            except ValueError:
+                try:
+                    parsed = pd.to_datetime(candidate).to_pydatetime()
+                except Exception:
+                    continue
+            if parsed.tzinfo is not None:
+                return parsed.astimezone(UTC).replace(tzinfo=None)
+            return parsed
+        return None
+
+    def _domain_family_aliases(self, domain: str) -> set[str]:
+        normalized = domain.lower().strip()
+        aliases = {normalized}
+        if normalized.endswith("sse.com.cn"):
+            aliases.update({"www.sse.com.cn", "query.sse.com.cn", "static.sse.com.cn"})
+        if normalized.endswith("szse.cn"):
+            aliases.update({"www.szse.cn", "disc.static.szse.cn"})
+        if normalized.endswith("bse.cn"):
+            aliases.update({"www.bse.cn"})
+        if normalized.endswith("eastmoney.com"):
+            aliases.update({"data.eastmoney.com", "reportapi.eastmoney.com", "datacenter-web.eastmoney.com"})
+        if normalized.endswith("stats.gov.cn"):
+            aliases.update({"www.stats.gov.cn", "stats.gov.cn"})
+        return aliases
+
+    def _allowed_domain_set(self, source_registry: pd.DataFrame) -> set[str]:
+        allowed: set[str] = set()
+        if source_registry.empty or "domain" not in source_registry.columns:
+            return allowed
+        for value in source_registry["domain"].dropna().tolist():
+            domain = self._extract_domain(value)
+            if not domain:
+                continue
+            allowed.update(self._domain_family_aliases(domain))
+        return allowed
+
+    def _scan_observed_domains(self) -> list[dict]:
+        processed_dir = settings.processed_dir
+        dataset_map = {
+            "financial_features": processed_dir / "financial_features.csv",
+            "financial_features_official": processed_dir / "financial_features_official.csv",
+            "research_reports": processed_dir / "research_reports.csv",
+            "industry_reports": processed_dir / "industry_reports.csv",
+            "official_periodic_snapshots": processed_dir / "official_periodic_snapshots.csv",
+            "macro_indicators": processed_dir / "macro_indicators.csv",
+        }
+        observed: dict[str, dict[str, object]] = {}
+        for dataset_name, path in dataset_map.items():
+            if not path.exists():
+                continue
+            frame = self._read_csv(path, dtype={"company_code": str})
+            if frame.empty:
+                continue
+            url_columns = [name for name in ("source_url", "pdf_url", "report_url") if name in frame.columns]
+            for column in url_columns:
+                for raw in frame[column].dropna().tolist():
+                    text = str(raw).strip()
+                    domain = self._extract_domain(text)
+                    if not domain:
+                        continue
+                    bucket = observed.setdefault(
+                        domain,
+                        {"domain": domain, "datasets": set(), "sample_urls": []},
+                    )
+                    datasets = bucket["datasets"]
+                    if isinstance(datasets, set):
+                        datasets.add(dataset_name)
+                    sample_urls = bucket["sample_urls"]
+                    if isinstance(sample_urls, list) and text not in sample_urls and len(sample_urls) < 3:
+                        sample_urls.append(text)
+        rows: list[dict] = []
+        for item in observed.values():
+            rows.append(
+                {
+                    "domain": str(item["domain"]),
+                    "datasets": sorted(list(item["datasets"])) if isinstance(item["datasets"], set) else [],
+                    "sample_urls": list(item["sample_urls"]) if isinstance(item["sample_urls"], list) else [],
+                }
+            )
+        return sorted(rows, key=lambda item: item["domain"])
+
+    def _scan_script_url_references(self) -> list[dict]:
+        if not self.script_dir.exists():
+            return []
+        findings: list[dict] = []
+        for path in sorted(self.script_dir.rglob("*.py")):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            urls = {part.strip(" '\"") for part in content.split() if "http://" in part or "https://" in part}
+            domains = sorted({self._extract_domain(url) for url in urls if self._extract_domain(url)})
+            for domain in domains:
+                findings.append(
+                    {
+                        "script_path": str(path.resolve()),
+                        "domain": domain,
+                    }
+                )
+        return findings
+
+    def _freshness_item(self, source_key: str, label: str, latest: str | None, threshold_days: int) -> dict:
+        parsed = self._parse_iso_datetime(latest)
+        days_since_update = None
+        if parsed is not None:
+            days_since_update = (datetime.now() - parsed).days
+        if latest is None or days_since_update is None:
+            status = "missing"
+        elif days_since_update <= threshold_days:
+            status = "fresh"
+        elif days_since_update <= threshold_days * 2:
+            status = "aging"
+        else:
+            status = "stale"
+        return {
+            "source_key": source_key,
+            "label": label,
+            "latest": latest,
+            "days_since_update": days_since_update,
+            "status": status,
+            "threshold_days": threshold_days,
+        }
 
     def _promotion_manifest_path(self, exchange: str) -> Path:
         exchange_key = str(exchange or "").strip().upper()
@@ -1170,6 +1317,158 @@ class DataQualityService:
             "company_coverage": company_coverage,
             "field_quality": field_quality,
             "evidence_mapping": evidence_mapping,
+        }
+
+    def get_trust_center_summary(self) -> dict:
+        source_registry = self._load_source_registry_frame()
+        quality_summary = self.get_quality_summary()
+        preparation_summary = self.get_preparation_summary()
+        governance_summary = self.get_governance_summary()
+
+        allowed_domains = self._allowed_domain_set(source_registry)
+        observed_domains = self._scan_observed_domains()
+        script_references = self._scan_script_url_references()
+
+        observed_rows: list[dict] = []
+        disallowed_observed_domains: list[str] = []
+        for item in observed_domains:
+            domain = str(item.get("domain") or "")
+            allowed = domain in allowed_domains
+            if not allowed:
+                disallowed_observed_domains.append(domain)
+            observed_rows.append(
+                {
+                    "domain": domain,
+                    "status": "approved" if allowed else "blocked",
+                    "datasets": list(item.get("datasets") or []),
+                    "sample_urls": list(item.get("sample_urls") or []),
+                }
+            )
+
+        legacy_script_issues = [
+            item for item in script_references
+            if str(item.get("domain") or "") not in allowed_domains
+        ]
+
+        freshness_watchlist = [
+            self._freshness_item(
+                "official_financial_reports",
+                "官方财报",
+                str(preparation_summary.get("source_status", [{}])[0].get("latest") or "") or None,
+                380,
+            ),
+            self._freshness_item(
+                "stock_research_reports",
+                "个股研报",
+                preparation_summary.get("latest_stock_report_date"),
+                30,
+            ),
+            self._freshness_item(
+                "industry_research_reports",
+                "行业研报",
+                preparation_summary.get("latest_industry_report_date"),
+                30,
+            ),
+            self._freshness_item(
+                "macro_indicators",
+                "宏观指标",
+                preparation_summary.get("latest_macro_period"),
+                120,
+            ),
+        ]
+
+        findings: list[dict] = []
+        if disallowed_observed_domains:
+            findings.append(
+                {
+                    "level": "critical",
+                    "category": "source_compliance",
+                    "title": "存在未登记的数据域名",
+                    "detail": f"已观测到 {len(disallowed_observed_domains)} 个未登记域名：{', '.join(disallowed_observed_domains[:4])}。",
+                }
+            )
+        if legacy_script_issues:
+            findings.append(
+                {
+                    "level": "high",
+                    "category": "legacy_pipeline",
+                    "title": "仓内仍有历史脚本引用非赛题来源",
+                    "detail": f"检测到 {len(legacy_script_issues)} 处脚本域名不在赛题登记表内，需停用或改写。",
+                }
+            )
+        if float(quality_summary.get("official_report_coverage_ratio") or 0.0) < 1.0:
+            findings.append(
+                {
+                    "level": "high",
+                    "category": "coverage",
+                    "title": "官方财报覆盖未打满",
+                    "detail": f"当前官方财报覆盖率为 {float(quality_summary.get('official_report_coverage_ratio') or 0.0):.2%}。",
+                }
+            )
+        if int(quality_summary.get("pending_review_count") or 0) > 0:
+            findings.append(
+                {
+                    "level": "medium",
+                    "category": "review_queue",
+                    "title": "仍存在待人工复核问题",
+                    "detail": f"当前待人工复核 {int(quality_summary.get('pending_review_count') or 0)} 项。",
+                }
+            )
+        stale_sources = [item for item in freshness_watchlist if item["status"] in {"aging", "stale", "missing"}]
+        for item in stale_sources[:2]:
+            findings.append(
+                {
+                    "level": "medium" if item["status"] != "missing" else "high",
+                    "category": "freshness",
+                    "title": f"{item['label']}时效需要关注",
+                    "detail": (
+                        f"最新更新时间为 {item['latest']}，距离现在 {item['days_since_update']} 天。"
+                        if item["latest"]
+                        else "当前没有可用更新时间，无法证明时效。"
+                    ),
+                }
+            )
+
+        score = 100
+        penalty_map = {"critical": 30, "high": 18, "medium": 8, "low": 4}
+        for item in findings:
+            score -= penalty_map.get(str(item.get("level") or "low"), 4)
+        score = max(score, 0)
+        if score >= 85:
+            trust_status = "trusted"
+        elif score >= 65:
+            trust_status = "watch"
+        else:
+            trust_status = "at_risk"
+
+        source_catalog = list(governance_summary.get("source_catalog") or [])
+        source_alignment = {
+            "registry_source_count": len(source_catalog),
+            "approved_domain_count": len(allowed_domains),
+            "observed_domain_count": len(observed_rows),
+            "disallowed_observed_domain_count": len(disallowed_observed_domains),
+            "legacy_script_issue_count": len(legacy_script_issues),
+            "competition_source_ready": (
+                len(source_catalog) >= 6
+                and len(disallowed_observed_domains) == 0
+                and {str(item.get("source_type") or "") for item in source_catalog} >= {"financial", "research", "macro"}
+            ),
+        }
+        next_actions = [
+            "继续只保留交易所、东方财富和国家统计局三类赛题来源，新增来源前先更新 source_registry。",
+            "把批任务入口统一指向官方抓取流水线，避免历史脚本绕开合规治理。",
+            "优先清空人工复核队列，并把扩池公司的官方财报覆盖继续补齐。",
+        ]
+
+        return {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "trust_score": score,
+            "trust_status": trust_status,
+            "source_alignment": source_alignment,
+            "observed_domains": observed_rows,
+            "freshness_watchlist": freshness_watchlist,
+            "findings": findings,
+            "next_actions": next_actions,
         }
 
     def submit_manual_review(

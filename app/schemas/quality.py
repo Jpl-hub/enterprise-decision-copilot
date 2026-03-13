@@ -175,6 +175,49 @@ class DataGovernanceSummaryResponse(BaseModel):
     evidence_mapping: list[GovernanceEvidenceMappingItem] = Field(default_factory=list)
 
 
+class TrustObservedDomainItem(BaseModel):
+    domain: str
+    status: str
+    datasets: list[str] = Field(default_factory=list)
+    sample_urls: list[str] = Field(default_factory=list)
+
+
+class TrustFreshnessItem(BaseModel):
+    source_key: str
+    label: str
+    latest: str | None = None
+    days_since_update: int | None = None
+    status: str
+    threshold_days: int
+
+
+class TrustFindingItem(BaseModel):
+    level: str
+    category: str
+    title: str
+    detail: str
+
+
+class TrustSourceAlignment(BaseModel):
+    registry_source_count: int = 0
+    approved_domain_count: int = 0
+    observed_domain_count: int = 0
+    disallowed_observed_domain_count: int = 0
+    legacy_script_issue_count: int = 0
+    competition_source_ready: bool = False
+
+
+class DataTrustSummaryResponse(BaseModel):
+    generated_at: str | None = None
+    trust_score: int = 0
+    trust_status: str
+    source_alignment: TrustSourceAlignment = Field(default_factory=TrustSourceAlignment)
+    observed_domains: list[TrustObservedDomainItem] = Field(default_factory=list)
+    freshness_watchlist: list[TrustFreshnessItem] = Field(default_factory=list)
+    findings: list[TrustFindingItem] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+
+
 class PreparationSourceStatus(BaseModel):
     source_key: str
     label: str
