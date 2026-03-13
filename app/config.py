@@ -2,6 +2,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.bootstrap_sample_data import ensure_sample_data
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
@@ -52,3 +54,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+ensure_sample_data(BASE_DIR)

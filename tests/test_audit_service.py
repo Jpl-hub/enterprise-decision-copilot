@@ -35,11 +35,10 @@ def test_audit_route_returns_recent_logs() -> None:
         service = AuditService(db_path)
         service.log_event('quality.review.submit', user_id='admin', target_type='manual_review', target_id='300760-2024', detail={'finding_type': '字段异常'})
         payload = get_audit_logs(limit=10, _={'user_id': 'admin', 'role': 'admin'}, audit_service=service)
+        if hasattr(payload, '__await__'):
+            import asyncio
+            payload = asyncio.run(payload)
     finally:
         shutil.rmtree(db_path.parent, ignore_errors=True)
-
-    if hasattr(payload, '__await__'):
-        import asyncio
-        payload = asyncio.run(payload)
     assert payload['total'] == 1
     assert payload['items'][0]['event_type'] == 'quality.review.submit'

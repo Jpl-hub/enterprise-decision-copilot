@@ -82,6 +82,7 @@ class DataQualityService:
         if self.source_registry_path and self.source_registry_path.exists():
             return self._read_csv(self.source_registry_path)
         candidates = [
+            settings.data_dir / "source_registry.csv",
             settings.processed_dir / "source_registry.csv",
             settings.data_dir / "lake" / "silver" / "source_registry" / "part-0000.csv",
             settings.data_dir / "lake" / "bronze" / "source_registry" / "part-0000.csv",
