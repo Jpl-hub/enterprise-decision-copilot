@@ -200,6 +200,7 @@ export interface EvidenceItem {
   matched_excerpt?: string | null;
   matched_terms?: string[];
   ranking_breakdown?: {
+    retrieval_mode?: string;
     char_score?: number;
     word_score?: number;
     hybrid_score?: number;
@@ -207,6 +208,7 @@ export interface EvidenceItem {
     recency_boost?: number;
     sentiment_boost?: number;
     entity_boost?: number;
+    diversity_boost?: number;
     rerank_score?: number;
     matched_terms?: string[];
     query_variant_count?: number;
@@ -842,6 +844,16 @@ export interface RetrievalEvalCaseResult {
   matched_titles: string[];
 }
 
+export interface RetrievalStrategyBenchmark {
+  retrieval_mode: string;
+  strategy_labels: string[];
+  case_count: number;
+  hit_at_3: number;
+  hit_at_5: number;
+  mrr: number;
+  ndcg_at_5: number;
+}
+
 export interface RetrievalEvaluationSummaryResponse {
   generated_at?: string | null;
   case_count: number;
@@ -851,6 +863,10 @@ export interface RetrievalEvaluationSummaryResponse {
   ndcg_at_5: number;
   retrieval_mode?: string | null;
   strategy_labels: string[];
+  strategy_benchmarks: RetrievalStrategyBenchmark[];
+  best_mode?: string | null;
+  best_mode_gain_at_3: number;
+  comparison_notes: string[];
   cases: RetrievalEvalCaseResult[];
 }
 

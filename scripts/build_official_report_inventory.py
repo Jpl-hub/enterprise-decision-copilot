@@ -23,6 +23,14 @@ MANIFEST_SPECS = [
 ]
 
 
+def resolve_inventory_targets_path() -> Path:
+    default_targets_path = ROOT / "data" / "targets.csv"
+    configured_path = Path(TARGETS_PATH)
+    if configured_path != default_targets_path:
+        return configured_path
+    resolved_path = resolve_targets_csv_path()
+    return resolved_path if resolved_path.exists() else configured_path
+
 
 def load_manifest_rows() -> list[dict]:
     rows: list[dict] = []
@@ -59,7 +67,7 @@ def load_manifest_rows() -> list[dict]:
 
 
 def build_target_coverage(inventory_df: pd.DataFrame) -> dict:
-    target_path = resolve_targets_csv_path()
+    target_path = resolve_inventory_targets_path()
     if not target_path.exists():
         return {
             "expected_slots": 0,

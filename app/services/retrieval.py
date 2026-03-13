@@ -32,6 +32,18 @@ QUERY_HINT_KEYWORDS = (
 )
 STOP_TOKENS = {"结合", "以及", "这个", "那个", "情况", "说明", "分析", "一下", "企业", "公司", "行业", "研报"}
 IDENTIFIER_COLUMNS = {"company_code", "industry_code", "security_code", "disclosure_company_code"}
+DEFAULT_RETRIEVAL_MODE = "hybrid_tfidf_rerank"
+RETRIEVAL_MODE_LABELS = {
+    "lexical_tfidf": ["word_tfidf", "keyword_overlap", "recency_rerank"],
+    "hybrid_tfidf_rerank": ["char_tfidf", "word_tfidf", "keyword_overlap", "recency_rerank"],
+    "hybrid_diversified": [
+        "char_tfidf",
+        "word_tfidf",
+        "keyword_overlap",
+        "recency_rerank",
+        "institution_diversity",
+    ],
+}
 
 
 @dataclass(slots=True)
@@ -290,6 +302,7 @@ class RetrievalService:
     def _build_ranking_breakdown(
         self,
         *,
+        retrieval_mode: str,
         char_score: float,
         word_score: float,
         hybrid_score: float,
@@ -297,11 +310,13 @@ class RetrievalService:
         date_boost: float,
         sentiment_boost: float,
         entity_boost: float,
+        diversity_boost: float,
         rerank_score: float,
         matched_terms: list[str],
         query_variants: list[str],
     ) -> dict:
         return {
+            "retrieval_mode": retrieval_mode,
             "char_score": round(float(char_score), 4),
             "word_score": round(float(word_score), 4),
             "hybrid_score": round(float(hybrid_score), 4),
@@ -309,6 +324,7 @@ class RetrievalService:
             "recency_boost": round(float(date_boost), 4),
             "sentiment_boost": round(float(sentiment_boost), 4),
             "entity_boost": round(float(entity_boost), 4),
+            "diversity_boost": round(float(diversity_boost), 4),
             "rerank_score": round(float(rerank_score), 4),
             "matched_terms": matched_terms[:6],
             "query_variant_count": len(query_variants),
@@ -330,6 +346,49 @@ class RetrievalService:
 
         return char_scores, word_scores
 
+    def _normalize_retrieval_mode(self, retrieval_mode: str | None) -> str:
+        mode = str(retrieval_mode or "").strip()
+        if mode in RETRIEVAL_MODE_LABELS:
+            return mode
+        return DEFAULT_RETRIEVAL_MODE
+
+    def _strategy_labels(self, retrieval_mode: str, expansion_terms: list[str] | None = None) -> list[str]:
+        labels = list(RETRIEVAL_MODE_LABELS.get(retrieval_mode, RETRIEVAL_MODE_LABELS[DEFAULT_RETRIEVAL_MODE]))
+        if expansion_terms:
+            insert_at = 2 if "word_tfidf" in labels else len(labels)
+            if "entity_expansion" not in labels:
+                labels.insert(insert_at, "entity_expansion")
+        return labels
+
+    def _base_scores_for_mode(self, char_scores: np.ndarray, word_scores: np.ndarray, retrieval_mode: str) -> np.ndarray:
+        if retrieval_mode == "lexical_tfidf":
+            return word_scores
+        if retrieval_mode == "hybrid_diversified":
+            return char_scores * 0.55 + word_scores * 0.45
+        return char_scores * 0.62 + word_scores * 0.38
+
+    def _diversity_boost(
+        self,
+        retrieval_mode: str,
+        report_row: dict,
+        seen_institutions: set[str],
+        seen_months: set[str],
+    ) -> tuple[float, list[str]]:
+        if retrieval_mode != "hybrid_diversified":
+            return 0.0, []
+
+        boost = 0.0
+        signals: list[str] = []
+        institution = self._normalize_text(str(report_row.get("institution") or ""))
+        report_month = self._normalize_text(str(report_row.get("report_date") or ""))[:7]
+        if institution and institution not in seen_institutions:
+            boost += 0.04
+            signals.append("diversity=institution")
+        if report_month and report_month not in seen_months:
+            boost += 0.02
+            signals.append("diversity=recency_mix")
+        return round(boost, 4), signals
+
     def _search(
         self,
         index: CorpusIndex,
@@ -337,6 +396,7 @@ class RetrievalService:
         limit: int,
         filter_mask: pd.Series | None = None,
         expansion_terms: list[str] | None = None,
+        retrieval_mode: str | None = None,
     ) -> list[dict]:
         if index.frame.empty:
             return []
@@ -358,10 +418,15 @@ class RetrievalService:
         if candidate_chunks.empty:
             return self._latest_rows(candidate_reports, columns, limit)
 
+        retrieval_mode = self._normalize_retrieval_mode(retrieval_mode)
         query_terms = self._dedupe_terms(self._extract_query_keywords(query) + list(expansion_terms or []), limit=10)
         query_variants = self._build_query_variants(query, expansion_terms=expansion_terms)
         char_scores, word_scores = self._hybrid_scores(index, query_variants)
-        base_scores = np.where(candidate_chunk_mask.to_numpy(), char_scores * 0.62 + word_scores * 0.38, -1.0)
+        base_scores = np.where(
+            candidate_chunk_mask.to_numpy(),
+            self._base_scores_for_mode(char_scores, word_scores, retrieval_mode),
+            -1.0,
+        )
 
         report_dates = pd.to_datetime(candidate_reports.get("report_date"), errors="coerce") if "report_date" in candidate_reports else pd.Series(dtype="datetime64[ns]")
         min_ord = int(report_dates.min().toordinal()) if not report_dates.empty and pd.notna(report_dates.min()) else 0
@@ -394,26 +459,8 @@ class RetrievalService:
                 signals.append(f"sentiment={sentiment_boost:.3f}")
             if entity_boost > 0:
                 signals.append("entity=expanded")
-            ranked_chunks.append((rerank_score, hybrid_score, chunk_row, signals))
-            if len(ranked_chunks) >= max(limit * 12, 24):
-                break
-
-        selected_reports = []
-        seen_report_ids: set[int] = set()
-        for rerank_score, hybrid_score, chunk_row, signals in sorted(ranked_chunks, key=lambda item: item[0], reverse=True):
-            report_id = int(chunk_row["_report_id"])
-            if report_id in seen_report_ids:
-                continue
-            seen_report_ids.add(report_id)
-            report_row = frame.iloc[report_id].to_dict()
-            report_row = {key: value for key, value in report_row.items() if not key.startswith("_")}
-            report_row = self._normalize_result_row(report_row)
-            report_row["matched_excerpt"] = self._build_excerpt(chunk_row)
-            report_row["relevance_score"] = round(hybrid_score, 4)
-            report_row["rerank_score"] = rerank_score
-            report_row["ranking_signals"] = signals
-            report_row["matched_terms"] = matched_terms[:6]
-            report_row["ranking_breakdown"] = self._build_ranking_breakdown(
+            breakdown = self._build_ranking_breakdown(
+                retrieval_mode=retrieval_mode,
                 char_score=float(char_scores[chunk_idx]),
                 word_score=float(word_scores[chunk_idx]),
                 hybrid_score=hybrid_score,
@@ -421,11 +468,60 @@ class RetrievalService:
                 date_boost=date_boost,
                 sentiment_boost=sentiment_boost,
                 entity_boost=entity_boost,
+                diversity_boost=0.0,
                 rerank_score=rerank_score,
                 matched_terms=matched_terms,
                 query_variants=query_variants,
             )
+            ranked_chunks.append(
+                {
+                    "rerank_score": rerank_score,
+                    "hybrid_score": hybrid_score,
+                    "chunk_row": chunk_row,
+                    "signals": signals,
+                    "matched_terms": matched_terms[:6],
+                    "breakdown": breakdown,
+                }
+            )
+            if len(ranked_chunks) >= max(limit * 12, 24):
+                break
+
+        selected_reports = []
+        seen_report_ids: set[int] = set()
+        seen_institutions: set[str] = set()
+        seen_months: set[str] = set()
+        for candidate in sorted(ranked_chunks, key=lambda item: item["rerank_score"], reverse=True):
+            chunk_row = candidate["chunk_row"]
+            report_id = int(chunk_row["_report_id"])
+            if report_id in seen_report_ids:
+                continue
+            report_row = frame.iloc[report_id].to_dict()
+            report_row = {key: value for key, value in report_row.items() if not key.startswith("_")}
+            report_row = self._normalize_result_row(report_row)
+            diversity_boost, diversity_signals = self._diversity_boost(
+                retrieval_mode,
+                report_row,
+                seen_institutions,
+                seen_months,
+            )
+            rerank_score = round(float(candidate["rerank_score"]) + diversity_boost, 4)
+            breakdown = dict(candidate["breakdown"])
+            breakdown["diversity_boost"] = round(diversity_boost, 4)
+            breakdown["rerank_score"] = rerank_score
+            report_row["matched_excerpt"] = self._build_excerpt(chunk_row)
+            report_row["relevance_score"] = round(float(candidate["hybrid_score"]), 4)
+            report_row["rerank_score"] = rerank_score
+            report_row["ranking_signals"] = list(candidate["signals"]) + diversity_signals
+            report_row["matched_terms"] = list(candidate["matched_terms"])
+            report_row["ranking_breakdown"] = breakdown
             selected_reports.append(report_row)
+            seen_report_ids.add(report_id)
+            institution = self._normalize_text(str(report_row.get("institution") or ""))
+            report_month = self._normalize_text(str(report_row.get("report_date") or ""))[:7]
+            if institution:
+                seen_institutions.add(institution)
+            if report_month:
+                seen_months.add(report_month)
             if len(selected_reports) >= limit:
                 break
 
@@ -433,7 +529,13 @@ class RetrievalService:
             return selected_reports
         return self._latest_rows(candidate_reports, columns, limit)
 
-    def retrieve_company_evidence(self, company_code: str, query: str, limit: int = 4) -> dict:
+    def retrieve_company_evidence(
+        self,
+        company_code: str,
+        query: str,
+        limit: int = 4,
+        retrieval_mode: str | None = None,
+    ) -> dict:
         company_code = str(company_code)
         stock_mask = self.stock_index.frame["company_code"].astype(str) == company_code if not self.stock_index.frame.empty else None
 
@@ -451,46 +553,57 @@ class RetrievalService:
 
         expansion_terms = self._dedupe_terms([company_name] + keywords, limit=6)
         query_terms = self._extract_query_keywords(query)
+        retrieval_mode = self._normalize_retrieval_mode(retrieval_mode)
         query_profile = {
             "query": query,
             "query_terms": query_terms,
             "expansion_terms": expansion_terms,
             "query_variants": self._build_query_variants(query, expansion_terms=expansion_terms),
-            "retrieval_mode": "hybrid_tfidf_rerank",
-            "strategy_labels": [
-                "char_tfidf",
-                "word_tfidf",
-                "entity_expansion",
-                "keyword_overlap",
-                "recency_rerank",
-            ],
+            "retrieval_mode": retrieval_mode,
+            "strategy_labels": self._strategy_labels(retrieval_mode, expansion_terms=expansion_terms),
         }
         return {
             "query": query,
             "query_terms": query_terms,
             "query_profile": query_profile,
-            "stock_reports": self._search(self.stock_index, query, limit, stock_mask, expansion_terms=expansion_terms),
-            "industry_reports": self._search(self.industry_index, query, limit, industry_mask, expansion_terms=expansion_terms),
+            "stock_reports": self._search(
+                self.stock_index,
+                query,
+                limit,
+                stock_mask,
+                expansion_terms=expansion_terms,
+                retrieval_mode=retrieval_mode,
+            ),
+            "industry_reports": self._search(
+                self.industry_index,
+                query,
+                limit,
+                industry_mask,
+                expansion_terms=expansion_terms,
+                retrieval_mode=retrieval_mode,
+            ),
         }
 
-    def retrieve_industry_evidence(self, query: str, limit: int = 6) -> dict:
+    def retrieve_industry_evidence(self, query: str, limit: int = 6, retrieval_mode: str | None = None) -> dict:
         query_terms = self._extract_query_keywords(query)
+        retrieval_mode = self._normalize_retrieval_mode(retrieval_mode)
         query_profile = {
             "query": query,
             "query_terms": query_terms,
             "expansion_terms": query_terms[:3],
             "query_variants": self._build_query_variants(query, expansion_terms=query_terms[:3]),
-            "retrieval_mode": "hybrid_tfidf_rerank",
-            "strategy_labels": [
-                "char_tfidf",
-                "word_tfidf",
-                "keyword_overlap",
-                "recency_rerank",
-            ],
+            "retrieval_mode": retrieval_mode,
+            "strategy_labels": self._strategy_labels(retrieval_mode, expansion_terms=query_terms[:3]),
         }
         return {
             "query": query,
             "query_terms": query_terms,
             "query_profile": query_profile,
-            "industry_reports": self._search(self.industry_index, query, limit, expansion_terms=query_terms[:3]),
+            "industry_reports": self._search(
+                self.industry_index,
+                query,
+                limit,
+                expansion_terms=query_terms[:3],
+                retrieval_mode=retrieval_mode,
+            ),
         }

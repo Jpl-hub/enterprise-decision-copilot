@@ -271,6 +271,9 @@ def test_quality_service_returns_retrieval_evaluation_summary() -> None:
     assert payload["case_count"] >= 1
     assert payload["retrieval_mode"] == "hybrid_tfidf_rerank"
     assert payload["strategy_labels"]
+    assert len(payload["strategy_benchmarks"]) == 3
+    assert payload["best_mode"]
+    assert payload["comparison_notes"]
     assert payload["cases"]
     assert "hit_at_3" in payload
 
@@ -279,4 +282,5 @@ def test_quality_route_returns_retrieval_evaluation_payload() -> None:
     payload = asyncio.run(get_retrieval_evaluation_summary(quality_service=DataQualityService()))
 
     assert payload["case_count"] >= 1
+    assert payload["strategy_benchmarks"]
     assert payload["cases"]

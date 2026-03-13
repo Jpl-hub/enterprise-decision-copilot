@@ -37,3 +37,17 @@ def test_industry_retrieval_returns_reranked_reports() -> None:
     assert first["ranking_breakdown"]["query_variant_count"] >= 1
     assert any(signal.startswith("hybrid=") for signal in first["ranking_signals"])
     assert "rerank_score" in first
+
+
+def test_retrieval_supports_multiple_modes() -> None:
+    retrieval = RetrievalService(AnalyticsService())
+
+    lexical = retrieval.retrieve_company_evidence("300760", "迈瑞医疗海外增长", limit=3, retrieval_mode="lexical_tfidf")
+    diversified = retrieval.retrieve_company_evidence("300760", "迈瑞医疗海外增长", limit=3, retrieval_mode="hybrid_diversified")
+
+    assert lexical["query_profile"]["retrieval_mode"] == "lexical_tfidf"
+    assert "word_tfidf" in lexical["query_profile"]["strategy_labels"]
+    assert lexical["stock_reports"][0]["ranking_breakdown"]["retrieval_mode"] == "lexical_tfidf"
+    assert diversified["query_profile"]["retrieval_mode"] == "hybrid_diversified"
+    assert "institution_diversity" in diversified["query_profile"]["strategy_labels"]
+    assert diversified["stock_reports"][0]["ranking_breakdown"]["diversity_boost"] >= 0

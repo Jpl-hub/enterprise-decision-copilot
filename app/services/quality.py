@@ -12,7 +12,7 @@ import pandas as pd
 from app.config import settings
 from app.data_access import load_targets
 from app.services.analytics import AnalyticsService
-from app.services.retrieval import RetrievalService
+from app.services.retrieval import DEFAULT_RETRIEVAL_MODE, RetrievalService
 
 
 @dataclass(slots=True)
@@ -251,29 +251,29 @@ class DataQualityService:
             score += rel / log2(idx + 1)
         return score
 
-    def get_retrieval_evaluation_summary(self) -> dict:
-        cases = self._read_retrieval_eval_cases()
-        if not cases:
-            return {
-                "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
-                "case_count": 0,
-                "hit_at_3": 0.0,
-                "hit_at_5": 0.0,
-                "mrr": 0.0,
-                "ndcg_at_5": 0.0,
-                "retrieval_mode": "hybrid_tfidf_rerank",
-                "strategy_labels": ["char_tfidf", "word_tfidf", "entity_expansion", "keyword_overlap", "recency_rerank"],
-                "cases": [],
-            }
+    def _empty_retrieval_summary(self) -> dict:
+        return {
+            "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "case_count": 0,
+            "hit_at_3": 0.0,
+            "hit_at_5": 0.0,
+            "mrr": 0.0,
+            "ndcg_at_5": 0.0,
+            "retrieval_mode": DEFAULT_RETRIEVAL_MODE,
+            "strategy_labels": [],
+            "strategy_benchmarks": [],
+            "best_mode": None,
+            "best_mode_gain_at_3": 0.0,
+            "comparison_notes": [],
+            "cases": [],
+        }
 
-        analytics = AnalyticsService()
-        retrieval = RetrievalService(analytics)
+    def _evaluate_retrieval_mode(self, retrieval: RetrievalService, cases: list[dict], retrieval_mode: str) -> dict:
         case_results: list[dict] = []
         hit3_total = 0
         hit5_total = 0
         rr_total = 0.0
         ndcg_total = 0.0
-        retrieval_mode = None
         strategy_labels: list[str] = []
 
         for raw_case in cases:
@@ -286,15 +286,14 @@ class DataQualityService:
                 continue
 
             if scope == "company" and target_code:
-                result = retrieval.retrieve_company_evidence(target_code, query, limit=5)
+                result = retrieval.retrieve_company_evidence(target_code, query, limit=5, retrieval_mode=retrieval_mode)
                 rows = list(result.get("stock_reports") or []) + list(result.get("industry_reports") or [])
             else:
-                result = retrieval.retrieve_industry_evidence(query, limit=5)
+                result = retrieval.retrieve_industry_evidence(query, limit=5, retrieval_mode=retrieval_mode)
                 rows = list(result.get("industry_reports") or [])
 
-            if retrieval_mode is None:
+            if not strategy_labels:
                 profile = result.get("query_profile") or {}
-                retrieval_mode = str(profile.get("retrieval_mode") or "hybrid_tfidf_rerank")
                 strategy_labels = [str(item) for item in list(profile.get("strategy_labels") or []) if str(item)]
 
             relevances = [1 if self._row_matches_keywords(row, relevant_keywords) else 0 for row in rows]
@@ -337,27 +336,90 @@ class DataQualityService:
         case_count = len(case_results)
         if case_count == 0:
             return {
-                "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "retrieval_mode": retrieval_mode,
+                "strategy_labels": strategy_labels,
                 "case_count": 0,
                 "hit_at_3": 0.0,
                 "hit_at_5": 0.0,
                 "mrr": 0.0,
                 "ndcg_at_5": 0.0,
-                "retrieval_mode": retrieval_mode or "hybrid_tfidf_rerank",
-                "strategy_labels": strategy_labels,
                 "cases": [],
             }
 
         return {
-            "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "retrieval_mode": retrieval_mode,
+            "strategy_labels": strategy_labels,
             "case_count": case_count,
             "hit_at_3": round(hit3_total / case_count, 4),
             "hit_at_5": round(hit5_total / case_count, 4),
             "mrr": round(rr_total / case_count, 4),
             "ndcg_at_5": round(ndcg_total / case_count, 4),
-            "retrieval_mode": retrieval_mode or "hybrid_tfidf_rerank",
-            "strategy_labels": strategy_labels,
             "cases": case_results,
+        }
+
+    def get_retrieval_evaluation_summary(self) -> dict:
+        cases = self._read_retrieval_eval_cases()
+        if not cases:
+            return self._empty_retrieval_summary()
+
+        analytics = AnalyticsService()
+        retrieval = RetrievalService(analytics)
+        benchmarks = [
+            self._evaluate_retrieval_mode(retrieval, cases, retrieval_mode)
+            for retrieval_mode in ("lexical_tfidf", DEFAULT_RETRIEVAL_MODE, "hybrid_diversified")
+        ]
+        populated = [item for item in benchmarks if int(item.get("case_count") or 0) > 0]
+        if not populated:
+            return self._empty_retrieval_summary()
+
+        benchmark_rows = [
+            {
+                "retrieval_mode": str(item["retrieval_mode"]),
+                "strategy_labels": list(item.get("strategy_labels") or []),
+                "case_count": int(item.get("case_count") or 0),
+                "hit_at_3": float(item.get("hit_at_3") or 0.0),
+                "hit_at_5": float(item.get("hit_at_5") or 0.0),
+                "mrr": float(item.get("mrr") or 0.0),
+                "ndcg_at_5": float(item.get("ndcg_at_5") or 0.0),
+            }
+            for item in populated
+        ]
+        benchmark_rows = sorted(
+            benchmark_rows,
+            key=lambda item: (item["hit_at_3"], item["mrr"], item["ndcg_at_5"]),
+            reverse=True,
+        )
+        selected = next(
+            (item for item in populated if str(item.get("retrieval_mode")) == DEFAULT_RETRIEVAL_MODE),
+            populated[0],
+        )
+        lexical = next((item for item in populated if str(item.get("retrieval_mode")) == "lexical_tfidf"), None)
+        best_mode = str(benchmark_rows[0]["retrieval_mode"]) if benchmark_rows else None
+        best_hit_at_3 = float(benchmark_rows[0]["hit_at_3"]) if benchmark_rows else 0.0
+        baseline_hit_at_3 = float(lexical.get("hit_at_3") or 0.0) if lexical else 0.0
+        comparison_notes = [
+            f"当前默认策略为 {selected['retrieval_mode']}，用于系统主链路。",
+            f"评测最佳策略为 {best_mode}，Hit@3 为 {best_hit_at_3:.3f}。",
+        ]
+        if lexical:
+            comparison_notes.append(
+                f"相较 lexical_tfidf 基线，最佳策略 Hit@3 提升 {(best_hit_at_3 - baseline_hit_at_3):+.3f}。"
+            )
+
+        return {
+            "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "case_count": int(selected.get("case_count") or 0),
+            "hit_at_3": float(selected.get("hit_at_3") or 0.0),
+            "hit_at_5": float(selected.get("hit_at_5") or 0.0),
+            "mrr": float(selected.get("mrr") or 0.0),
+            "ndcg_at_5": float(selected.get("ndcg_at_5") or 0.0),
+            "retrieval_mode": str(selected.get("retrieval_mode") or DEFAULT_RETRIEVAL_MODE),
+            "strategy_labels": list(selected.get("strategy_labels") or []),
+            "strategy_benchmarks": benchmark_rows,
+            "best_mode": best_mode,
+            "best_mode_gain_at_3": round(best_hit_at_3 - baseline_hit_at_3, 4) if lexical else 0.0,
+            "comparison_notes": comparison_notes,
+            "cases": list(selected.get("cases") or []),
         }
 
     def get_multimodal_extract_summary(self) -> dict:

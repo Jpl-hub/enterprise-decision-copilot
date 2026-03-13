@@ -203,13 +203,59 @@
             <div class="v-retrieval-head">
               <div class="v-retrieval-mode">
                 <strong>当前检索策略</strong>
-                <p>{{ retrievalEvaluation.retrieval_mode || 'hybrid_tfidf_rerank' }}</p>
+                <p>{{ formatModeLabel(retrievalEvaluation.retrieval_mode || 'hybrid_tfidf_rerank') }}</p>
               </div>
               <div class="v-stack-metrics">
                 <span v-for="label in retrievalEvaluation.strategy_labels" :key="label" class="v-badge neutral">
                   {{ label }}
                 </span>
               </div>
+            </div>
+
+            <div
+              v-if="retrievalEvaluation.strategy_benchmarks.length"
+              class="v-retrieval-benchmark-grid"
+            >
+              <article
+                v-for="item in retrievalEvaluation.strategy_benchmarks"
+                :key="item.retrieval_mode"
+                class="v-retrieval-benchmark-card"
+                :class="{ best: retrievalEvaluation.best_mode === item.retrieval_mode }"
+              >
+                <div class="v-retrieval-benchmark-top">
+                  <div>
+                    <span class="v-stat-label">策略模式</span>
+                    <h3 class="v-retrieval-benchmark-title">{{ formatModeLabel(item.retrieval_mode) }}</h3>
+                  </div>
+                  <div
+                    v-if="retrievalEvaluation.best_mode === item.retrieval_mode"
+                    class="v-retrieval-case-score success"
+                  >
+                    当前最佳
+                  </div>
+                </div>
+                <div class="v-retrieval-benchmark-metrics">
+                  <span>Hit@3 {{ percent(item.hit_at_3) }}</span>
+                  <span>MRR {{ scoreText(item.mrr) }}</span>
+                  <span>nDCG@5 {{ scoreText(item.ndcg_at_5) }}</span>
+                </div>
+                <p class="v-retrieval-case-line v-text-muted">
+                  {{ item.strategy_labels.join('、') }}
+                </p>
+              </article>
+            </div>
+
+            <div
+              v-if="retrievalEvaluation.comparison_notes.length"
+              class="v-retrieval-notes"
+            >
+              <p
+                v-for="note in retrievalEvaluation.comparison_notes"
+                :key="note"
+                class="v-retrieval-note"
+              >
+                {{ note }}
+              </p>
             </div>
 
             <div class="v-retrieval-case-list">
@@ -288,6 +334,15 @@ function formatReadiness(value: unknown) {
 function scoreText(value: unknown) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '0.000';
   return value.toFixed(3);
+}
+
+function formatModeLabel(value: string) {
+  const mapping: Record<string, string> = {
+    lexical_tfidf: 'Lexical TF-IDF',
+    hybrid_tfidf_rerank: 'Hybrid TF-IDF + Rerank',
+    hybrid_diversified: 'Hybrid Diversified',
+  };
+  return mapping[value] || value;
 }
 
 async function loadSummary() {
@@ -628,6 +683,67 @@ onMounted(() => {
   gap: 18px;
 }
 
+.v-retrieval-benchmark-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.v-retrieval-benchmark-card {
+  padding: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,249,251,0.98) 100%);
+  display: grid;
+  gap: 12px;
+}
+
+.v-retrieval-benchmark-card.best {
+  border-color: rgba(15, 111, 40, 0.35);
+  box-shadow: 0 12px 30px rgba(15, 111, 40, 0.08);
+}
+
+.v-retrieval-benchmark-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.v-retrieval-benchmark-title {
+  margin: 6px 0 0;
+  font-size: 18px;
+  line-height: 1.3;
+  letter-spacing: -0.03em;
+}
+
+.v-retrieval-benchmark-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.v-retrieval-notes {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.v-retrieval-note {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
 .v-retrieval-case {
   padding: 22px;
   border: 1px solid var(--border-strong);
@@ -823,6 +939,9 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
   .v-retrieval-case-list {
+    grid-template-columns: 1fr;
+  }
+  .v-retrieval-benchmark-grid {
     grid-template-columns: 1fr;
   }
   .v-export-split {

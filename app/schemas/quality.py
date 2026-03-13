@@ -266,6 +266,16 @@ class RetrievalEvalCaseResult(BaseModel):
     matched_titles: list[str] = Field(default_factory=list)
 
 
+class RetrievalStrategyBenchmark(BaseModel):
+    retrieval_mode: str
+    strategy_labels: list[str] = Field(default_factory=list)
+    case_count: int = 0
+    hit_at_3: float = 0.0
+    hit_at_5: float = 0.0
+    mrr: float = 0.0
+    ndcg_at_5: float = 0.0
+
+
 class RetrievalEvaluationSummaryResponse(BaseModel):
     generated_at: str | None = None
     case_count: int = 0
@@ -275,4 +285,8 @@ class RetrievalEvaluationSummaryResponse(BaseModel):
     ndcg_at_5: float = 0.0
     retrieval_mode: str | None = None
     strategy_labels: list[str] = Field(default_factory=list)
+    strategy_benchmarks: list[RetrievalStrategyBenchmark] = Field(default_factory=list)
+    best_mode: str | None = None
+    best_mode_gain_at_3: float = 0.0
+    comparison_notes: list[str] = Field(default_factory=list)
     cases: list[RetrievalEvalCaseResult] = Field(default_factory=list)
