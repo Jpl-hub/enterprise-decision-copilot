@@ -51,7 +51,7 @@ class WarehouseService:
             normalized_rows.append(normalized)
         return normalized_rows
 
-    def _fetch_rows(self, db_path: Path, sql: str, limit: int) -> list[dict[str, Any]]:
+    def _fetch_rows(self, db_path: Path, sql: str, limit: Any) -> list[dict[str, Any]]:
         connection = self._connect(db_path)
         try:
             rows = connection.execute(sql, [limit]).fetchdf().to_dict('records')
@@ -124,4 +124,92 @@ class WarehouseService:
             'company_overview': company_overview,
             'industry_heat': industry_heat,
             'company_research_heat': company_research_heat,
+        }
+
+    def build_company_sql_playbook(self, company_code: str, company_name: str | None = None) -> dict:
+        summary = self.get_summary()
+        normalized_code = str(company_code)
+        queries = [
+            {
+                'query_id': 'company-overview',
+                'title': '公司财务总览',
+                'sql': (
+                    "SELECT company_code, company_name, report_year, revenue_million, net_profit_million, "
+                    "positive_reports, negative_reports, report_coverage, published_at "
+                    "FROM mart.company_overview WHERE company_code = ? ORDER BY report_year DESC LIMIT 4"
+                ),
+                'params': [normalized_code],
+            },
+            {
+                'query_id': 'research-heat',
+                'title': '公司研报热度',
+                'sql': (
+                    "SELECT company_code, company_name, report_count, positive_count, negative_count, latest_report_date "
+                    "FROM mart.company_research_heat WHERE company_code = ? LIMIT 1"
+                ),
+                'params': [normalized_code],
+            },
+        ]
+        missions = [
+            {
+                'mission_id': 'finance-drilldown',
+                'label': '财务钻取',
+                'goal': '快速回放年度财务表现与研报覆盖变化。',
+            },
+            {
+                'mission_id': 'sentiment-shift',
+                'label': '观点迁移',
+                'goal': '识别正负面研报变化以及最近观点拐点。',
+            },
+            {
+                'mission_id': 'boardroom-followup',
+                'label': '会议追问',
+                'goal': '把管理层追问沉淀为可复用 SQL 任务。',
+            },
+        ]
+        if not summary.get('warehouse_ready'):
+            return {
+                'warehouse_ready': False,
+                'current_engine': 'python + duckdb',
+                'company_code': normalized_code,
+                'company_name': company_name,
+                'queries': queries,
+                'missions': missions,
+                'company_overview_rows': [],
+                'research_heat_rows': [],
+            }
+
+        db_path = Path(summary['warehouse_db'])
+        company_overview_rows = self._fetch_rows(
+            db_path,
+            '''
+            SELECT company_code, company_name, report_year, revenue_million, net_profit_million,
+                   positive_reports, negative_reports, report_coverage, published_at
+            FROM mart.company_overview
+            WHERE company_code = ?
+            ORDER BY report_year DESC
+            LIMIT 4
+            ''',
+            limit=normalized_code,
+        )
+        research_heat_rows = self._fetch_rows(
+            db_path,
+            '''
+            SELECT company_code, company_name, report_count, positive_count, negative_count, latest_report_date
+            FROM mart.company_research_heat
+            WHERE company_code = ?
+            LIMIT 1
+            ''',
+            limit=normalized_code,
+        )
+        return {
+            'warehouse_ready': True,
+            'current_engine': 'python + duckdb',
+            'warehouse_db': summary.get('warehouse_db'),
+            'company_code': normalized_code,
+            'company_name': company_name or (company_overview_rows[0]['company_name'] if company_overview_rows else None),
+            'queries': queries,
+            'missions': missions,
+            'company_overview_rows': company_overview_rows,
+            'research_heat_rows': research_heat_rows,
         }

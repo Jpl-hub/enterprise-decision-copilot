@@ -136,6 +136,22 @@ def test_agent_can_generate_decision_brief() -> None:
     assert any("证据：" in item for item in payload["highlights"])
 
 
+def test_agent_can_generate_executive_boardroom() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer("给迈瑞医疗开一个管理层决策会议室，让财务市场风险多个agent一起会诊")
+
+    assert "会议室" in payload["title"]
+    assert payload["task_mode"] == "executive_boardroom"
+    assert payload["skill_id"] == "executive_boardroom"
+    assert payload["evidence"]["decision_brief"]
+    assert payload["evidence"]["risk_forecast"]
+    assert payload["panelists"]
+    assert len(payload["panelists"]) >= 5
+    assert payload["debate_rounds"]
+    assert payload["synthesis"]["action_board"]
+    assert payload["sql_playbook"]["queries"]
+
+
 def test_decision_brief_contains_evidence_highlights() -> None:
     container = build_service_container()
     brief = container.decision_service.build_company_decision_brief("300760", "结合海外增长和风险看迈瑞医疗")
@@ -323,6 +339,16 @@ def test_agent_respects_explicit_task_mode() -> None:
     assert payload['task_mode'] == 'company_risk_forecast'
     assert payload['task_label'] == '风险判断'
     assert '风险' in payload['title']
+
+
+def test_agent_respects_boardroom_task_mode() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer('分析迈瑞医疗', task_mode='executive_boardroom')
+
+    assert payload['task_mode'] == 'executive_boardroom'
+    assert payload['task_label'] == '决策会议室'
+    assert payload['panelists']
+    assert payload['sql_playbook']['missions']
 
 def test_ai_stack_summary_exposes_core_engines() -> None:
     container = build_service_container()

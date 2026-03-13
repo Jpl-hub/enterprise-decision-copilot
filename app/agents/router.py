@@ -21,6 +21,7 @@ class IntentRouter:
         self.risk_keywords = ("风险", "承压", "预警", "预测", "监测", "隐患", "稳健性", "暴露")
         self.report_keywords = ("报告", "摘要", "研究", "诊断书", "生成", "材料", "全景", "梳理")
         self.decision_keywords = ("建议", "决策", "策略", "依据", "原因", "机会", "举措", "打法", "取舍")
+        self.boardroom_keywords = ("会议室", "会诊", "圆桌", "辩论", "董事会", "委员会", "多agent", "多智能体", "协同", "群策")
         self.industry_keywords = ("行业", "赛道", "趋势", "景气度", "板块", "主题", "风向")
         self.quality_keywords = ("数据质量", "质量", "覆盖率", "复核", "缺失", "治理", "异常字段", "底座", "可信", "可靠")
         self.company_focus_keywords = ("企业", "公司", "经营", "财务", "盈利", "收入", "现金流", "研发", "管理层", "业务")
@@ -51,6 +52,9 @@ class IntentRouter:
             IntentExample(AgentIntent.COMPANY_DECISION_BRIEF, "结合机会和风险给出动作建议"),
             IntentExample(AgentIntent.COMPANY_DECISION_BRIEF, "给我一个管理层可执行的判断"),
             IntentExample(AgentIntent.COMPANY_DECISION_BRIEF, "应该怎么取舍和推进"),
+            IntentExample(AgentIntent.EXECUTIVE_BOARDROOM, "给迈瑞医疗开一个管理层决策会议室"),
+            IntentExample(AgentIntent.EXECUTIVE_BOARDROOM, "让财务市场风险多个agent一起会诊这家公司"),
+            IntentExample(AgentIntent.EXECUTIVE_BOARDROOM, "做一个能答辩的多智能体协同决策场景"),
             IntentExample(AgentIntent.COMPANY_RISK_FORECAST, "判断这家公司未来一段时间会不会出风险"),
             IntentExample(AgentIntent.COMPANY_RISK_FORECAST, "看看潜在隐患和风险暴露"),
             IntentExample(AgentIntent.COMPANY_RISK_FORECAST, "评估企业后续承压情况"),
@@ -98,6 +102,7 @@ class IntentRouter:
         risk_hits = self._keyword_hits(text, self.risk_keywords)
         report_hits = self._keyword_hits(text, self.report_keywords)
         decision_hits = self._keyword_hits(text, self.decision_keywords)
+        boardroom_hits = self._keyword_hits(text, self.boardroom_keywords)
         industry_hits = self._keyword_hits(text, self.industry_keywords)
         quality_hits = self._keyword_hits(text, self.quality_keywords)
         company_hits = self._keyword_hits(text, self.company_focus_keywords)
@@ -110,6 +115,7 @@ class IntentRouter:
                 AgentIntent.COMPANY_DIAGNOSIS,
                 AgentIntent.COMPANY_REPORT,
                 AgentIntent.COMPANY_DECISION_BRIEF,
+                AgentIntent.EXECUTIVE_BOARDROOM,
                 AgentIntent.COMPANY_RISK_FORECAST,
             ):
                 scores[intent] += 3.0
@@ -120,6 +126,7 @@ class IntentRouter:
             (AgentIntent.COMPANY_RISK_FORECAST, risk_hits, 3.2, "风险词"),
             (AgentIntent.COMPANY_REPORT, report_hits, 2.8, "报告词"),
             (AgentIntent.COMPANY_DECISION_BRIEF, decision_hits, 2.8, "决策词"),
+            (AgentIntent.EXECUTIVE_BOARDROOM, boardroom_hits, 4.6, "协同词"),
             (AgentIntent.INDUSTRY_TREND, industry_hits, 3.0, "行业词"),
             (AgentIntent.DATA_QUALITY, quality_hits, 4.0, "质量词"),
         ):
@@ -139,9 +146,17 @@ class IntentRouter:
             scores[AgentIntent.COMPANY_DIAGNOSIS] += 2.4
             reasons[AgentIntent.COMPANY_DIAGNOSIS].append(f"经营词：{'、'.join(company_hits[:3])}")
 
+        if matched_count == 1 and boardroom_hits:
+            scores[AgentIntent.EXECUTIVE_BOARDROOM] += 2.4
+            reasons[AgentIntent.EXECUTIVE_BOARDROOM].append("单企业且要求多角色协同，进入会议室链路")
+
         if matched_count == 1 and decision_hits and risk_hits:
             scores[AgentIntent.COMPANY_DECISION_BRIEF] += 1.6
             reasons[AgentIntent.COMPANY_DECISION_BRIEF].append("同时涉及机会与风险，更适合决策综述")
+
+        if matched_count == 1 and decision_hits and boardroom_hits:
+            scores[AgentIntent.EXECUTIVE_BOARDROOM] += 1.8
+            reasons[AgentIntent.EXECUTIVE_BOARDROOM].append("同时涉及决策与协同，更适合会议室模式")
 
         if matched_count == 0 and industry_hits:
             scores[AgentIntent.INDUSTRY_TREND] += 2.0
@@ -151,7 +166,7 @@ class IntentRouter:
         if matched_count == 0 and not any([compare_hits, risk_hits, report_hits, decision_hits, industry_hits, quality_hits]):
             scores[AgentIntent.OVERVIEW] += 2.0
             reasons[AgentIntent.OVERVIEW].append("默认全局扫描入口")
-        if matched_count == 1 and not any([report_hits, decision_hits, risk_hits]):
+        if matched_count == 1 and not any([report_hits, decision_hits, risk_hits, boardroom_hits]):
             report_semantic = semantic_hits.get(AgentIntent.COMPANY_REPORT, (0.0, ""))[0]
             diagnosis_semantic = semantic_hits.get(AgentIntent.COMPANY_DIAGNOSIS, (0.0, ""))[0]
             if report_semantic >= 0.18 and report_semantic >= diagnosis_semantic:

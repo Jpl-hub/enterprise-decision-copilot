@@ -5,10 +5,12 @@ from typing import Protocol
 
 from app.agents.models import AgentIntent, ToolResult, WorkflowContext
 from app.services.analytics import AnalyticsService
+from app.services.boardroom import BoardroomService
 from app.services.decision import DecisionService
 from app.services.narrative import NarrativeService
 from app.services.quality import DataQualityService
 from app.services.risk import RiskService
+from app.services.warehouse import WarehouseService
 
 
 class AgentTool(Protocol):
@@ -301,6 +303,54 @@ class CompanyDecisionBriefTool:
         )
 
 
+class ExecutiveBoardroomTool:
+    name = 'executive_boardroom_tool'
+    label = '多代理决策会议室'
+    description = '负责拉起财务、市场、风险、治理和SQL多个角色代理，输出会议共识与动作板。'
+    supported_intents = (AgentIntent.EXECUTIVE_BOARDROOM,)
+
+    def __init__(
+        self,
+        decision_service: DecisionService,
+        risk_service: RiskService,
+        quality_service: DataQualityService,
+        warehouse_service: WarehouseService | None = None,
+    ) -> None:
+        self.boardroom_service = BoardroomService(
+            analytics_service=decision_service.analytics_service,
+            decision_service=decision_service,
+            risk_service=risk_service,
+            quality_service=quality_service,
+            warehouse_service=warehouse_service,
+        )
+
+    def run(self, context: WorkflowContext, analytics_service: AnalyticsService) -> ToolResult:
+        company_code = str(context.matches[0]['company_code'])
+        payload = self.boardroom_service.build_company_boardroom(company_code, context.question)
+        if payload is None:
+            return FallbackTool().run(context, analytics_service)
+        synthesis = dict(payload.get('synthesis') or {})
+        action_board = list(synthesis.get('action_board') or [])
+        return ToolResult(
+            payload={
+                'title': f"{payload['company_name']} 决策会议室",
+                'summary': payload['summary'],
+                'highlights': action_board[:3] + list(payload.get('highlights') or [])[:2],
+                'suggested_questions': [
+                    '继续展开会议里的分歧点',
+                    '把SQL动作板细化成批任务',
+                    '把这轮会议纪要改成正式答辩稿',
+                ],
+                'evidence': payload['evidence'],
+                'panelists': payload['panelists'],
+                'debate_rounds': payload['debate_rounds'],
+                'synthesis': payload['synthesis'],
+                'sql_playbook': payload['sql_playbook'],
+            },
+            detail=f"已召集 {len(payload.get('panelists') or [])} 个角色代理完成管理层会议协作。",
+        )
+
+
 class CompanyRiskForecastTool:
     name = 'company_risk_forecast_tool'
     label = '风险预测分析'
@@ -406,6 +456,7 @@ def build_agent_tools(
     risk_service: RiskService,
     quality_service: DataQualityService,
     narrative_service: NarrativeService | None = None,
+    warehouse_service: WarehouseService | None = None,
 ) -> list[AgentTool]:
     return [
         FallbackTool(),
@@ -414,6 +465,7 @@ def build_agent_tools(
         CompanyDiagnosisTool(),
         CompanyReportTool(narrative_service=narrative_service),
         CompanyDecisionBriefTool(decision_service),
+        ExecutiveBoardroomTool(decision_service, risk_service, quality_service, warehouse_service=warehouse_service),
         CompanyRiskForecastTool(risk_service),
         CompareCompaniesTool(),
         IndustryTrendTool(narrative_service=narrative_service),

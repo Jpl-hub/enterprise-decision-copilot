@@ -59,6 +59,7 @@ def build_service_container() -> ServiceContainer:
             risk_service,
             quality_service,
             narrative_service=narrative_service,
+            warehouse_service=warehouse_service,
         ),
     )
     agent_service = AgentService(workflow, audit_service=audit_service)

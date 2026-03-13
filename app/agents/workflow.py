@@ -24,6 +24,7 @@ class AgentWorkflow:
             AgentIntent.COMPANY_DIAGNOSIS: '企业诊断',
             AgentIntent.COMPANY_REPORT: '综合分析',
             AgentIntent.COMPANY_DECISION_BRIEF: '决策建议',
+            AgentIntent.EXECUTIVE_BOARDROOM: '决策会议室',
             AgentIntent.COMPANY_RISK_FORECAST: '风险判断',
             AgentIntent.COMPANY_COMPARE: '企业对比',
             AgentIntent.INDUSTRY_TREND: '行业趋势',
@@ -35,6 +36,7 @@ class AgentWorkflow:
             'company_diagnosis': AgentIntent.COMPANY_DIAGNOSIS,
             'company_report': AgentIntent.COMPANY_REPORT,
             'company_decision_brief': AgentIntent.COMPANY_DECISION_BRIEF,
+            'executive_boardroom': AgentIntent.EXECUTIVE_BOARDROOM,
             'company_risk_forecast': AgentIntent.COMPANY_RISK_FORECAST,
             'company_compare': AgentIntent.COMPANY_COMPARE,
             'industry_trend': AgentIntent.INDUSTRY_TREND,
@@ -67,6 +69,7 @@ class AgentWorkflow:
             self.intent_router.risk_keywords,
             self.intent_router.report_keywords,
             self.intent_router.decision_keywords,
+            self.intent_router.boardroom_keywords,
             self.intent_router.industry_keywords,
             self.intent_router.quality_keywords,
         )
@@ -102,6 +105,7 @@ class AgentWorkflow:
             AgentIntent.COMPANY_DIAGNOSIS: ('已形成企业诊断', ['经营判断', '风险信号', '建议动作']),
             AgentIntent.COMPANY_REPORT: ('已形成综合报告', ['经营概况', '趋势变化', '证据引用']),
             AgentIntent.COMPANY_DECISION_BRIEF: ('已形成决策建议', ['结论摘要', '行动建议', '证据引用']),
+            AgentIntent.EXECUTIVE_BOARDROOM: ('已形成会议共识', ['多角色观点', '会议纪要', 'SQL动作板']),
             AgentIntent.COMPANY_RISK_FORECAST: ('已形成风险判断', ['风险等级', '模型概率', '监测项']),
             AgentIntent.COMPANY_COMPARE: ('已形成对比判断', ['赢家结论', '维度差异', '证据入口']),
             AgentIntent.INDUSTRY_TREND: ('已形成行业扫描', ['景气变化', '主题动向', '宏观摘要']),
@@ -119,6 +123,10 @@ class AgentWorkflow:
         elif context.intent == AgentIntent.COMPANY_RISK_FORECAST:
             context.add_plan('提取风险特征', '提取财务、经营和行业风险特征。')
             context.add_plan('生成风险判断', '综合规则引擎与风险模型生成风险判断。')
+        elif context.intent == AgentIntent.EXECUTIVE_BOARDROOM:
+            context.add_plan('召集角色代理', '召集财务、市场、风险、治理和SQL角色进入会议。')
+            context.add_plan('展开协同会诊', '对经营、机会、风险和数据可信度进行交叉质询。')
+            context.add_plan('沉淀会议纪要', '输出共识、分歧、红线和SQL动作板。')
         elif context.intent in {AgentIntent.COMPANY_DECISION_BRIEF, AgentIntent.COMPANY_REPORT, AgentIntent.COMPANY_DIAGNOSIS}:
             context.add_plan('汇总企业证据', '汇总企业财报、研报和趋势证据。')
             context.add_plan('形成经营判断', '形成经营判断、风险机会和建议动作。')

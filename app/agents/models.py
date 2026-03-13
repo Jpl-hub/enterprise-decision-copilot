@@ -12,6 +12,7 @@ class AgentIntent(str, Enum):
     COMPANY_DIAGNOSIS = "company_diagnosis"
     COMPANY_REPORT = "company_report"
     COMPANY_DECISION_BRIEF = "company_decision_brief"
+    EXECUTIVE_BOARDROOM = "executive_boardroom"
     COMPANY_RISK_FORECAST = "company_risk_forecast"
     COMPANY_COMPARE = "company_compare"
     INDUSTRY_TREND = "industry_trend"
