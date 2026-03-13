@@ -8,6 +8,7 @@ from app.agents.models import AgentIntent, WorkflowContext
 from app.agents.router import IntentRouter
 from app.agents.tools import CompanyReportTool, build_agent_tools
 from app.agents.workflow import AgentWorkflow
+from app.api.routes.ai import get_ai_engine_room
 from app.api.routes.reports import compare_companies
 from app.api.routes.risk import get_risk_model_summary
 from app.core.container import build_service_container
@@ -330,6 +331,18 @@ def test_ai_stack_summary_exposes_core_engines() -> None:
     assert 'traditional-agent' in pillar_ids
     assert 'deep-learning' in pillar_ids
     assert 'big-data' in pillar_ids
+
+
+def test_ai_engine_room_route_returns_compute_and_model_registry() -> None:
+    container = build_service_container()
+
+    payload = asyncio.run(get_ai_engine_room(container.ai_stack_service))
+
+    assert payload['compute_pipeline']['job_count'] >= 1
+    assert payload['compute_pipeline']['spark_ready_job_count'] >= 1
+    assert payload['model_registry']
+    assert any(item['model_id'] == 'risk-tabular' for item in payload['model_registry'])
+    assert payload['recommended_actions']
 
 def test_agent_returns_safe_payload_when_workflow_fails() -> None:
     class BrokenWorkflow:

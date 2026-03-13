@@ -70,3 +70,48 @@ class AIStackSummaryResponse(BaseModel):
     priority_actions: list[str] = Field(default_factory=list)
     system_story: list[str] = Field(default_factory=list)
     design_choices: list[str] = Field(default_factory=list)
+
+
+class AIComputeJob(BaseModel):
+    job_id: str
+    stage: str
+    current_engine: str
+    spark_ready: bool = False
+    inputs: list[str] = Field(default_factory=list)
+    outputs: list[str] = Field(default_factory=list)
+    partition_keys: list[str] = Field(default_factory=list)
+    goal: str
+
+
+class AIComputePipelineSummary(BaseModel):
+    current_engine: str
+    next_engine: str
+    warehouse_db: str | None = None
+    job_count: int = 0
+    spark_ready_job_count: int = 0
+    parquet_artifact_count: int = 0
+    mart_views: list[str] = Field(default_factory=list)
+    jobs: list[AIComputeJob] = Field(default_factory=list)
+
+
+class AIModelRegistryItem(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_id: str
+    label: str
+    status: str
+    stage_label: str
+    artifact_path: str | None = None
+    sample_count: int = 0
+    metric_label: str | None = None
+    metric_value: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class AIEngineRoomSummaryResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    generated_at: str
+    compute_pipeline: AIComputePipelineSummary
+    model_registry: list[AIModelRegistryItem] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)

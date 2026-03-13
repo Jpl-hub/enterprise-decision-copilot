@@ -83,11 +83,28 @@ class AIStackService:
     def _headline_metric(self, label: str, value: str, tone: str = 'neutral') -> dict:
         return {'label': label, 'value': value, 'tone': tone}
 
+    def _safe_path(self, path: Path) -> str | None:
+        return str(path.resolve()) if path.exists() else None
+
+    def _compute_manifest(self) -> dict:
+        payload = self._read_json(COMPUTE_MANIFEST_PATH)
+        if payload:
+            return payload
+        return {
+            'generated_at': datetime.now().isoformat(timespec='seconds'),
+            'current_engine': 'python + duckdb',
+            'next_engine': 'spark-ready batch',
+            'warehouse_db': None,
+            'parquet_artifact_count': 0,
+            'mart_views': [],
+            'jobs': [],
+        }
+
     def get_stack_summary(self) -> dict:
         risk_summary = self.risk_model_service.get_summary()
         quality_summary = self.quality_service.get_quality_summary()
         foundation_summary = self.quality_service.get_foundation_summary()
-        compute_manifest = self._read_json(COMPUTE_MANIFEST_PATH)
+        compute_manifest = self._compute_manifest()
 
         model_dir = settings.cache_dir / 'models'
         multimodal_dir = settings.cache_dir / 'official_extract_multimodal'
@@ -442,4 +459,114 @@ class AIStackService:
                 '深度学习层优先服务于风险预测与财报多模态解析，而不是泛化成无落点的大模型演示。',
                 '大数据层先保证数据真实、可追溯、可量化，再逐步扩到更大规模计算与训练资源。',
             ],
+        }
+
+    def get_engine_room_summary(self) -> dict:
+        risk_summary = self.risk_model_service.get_summary()
+        quality_summary = self.quality_service.get_quality_summary()
+        compute_manifest = self._compute_manifest()
+
+        model_dir = settings.cache_dir / 'models'
+        dataset_dir = settings.data_dir / 'datasets'
+        multimodal_dir = settings.cache_dir / 'official_extract_multimodal'
+
+        tabular_artifact_path = model_dir / 'risk_tabular_model.json'
+        sequence_artifact_path = model_dir / 'risk_lstm.keras'
+        sequence_metrics_path = model_dir / 'risk_lstm_metrics.json'
+        sft_dataset_path = dataset_dir / 'official_multimodal_sft.jsonl'
+
+        dataset_file_count, dataset_sample_count = self._count_dataset_rows(dataset_dir)
+        multimodal_extract_count = self._count_matching_files(multimodal_dir, '*.json')
+        multimodal_expected_count = self._safe_int(quality_summary.get('multimodal_expected_report_count'))
+        sequence_metrics = self._read_json(sequence_metrics_path)
+        jobs = [dict(item) for item in list(compute_manifest.get('jobs') or []) if isinstance(item, dict)]
+        spark_ready_job_count = sum(1 for item in jobs if bool(item.get('spark_ready')))
+
+        model_registry = [
+            {
+                'model_id': 'risk-tabular',
+                'label': '表格风险模型',
+                'status': 'active' if risk_summary.get('model_ready') else 'warming_up',
+                'stage_label': '已落盘' if risk_summary.get('model_ready') else '待训练',
+                'artifact_path': self._safe_path(tabular_artifact_path),
+                'sample_count': self._safe_int(risk_summary.get('sample_count')),
+                'metric_label': 'ROC-AUC',
+                'metric_value': f"{self._safe_float((risk_summary.get('metrics') or {}).get('roc_auc')):.3f}" if risk_summary.get('model_ready') else None,
+                'notes': [
+                    f"正样本 {self._safe_int(risk_summary.get('positive_samples'))} 条",
+                    f"特征 {len(risk_summary.get('feature_columns') or [])} 个",
+                ],
+            },
+            {
+                'model_id': 'risk-sequence',
+                'label': '时序风险模型',
+                'status': 'active' if sequence_artifact_path.exists() else ('building' if (SCRIPT_DIR / 'train_risk_sequence_model.py').exists() else 'warming_up'),
+                'stage_label': '已产出模型' if sequence_artifact_path.exists() else ('脚本已就绪' if (SCRIPT_DIR / 'train_risk_sequence_model.py').exists() else '未接入'),
+                'artifact_path': self._safe_path(sequence_artifact_path),
+                'sample_count': self._safe_int(sequence_metrics.get('sample_count')),
+                'metric_label': '验证 AUC',
+                'metric_value': f"{self._safe_float(sequence_metrics.get('roc_auc')):.3f}" if sequence_metrics else None,
+                'notes': [
+                    '当前序列窗口按 3 年连续财务特征设计。',
+                    '需要继续补统一评测文件和模型注册元数据。',
+                ],
+            },
+            {
+                'model_id': 'multimodal-extractor',
+                'label': '多模态财报抽取',
+                'status': 'active' if multimodal_extract_count else ('building' if (SCRIPT_DIR / 'extract_official_financial_panel_multimodal.py').exists() else 'warming_up'),
+                'stage_label': '抽取结果入链' if multimodal_extract_count else ('脚本已就绪' if (SCRIPT_DIR / 'extract_official_financial_panel_multimodal.py').exists() else '未接入'),
+                'artifact_path': self._safe_path(multimodal_dir),
+                'sample_count': multimodal_extract_count,
+                'metric_label': '覆盖率',
+                'metric_value': f"{self._safe_float(quality_summary.get('multimodal_extract_coverage_ratio')) * 100:.1f}%" if multimodal_expected_count else None,
+                'notes': [
+                    f"当前覆盖 {multimodal_extract_count}/{multimodal_expected_count or 0} 份财报",
+                    '抽取结果会回流到企业分析和质量治理链路。',
+                ],
+            },
+            {
+                'model_id': 'multimodal-sft',
+                'label': '多模态 SFT 数据集',
+                'status': 'active' if dataset_sample_count else ('building' if (SCRIPT_DIR / 'build_multimodal_sft_dataset.py').exists() else 'warming_up'),
+                'stage_label': '可用于微调' if dataset_sample_count else ('脚本已就绪' if (SCRIPT_DIR / 'build_multimodal_sft_dataset.py').exists() else '未接入'),
+                'artifact_path': self._safe_path(sft_dataset_path),
+                'sample_count': dataset_sample_count,
+                'metric_label': '数据集文件',
+                'metric_value': str(dataset_file_count),
+                'notes': [
+                    '用于后续 ModelScope / ms-swift 轻量微调实验。',
+                    '当前样本量仍需继续扩充到比赛级规模。',
+                ],
+            },
+        ]
+
+        recommended_actions = [
+            f'当前 Spark-ready 计算任务 {spark_ready_job_count}/{len(jobs)} 个，下一步应把批处理作业接入调度而不只是脚本清单。',
+            (
+                f'多模态抽取已覆盖 {multimodal_extract_count}/{multimodal_expected_count} 份财报，继续补齐后才能稳定支撑复杂图表问答。'
+                if multimodal_expected_count
+                else '多模态抽取目标规模尚未入表，需要先明确 expected_report_count。'
+            ),
+            (
+                f'当前 SFT 样本 {dataset_sample_count} 条，仍需继续扩样后再做轻量微调验证。'
+                if dataset_sample_count
+                else '当前 SFT 数据集还为空，应优先产出首版训练样本。'
+            ),
+        ]
+
+        return {
+            'generated_at': datetime.now().isoformat(timespec='seconds'),
+            'compute_pipeline': {
+                'current_engine': str(compute_manifest.get('current_engine') or 'python + duckdb'),
+                'next_engine': str(compute_manifest.get('next_engine') or 'spark-ready batch'),
+                'warehouse_db': str(compute_manifest.get('warehouse_db') or '') or None,
+                'job_count': len(jobs),
+                'spark_ready_job_count': spark_ready_job_count,
+                'parquet_artifact_count': self._safe_int(compute_manifest.get('parquet_artifact_count')),
+                'mart_views': [str(item) for item in list(compute_manifest.get('mart_views') or []) if str(item)],
+                'jobs': jobs,
+            },
+            'model_registry': model_registry,
+            'recommended_actions': recommended_actions,
         }
