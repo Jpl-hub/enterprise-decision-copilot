@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_ai_stack_service
-from app.schemas.ai import AIEngineRoomSummaryResponse, AIStackSummaryResponse
+from app.api.dependencies import get_ai_stack_service, get_model_registry_service
+from app.schemas.ai import AIEngineRoomSummaryResponse, AIModelRegistryResponse, AIStackSummaryResponse
 from app.services.ai_stack import AIStackService
+from app.services.model_registry import ModelRegistryService
 
 
 router = APIRouter(prefix='/api/ai', tags=['ai'])
@@ -22,3 +23,10 @@ async def get_ai_engine_room(
     ai_stack_service: AIStackService = Depends(get_ai_stack_service),
 ) -> dict:
     return ai_stack_service.get_engine_room_summary()
+
+
+@router.get('/model-registry', response_model=AIModelRegistryResponse)
+async def get_ai_model_registry(
+    model_registry_service: ModelRegistryService = Depends(get_model_registry_service),
+) -> dict:
+    return model_registry_service.get_summary()

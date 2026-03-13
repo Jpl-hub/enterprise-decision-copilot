@@ -106,9 +106,12 @@ def main() -> None:
 
     service = RiskModelService()
     service.save_artifact(payload)
+    metadata_path = service.artifact_path.with_name('risk_tabular_metadata.json')
+    metadata_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
 
     output = {
         'artifact_path': str(service.artifact_path),
+        'metadata_path': str(metadata_path),
         'metadata': payload,
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))

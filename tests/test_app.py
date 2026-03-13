@@ -8,7 +8,7 @@ from app.agents.models import AgentIntent, WorkflowContext
 from app.agents.router import IntentRouter
 from app.agents.tools import CompanyReportTool, build_agent_tools
 from app.agents.workflow import AgentWorkflow
-from app.api.routes.ai import get_ai_engine_room
+from app.api.routes.ai import get_ai_engine_room, get_ai_model_registry
 from app.api.routes.reports import compare_companies
 from app.api.routes.risk import get_risk_model_summary
 from app.core.container import build_service_container
@@ -16,6 +16,7 @@ from app.services.agent import AgentService
 from app.services.analytics import AnalyticsService
 from app.services.audit import AuditService
 from app.services.decision import DecisionService
+from app.services.model_registry import ModelRegistryService
 from app.services.quality import DataQualityService
 from app.services.retrieval import RetrievalService
 from app.services.risk import RiskService
@@ -343,6 +344,20 @@ def test_ai_engine_room_route_returns_compute_and_model_registry() -> None:
     assert payload['model_registry']
     assert any(item['model_id'] == 'risk-tabular' for item in payload['model_registry'])
     assert payload['recommended_actions']
+
+
+def test_ai_model_registry_route_returns_registry_summary() -> None:
+    payload = asyncio.run(get_ai_model_registry(ModelRegistryService()))
+
+    assert payload['model_count'] == 4
+    assert len(payload['items']) == 4
+    assert payload['priority_actions']
+    assert {item['model_id'] for item in payload['items']} == {
+        'risk-tabular',
+        'risk-sequence',
+        'multimodal-extractor',
+        'multimodal-sft',
+    }
 
 def test_agent_returns_safe_payload_when_workflow_fails() -> None:
     class BrokenWorkflow:

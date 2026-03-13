@@ -115,3 +115,15 @@ class AIEngineRoomSummaryResponse(BaseModel):
     compute_pipeline: AIComputePipelineSummary
     model_registry: list[AIModelRegistryItem] = Field(default_factory=list)
     recommended_actions: list[str] = Field(default_factory=list)
+
+
+class AIModelRegistryResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    generated_at: str
+    registry_ready: bool = False
+    model_count: int = 0
+    active_count: int = 0
+    building_count: int = 0
+    items: list[AIModelRegistryItem] = Field(default_factory=list)
+    priority_actions: list[str] = Field(default_factory=list)

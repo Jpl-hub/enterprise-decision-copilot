@@ -14,6 +14,7 @@ from app.services.audit import AuditService
 from app.services.auth import AuthService
 from app.services.competition_report import CompetitionReportService
 from app.services.decision import DecisionService
+from app.services.model_registry import ModelRegistryService
 from app.services.narrative import NarrativeService
 from app.services.quality import DataQualityService
 from app.services.retrieval import RetrievalService
@@ -68,6 +69,10 @@ def get_ai_stack_service(container: ServiceContainer = Depends(get_container)) -
         DataQualityService(),
         agent_skill_count=len(container.agent_service.workflow.skill_registry.skills),
     )
+
+
+def get_model_registry_service() -> ModelRegistryService:
+    return ModelRegistryService()
 
 
 

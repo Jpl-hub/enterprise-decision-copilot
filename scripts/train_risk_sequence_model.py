@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -121,9 +123,29 @@ def main() -> None:
     output_dir = settings.cache_dir / "models"
     output_dir.mkdir(parents=True, exist_ok=True)
     model_path = output_dir / "risk_lstm.keras"
+    metrics_path = output_dir / "risk_lstm_metrics.json"
     model.save(model_path)
+    best_val_auc = float(max(history.history.get("val_auc", [0.0])))
+    best_val_accuracy = float(max(history.history.get("val_accuracy", [0.0])))
+    metrics_payload = {
+        "model_type": "lstm_sequence_risk",
+        "trained_at": datetime.now().isoformat(timespec="seconds"),
+        "sequence_length": SEQUENCE_LENGTH,
+        "feature_count": len(FEATURES),
+        "sample_count": int(len(x)),
+        "train_sample_count": int(len(x_train)),
+        "validation_sample_count": int(len(x_val)),
+        "positive_samples": int(y.sum()),
+        "negative_samples": int((1 - y).sum()),
+        "best_val_auc": round(best_val_auc, 4),
+        "best_val_accuracy": round(best_val_accuracy, 4),
+        "epochs_ran": int(len(history.history.get("loss", []))),
+        "artifact_path": str(model_path.resolve()),
+    }
+    metrics_path.write_text(json.dumps(metrics_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print("模型已保存：", model_path)
-    print("最佳验证 AUC：", max(history.history.get("val_auc", [0])))
+    print("评测文件已保存：", metrics_path)
+    print("最佳验证 AUC：", best_val_auc)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.config import settings
+from app.services.model_registry import ModelRegistryService
 from app.services.quality import DataQualityService
 from app.services.risk_model import RiskModelService
 from app.services.vision_llm import VisionLLMClient
@@ -21,10 +22,12 @@ class AIStackService:
         risk_model_service: RiskModelService,
         quality_service: DataQualityService,
         agent_skill_count: int = 9,
+        model_registry_service: ModelRegistryService | None = None,
     ) -> None:
         self.risk_model_service = risk_model_service
         self.quality_service = quality_service
         self.agent_skill_count = agent_skill_count
+        self.model_registry_service = model_registry_service or ModelRegistryService()
 
     def _safe_float(self, value: object, default: float = 0.0) -> float:
         try:
@@ -462,89 +465,23 @@ class AIStackService:
         }
 
     def get_engine_room_summary(self) -> dict:
-        risk_summary = self.risk_model_service.get_summary()
         quality_summary = self.quality_service.get_quality_summary()
         compute_manifest = self._compute_manifest()
+        registry_summary = self.model_registry_service.get_summary()
 
-        model_dir = settings.cache_dir / 'models'
         dataset_dir = settings.data_dir / 'datasets'
-        multimodal_dir = settings.cache_dir / 'official_extract_multimodal'
-
-        tabular_artifact_path = model_dir / 'risk_tabular_model.json'
-        sequence_artifact_path = model_dir / 'risk_lstm.keras'
-        sequence_metrics_path = model_dir / 'risk_lstm_metrics.json'
         sft_dataset_path = dataset_dir / 'official_multimodal_sft.jsonl'
 
         dataset_file_count, dataset_sample_count = self._count_dataset_rows(dataset_dir)
-        multimodal_extract_count = self._count_matching_files(multimodal_dir, '*.json')
         multimodal_expected_count = self._safe_int(quality_summary.get('multimodal_expected_report_count'))
-        sequence_metrics = self._read_json(sequence_metrics_path)
         jobs = [dict(item) for item in list(compute_manifest.get('jobs') or []) if isinstance(item, dict)]
         spark_ready_job_count = sum(1 for item in jobs if bool(item.get('spark_ready')))
-
-        model_registry = [
-            {
-                'model_id': 'risk-tabular',
-                'label': '表格风险模型',
-                'status': 'active' if risk_summary.get('model_ready') else 'warming_up',
-                'stage_label': '已落盘' if risk_summary.get('model_ready') else '待训练',
-                'artifact_path': self._safe_path(tabular_artifact_path),
-                'sample_count': self._safe_int(risk_summary.get('sample_count')),
-                'metric_label': 'ROC-AUC',
-                'metric_value': f"{self._safe_float((risk_summary.get('metrics') or {}).get('roc_auc')):.3f}" if risk_summary.get('model_ready') else None,
-                'notes': [
-                    f"正样本 {self._safe_int(risk_summary.get('positive_samples'))} 条",
-                    f"特征 {len(risk_summary.get('feature_columns') or [])} 个",
-                ],
-            },
-            {
-                'model_id': 'risk-sequence',
-                'label': '时序风险模型',
-                'status': 'active' if sequence_artifact_path.exists() else ('building' if (SCRIPT_DIR / 'train_risk_sequence_model.py').exists() else 'warming_up'),
-                'stage_label': '已产出模型' if sequence_artifact_path.exists() else ('脚本已就绪' if (SCRIPT_DIR / 'train_risk_sequence_model.py').exists() else '未接入'),
-                'artifact_path': self._safe_path(sequence_artifact_path),
-                'sample_count': self._safe_int(sequence_metrics.get('sample_count')),
-                'metric_label': '验证 AUC',
-                'metric_value': f"{self._safe_float(sequence_metrics.get('roc_auc')):.3f}" if sequence_metrics else None,
-                'notes': [
-                    '当前序列窗口按 3 年连续财务特征设计。',
-                    '需要继续补统一评测文件和模型注册元数据。',
-                ],
-            },
-            {
-                'model_id': 'multimodal-extractor',
-                'label': '多模态财报抽取',
-                'status': 'active' if multimodal_extract_count else ('building' if (SCRIPT_DIR / 'extract_official_financial_panel_multimodal.py').exists() else 'warming_up'),
-                'stage_label': '抽取结果入链' if multimodal_extract_count else ('脚本已就绪' if (SCRIPT_DIR / 'extract_official_financial_panel_multimodal.py').exists() else '未接入'),
-                'artifact_path': self._safe_path(multimodal_dir),
-                'sample_count': multimodal_extract_count,
-                'metric_label': '覆盖率',
-                'metric_value': f"{self._safe_float(quality_summary.get('multimodal_extract_coverage_ratio')) * 100:.1f}%" if multimodal_expected_count else None,
-                'notes': [
-                    f"当前覆盖 {multimodal_extract_count}/{multimodal_expected_count or 0} 份财报",
-                    '抽取结果会回流到企业分析和质量治理链路。',
-                ],
-            },
-            {
-                'model_id': 'multimodal-sft',
-                'label': '多模态 SFT 数据集',
-                'status': 'active' if dataset_sample_count else ('building' if (SCRIPT_DIR / 'build_multimodal_sft_dataset.py').exists() else 'warming_up'),
-                'stage_label': '可用于微调' if dataset_sample_count else ('脚本已就绪' if (SCRIPT_DIR / 'build_multimodal_sft_dataset.py').exists() else '未接入'),
-                'artifact_path': self._safe_path(sft_dataset_path),
-                'sample_count': dataset_sample_count,
-                'metric_label': '数据集文件',
-                'metric_value': str(dataset_file_count),
-                'notes': [
-                    '用于后续 ModelScope / ms-swift 轻量微调实验。',
-                    '当前样本量仍需继续扩充到比赛级规模。',
-                ],
-            },
-        ]
+        model_registry = [dict(item) for item in registry_summary.get('items') or []]
 
         recommended_actions = [
             f'当前 Spark-ready 计算任务 {spark_ready_job_count}/{len(jobs)} 个，下一步应把批处理作业接入调度而不只是脚本清单。',
             (
-                f'多模态抽取已覆盖 {multimodal_extract_count}/{multimodal_expected_count} 份财报，继续补齐后才能稳定支撑复杂图表问答。'
+                f"多模态抽取已覆盖 {next((item.get('sample_count') for item in model_registry if item.get('model_id') == 'multimodal-extractor'), 0)}/{multimodal_expected_count} 份财报，继续补齐后才能稳定支撑复杂图表问答。"
                 if multimodal_expected_count
                 else '多模态抽取目标规模尚未入表，需要先明确 expected_report_count。'
             ),
@@ -554,6 +491,7 @@ class AIStackService:
                 else '当前 SFT 数据集还为空，应优先产出首版训练样本。'
             ),
         ]
+        recommended_actions.extend(list(registry_summary.get('priority_actions') or [])[:2])
 
         return {
             'generated_at': datetime.now().isoformat(timespec='seconds'),
