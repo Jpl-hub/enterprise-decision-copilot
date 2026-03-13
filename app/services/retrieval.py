@@ -5,8 +5,10 @@ import re
 
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
+from sklearn.preprocessing import Normalizer
 
 from app.services.analytics import AnalyticsService
 
@@ -32,13 +34,21 @@ QUERY_HINT_KEYWORDS = (
 )
 STOP_TOKENS = {"结合", "以及", "这个", "那个", "情况", "说明", "分析", "一下", "企业", "公司", "行业", "研报"}
 IDENTIFIER_COLUMNS = {"company_code", "industry_code", "security_code", "disclosure_company_code"}
-DEFAULT_RETRIEVAL_MODE = "hybrid_tfidf_rerank"
+DEFAULT_RETRIEVAL_MODE = "hybrid_semantic_rerank"
 RETRIEVAL_MODE_LABELS = {
     "lexical_tfidf": ["word_tfidf", "keyword_overlap", "recency_rerank"],
     "hybrid_tfidf_rerank": ["char_tfidf", "word_tfidf", "keyword_overlap", "recency_rerank"],
+    "hybrid_semantic_rerank": [
+        "char_tfidf",
+        "word_tfidf",
+        "latent_semantic",
+        "keyword_overlap",
+        "recency_rerank",
+    ],
     "hybrid_diversified": [
         "char_tfidf",
         "word_tfidf",
+        "latent_semantic",
         "keyword_overlap",
         "recency_rerank",
         "institution_diversity",
@@ -54,6 +64,9 @@ class CorpusIndex:
     char_matrix: object | None
     word_vectorizer: TfidfVectorizer | None
     word_matrix: object | None
+    semantic_projector: TruncatedSVD | None
+    semantic_normalizer: Normalizer | None
+    semantic_matrix: object | None
     text_column: str
     lexical_column: str
 
@@ -80,6 +93,9 @@ class RetrievalService:
                 char_matrix=None,
                 word_vectorizer=None,
                 word_matrix=None,
+                semantic_projector=None,
+                semantic_normalizer=None,
+                semantic_matrix=None,
                 text_column="_search_text",
                 lexical_column="_lexical_terms",
             )
@@ -130,6 +146,14 @@ class RetrievalService:
         )
         char_matrix = char_vectorizer.fit_transform(chunk_frame["_search_text"])
         word_matrix = word_vectorizer.fit_transform(chunk_frame["_lexical_terms"])
+        semantic_projector = None
+        semantic_normalizer = None
+        semantic_matrix = None
+        latent_rank = min(word_matrix.shape[0] - 1, word_matrix.shape[1] - 1, 48)
+        if latent_rank >= 2:
+            semantic_projector = TruncatedSVD(n_components=latent_rank, random_state=42)
+            semantic_normalizer = Normalizer(copy=False)
+            semantic_matrix = semantic_normalizer.fit_transform(semantic_projector.fit_transform(word_matrix))
         return CorpusIndex(
             frame=corpus,
             chunk_frame=chunk_frame,
@@ -137,6 +161,9 @@ class RetrievalService:
             char_matrix=char_matrix,
             word_vectorizer=word_vectorizer,
             word_matrix=word_matrix,
+            semantic_projector=semantic_projector,
+            semantic_normalizer=semantic_normalizer,
+            semantic_matrix=semantic_matrix,
             text_column="_search_text",
             lexical_column="_lexical_terms",
         )
@@ -305,6 +332,7 @@ class RetrievalService:
         retrieval_mode: str,
         char_score: float,
         word_score: float,
+        semantic_score: float,
         hybrid_score: float,
         keyword_boost: float,
         date_boost: float,
@@ -319,6 +347,7 @@ class RetrievalService:
             "retrieval_mode": retrieval_mode,
             "char_score": round(float(char_score), 4),
             "word_score": round(float(word_score), 4),
+            "semantic_score": round(float(semantic_score), 4),
             "hybrid_score": round(float(hybrid_score), 4),
             "keyword_boost": round(float(keyword_boost), 4),
             "recency_boost": round(float(date_boost), 4),
@@ -330,21 +359,31 @@ class RetrievalService:
             "query_variant_count": len(query_variants),
         }
 
-    def _hybrid_scores(self, index: CorpusIndex, query_variants: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    def _hybrid_scores(self, index: CorpusIndex, query_variants: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         chunk_count = len(index.chunk_frame)
         char_scores = np.zeros(chunk_count, dtype=float)
         word_scores = np.zeros(chunk_count, dtype=float)
+        semantic_scores = np.zeros(chunk_count, dtype=float)
 
         if query_variants and index.char_vectorizer is not None and index.char_matrix is not None:
             char_queries = index.char_vectorizer.transform(query_variants)
             char_scores = np.asarray(linear_kernel(char_queries, index.char_matrix)).max(axis=0)
 
+        lexical_queries: list[str] = []
         if query_variants and index.word_vectorizer is not None and index.word_matrix is not None:
             lexical_queries = [" ".join(self._tokenize_text(item)) or item for item in query_variants]
             word_queries = index.word_vectorizer.transform(lexical_queries)
             word_scores = np.asarray(linear_kernel(word_queries, index.word_matrix)).max(axis=0)
+            if (
+                index.semantic_projector is not None
+                and index.semantic_normalizer is not None
+                and index.semantic_matrix is not None
+            ):
+                semantic_queries = index.semantic_projector.transform(word_queries)
+                semantic_queries = index.semantic_normalizer.transform(semantic_queries)
+                semantic_scores = np.asarray(linear_kernel(semantic_queries, index.semantic_matrix)).max(axis=0)
 
-        return char_scores, word_scores
+        return char_scores, word_scores, semantic_scores
 
     def _normalize_retrieval_mode(self, retrieval_mode: str | None) -> str:
         mode = str(retrieval_mode or "").strip()
@@ -360,11 +399,19 @@ class RetrievalService:
                 labels.insert(insert_at, "entity_expansion")
         return labels
 
-    def _base_scores_for_mode(self, char_scores: np.ndarray, word_scores: np.ndarray, retrieval_mode: str) -> np.ndarray:
+    def _base_scores_for_mode(
+        self,
+        char_scores: np.ndarray,
+        word_scores: np.ndarray,
+        semantic_scores: np.ndarray,
+        retrieval_mode: str,
+    ) -> np.ndarray:
         if retrieval_mode == "lexical_tfidf":
             return word_scores
+        if retrieval_mode == "hybrid_semantic_rerank":
+            return char_scores * 0.38 + word_scores * 0.24 + semantic_scores * 0.38
         if retrieval_mode == "hybrid_diversified":
-            return char_scores * 0.55 + word_scores * 0.45
+            return char_scores * 0.42 + word_scores * 0.22 + semantic_scores * 0.36
         return char_scores * 0.62 + word_scores * 0.38
 
     def _diversity_boost(
@@ -421,10 +468,10 @@ class RetrievalService:
         retrieval_mode = self._normalize_retrieval_mode(retrieval_mode)
         query_terms = self._dedupe_terms(self._extract_query_keywords(query) + list(expansion_terms or []), limit=10)
         query_variants = self._build_query_variants(query, expansion_terms=expansion_terms)
-        char_scores, word_scores = self._hybrid_scores(index, query_variants)
+        char_scores, word_scores, semantic_scores = self._hybrid_scores(index, query_variants)
         base_scores = np.where(
             candidate_chunk_mask.to_numpy(),
-            self._base_scores_for_mode(char_scores, word_scores, retrieval_mode),
+            self._base_scores_for_mode(char_scores, word_scores, semantic_scores, retrieval_mode),
             -1.0,
         )
 
@@ -448,6 +495,7 @@ class RetrievalService:
             signals = [
                 f"char={char_scores[chunk_idx]:.4f}",
                 f"word={word_scores[chunk_idx]:.4f}",
+                f"semantic={semantic_scores[chunk_idx]:.4f}",
                 f"hybrid={hybrid_score:.4f}",
                 f"variants={len(query_variants)}",
             ]
@@ -463,6 +511,7 @@ class RetrievalService:
                 retrieval_mode=retrieval_mode,
                 char_score=float(char_scores[chunk_idx]),
                 word_score=float(word_scores[chunk_idx]),
+                semantic_score=float(semantic_scores[chunk_idx]),
                 hybrid_score=hybrid_score,
                 keyword_boost=keyword_boost,
                 date_boost=date_boost,
@@ -561,6 +610,7 @@ class RetrievalService:
             "query_variants": self._build_query_variants(query, expansion_terms=expansion_terms),
             "retrieval_mode": retrieval_mode,
             "strategy_labels": self._strategy_labels(retrieval_mode, expansion_terms=expansion_terms),
+            "semantic_ranker_ready": self.stock_index.semantic_matrix is not None,
         }
         return {
             "query": query,
@@ -594,6 +644,7 @@ class RetrievalService:
             "query_variants": self._build_query_variants(query, expansion_terms=query_terms[:3]),
             "retrieval_mode": retrieval_mode,
             "strategy_labels": self._strategy_labels(retrieval_mode, expansion_terms=query_terms[:3]),
+            "semantic_ranker_ready": self.industry_index.semantic_matrix is not None,
         }
         return {
             "query": query,

@@ -316,9 +316,10 @@ def test_quality_service_returns_retrieval_evaluation_summary() -> None:
     payload = DataQualityService().get_retrieval_evaluation_summary()
 
     assert payload["case_count"] >= 1
-    assert payload["retrieval_mode"] == "hybrid_tfidf_rerank"
+    assert payload["retrieval_mode"] == "hybrid_semantic_rerank"
     assert payload["strategy_labels"]
-    assert len(payload["strategy_benchmarks"]) == 3
+    assert len(payload["strategy_benchmarks"]) == 4
+    assert any(item["retrieval_mode"] == "hybrid_semantic_rerank" for item in payload["strategy_benchmarks"])
     assert payload["best_mode"]
     assert payload["comparison_notes"]
     assert payload["cases"]

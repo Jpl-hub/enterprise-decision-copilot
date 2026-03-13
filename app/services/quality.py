@@ -514,7 +514,7 @@ class DataQualityService:
         retrieval = RetrievalService(analytics)
         benchmarks = [
             self._evaluate_retrieval_mode(retrieval, cases, retrieval_mode)
-            for retrieval_mode in ("lexical_tfidf", DEFAULT_RETRIEVAL_MODE, "hybrid_diversified")
+            for retrieval_mode in ("lexical_tfidf", "hybrid_tfidf_rerank", DEFAULT_RETRIEVAL_MODE, "hybrid_diversified")
         ]
         populated = [item for item in benchmarks if int(item.get("case_count") or 0) > 0]
         if not populated:
