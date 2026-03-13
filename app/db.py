@@ -193,5 +193,3 @@ def table_has_rows(table_name: str) -> bool:
             return row is not None
         except sqlite3.Error:
             return False
-
-

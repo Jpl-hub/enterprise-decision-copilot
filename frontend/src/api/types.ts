@@ -65,6 +65,44 @@ export interface AIStackSummaryResponse {
   design_choices: string[];
 }
 
+export interface AIMissionControlMetric {
+  label: string;
+  value: string;
+  tone: string;
+}
+
+export interface AIMissionLane {
+  lane_id: string;
+  name: string;
+  owner_role: string;
+  status: string;
+  readiness_score: number;
+  summary: string;
+  current_focus: string;
+  blockers: string[];
+  next_actions: string[];
+  deliverables: string[];
+  linked_engines: string[];
+}
+
+export interface AIReleaseGate {
+  gate_status: string;
+  trust_status: string;
+  trusted: boolean;
+  blocking_issue_count: number;
+  pending_review_count: number;
+  release_note: string;
+}
+
+export interface AIMissionControlResponse {
+  generated_at: string;
+  headline_metrics: AIMissionControlMetric[];
+  mission_lanes: AIMissionLane[];
+  release_gate: AIReleaseGate;
+  showcase_flows: string[];
+  control_tower_brief: string[];
+}
+
 export interface PipelineStatus {
   has_financials: boolean;
   has_reports: boolean;

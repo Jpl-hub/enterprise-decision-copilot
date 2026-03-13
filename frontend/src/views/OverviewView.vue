@@ -206,6 +206,11 @@ const cockpitRoutes = computed(() => [
     body: '面向展示与集中研判的可视化总览界面。',
     to: '/board'
   },
+  {
+    title: '项目总控台',
+    body: '查看数据、Agent、模型、计算与正式交付五条主任务线。',
+    to: '/mission-control'
+  },
   { 
     title: '企业分析工作台', 
     body: '带有证据链路的单体深度体检。', 

@@ -127,3 +127,41 @@ class AIModelRegistryResponse(BaseModel):
     building_count: int = 0
     items: list[AIModelRegistryItem] = Field(default_factory=list)
     priority_actions: list[str] = Field(default_factory=list)
+
+
+class AIMissionControlMetric(BaseModel):
+    label: str
+    value: str
+    tone: str = 'neutral'
+
+
+class AIMissionLane(BaseModel):
+    lane_id: str
+    name: str
+    owner_role: str
+    status: str
+    readiness_score: float
+    summary: str
+    current_focus: str
+    blockers: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+    deliverables: list[str] = Field(default_factory=list)
+    linked_engines: list[str] = Field(default_factory=list)
+
+
+class AIReleaseGate(BaseModel):
+    gate_status: str
+    trust_status: str
+    trusted: bool = False
+    blocking_issue_count: int = 0
+    pending_review_count: int = 0
+    release_note: str
+
+
+class AIMissionControlResponse(BaseModel):
+    generated_at: str
+    headline_metrics: list[AIMissionControlMetric] = Field(default_factory=list)
+    mission_lanes: list[AIMissionLane] = Field(default_factory=list)
+    release_gate: AIReleaseGate
+    showcase_flows: list[str] = Field(default_factory=list)
+    control_tower_brief: list[str] = Field(default_factory=list)

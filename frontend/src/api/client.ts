@@ -1,4 +1,5 @@
 import type {
+  AIMissionControlResponse,
   AIStackSummaryResponse,
   AgentResponse,
   AgentThreadDetailResponse,
@@ -95,6 +96,9 @@ export const api = {
   },
   getAIStack() {
     return request<AIStackSummaryResponse>('/api/ai/stack');
+  },
+  getAIMissionControl() {
+    return request<AIMissionControlResponse>('/api/ai/mission-control');
   },
   getAuditLogs(limit = 30) {
     return request<AuditLogListResponse>(`/api/audit/logs?limit=${limit}`);

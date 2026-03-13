@@ -8,7 +8,7 @@ from app.agents.models import AgentIntent, WorkflowContext
 from app.agents.router import IntentRouter
 from app.agents.tools import CompanyReportTool, build_agent_tools
 from app.agents.workflow import AgentWorkflow
-from app.api.routes.ai import get_ai_engine_room, get_ai_model_registry
+from app.api.routes.ai import get_ai_engine_room, get_ai_mission_control, get_ai_model_registry
 from app.api.routes.reports import compare_companies
 from app.api.routes.risk import get_risk_model_summary
 from app.core.container import build_service_container
@@ -399,6 +399,19 @@ def test_ai_engine_room_route_returns_compute_and_model_registry() -> None:
     assert payload['model_registry']
     assert any(item['model_id'] == 'risk-tabular' for item in payload['model_registry'])
     assert payload['recommended_actions']
+
+
+def test_ai_mission_control_route_returns_lanes_and_release_gate() -> None:
+    container = build_service_container()
+
+    payload = asyncio.run(get_ai_mission_control(container.ai_stack_service))
+
+    assert len(payload['headline_metrics']) >= 4
+    assert len(payload['mission_lanes']) >= 5
+    assert any(item['lane_id'] == 'agent-boardroom' for item in payload['mission_lanes'])
+    assert payload['release_gate']['gate_status'] in {'open', 'review_required'}
+    assert payload['showcase_flows']
+    assert payload['control_tower_brief']
 
 
 def test_ai_model_registry_route_returns_registry_summary() -> None:
