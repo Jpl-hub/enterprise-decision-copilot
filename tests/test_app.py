@@ -195,6 +195,26 @@ def test_intent_router_exposes_ranked_candidates() -> None:
     assert ranked[0]["reasons"]
 
 
+def test_intent_router_uses_semantic_examples_for_quality_questions() -> None:
+    router = IntentRouter()
+    ranked = router.score_intents("看看当前数据底座靠不靠谱", [])
+
+    assert ranked
+    assert ranked[0]["intent"] == AgentIntent.DATA_QUALITY
+    assert any("语义示例" in reason for reason in ranked[0]["reasons"])
+
+
+def test_intent_router_promotes_report_queries_without_explicit_report_keyword() -> None:
+    router = IntentRouter()
+    ranked = router.score_intents(
+        "帮我整理一份迈瑞医疗给管理层看的版本",
+        [{"company_code": "300760", "company_name": "迈瑞医疗"}],
+    )
+
+    assert ranked
+    assert ranked[0]["intent"] == AgentIntent.COMPANY_REPORT
+
+
 def test_agent_thread_keeps_focus_for_follow_up_questions() -> None:
     container = build_service_container()
     first = container.agent_service.answer('分析迈瑞医疗')
