@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.config import settings
+from app.data_access import resolve_targets_csv_path
 from scripts.expand_target_pool import build_expanded_targets
 
 
@@ -47,3 +49,17 @@ def test_build_expanded_targets_adds_ranked_candidates() -> None:
     assert '301096' not in codes
     assert summary['added_target_count'] == 2
     assert summary['coverage_source'] == 'financial'
+
+
+def test_resolve_targets_csv_path_prefers_expanded_mode() -> None:
+    original_mode = settings.target_pool_mode
+    original_path = settings.target_pool_path
+    try:
+        settings.target_pool_mode = 'expanded'
+        settings.target_pool_path = ''
+        path = resolve_targets_csv_path()
+    finally:
+        settings.target_pool_mode = original_mode
+        settings.target_pool_path = original_path
+
+    assert path.name == 'targets_expanded.csv'

@@ -148,6 +148,18 @@ TARGET_POOL_MODE=expanded
 - `data/targets_expanded.csv`
 - `data/quality/targets_expanded_summary.json`
 
+如果要把“候选生成 -> 候选年报抓取 -> 官方财报抽取 -> 双口径扩池”整条链一次跑完，可以使用：
+
+```bash
+python scripts/refresh_target_expansion_pipeline.py
+```
+
+该脚本会产出：
+
+- `data/targets_expanded.csv`：扩展演示池
+- `data/targets_expanded_strict.csv`：严格官方财报口径池
+- `data/quality/target_pool_refresh_summary.json`：扩池刷新总览
+
 ## 数据说明
 
 项目默认遵循“真实公开数据优先”原则，重点使用赛题允许的数据来源：

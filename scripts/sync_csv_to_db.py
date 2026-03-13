@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.config import settings
+from app.data_access import resolve_targets_csv_path
 from app.db import get_connection, init_db
 
 
@@ -21,7 +22,8 @@ def read_csv(path: Path) -> pd.DataFrame:
 
 def main() -> None:
     init_db()
-    targets = read_csv(settings.data_dir / 'targets.csv')
+    targets_path = resolve_targets_csv_path()
+    targets = read_csv(targets_path)
     financials = read_csv(settings.processed_dir / 'financial_features.csv')
     reports = read_csv(settings.processed_dir / 'research_reports.csv')
     industry_reports = read_csv(settings.processed_dir / 'industry_reports.csv')
@@ -38,6 +40,7 @@ def main() -> None:
         conn.commit()
 
     print('已完成 CSV -> SQLite 同步：', settings.data_dir / 'app.db')
+    print('目标池来源：', targets_path)
     print(
         f'companies={len(targets)}, financial_features={len(financials)}, '
         f'research_reports={len(reports)}, industry_reports={len(industry_reports)}, '

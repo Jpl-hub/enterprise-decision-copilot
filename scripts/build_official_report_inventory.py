@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.data_access import resolve_targets_csv_path
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW_OFFICIAL_DIR = ROOT / "data" / "raw" / "official"
@@ -57,7 +59,8 @@ def load_manifest_rows() -> list[dict]:
 
 
 def build_target_coverage(inventory_df: pd.DataFrame) -> dict:
-    if not TARGETS_PATH.exists():
+    target_path = resolve_targets_csv_path()
+    if not target_path.exists():
         return {
             "expected_slots": 0,
             "downloaded_slots": 0,
@@ -65,7 +68,7 @@ def build_target_coverage(inventory_df: pd.DataFrame) -> dict:
             "missing_slots": [],
         }
 
-    targets = pd.read_csv(TARGETS_PATH, dtype={"company_code": str})
+    targets = pd.read_csv(target_path, dtype={"company_code": str})
     if targets.empty:
         return {
             "expected_slots": 0,

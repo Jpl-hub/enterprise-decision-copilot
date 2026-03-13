@@ -7,6 +7,8 @@ from pathlib import Path
 import pandas as pd
 from PyPDF2 import PdfReader
 
+from app.data_access import resolve_targets_csv_path
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE_DIR = ROOT / "data" / "cache" / "official_extract"
@@ -106,9 +108,10 @@ def _load_manifest_records() -> list[dict]:
                 manifest_records.append(item)
     return manifest_records
 def _load_target_names() -> dict[str, str]:
-    if not TARGETS_PATH.exists():
+    target_path = resolve_targets_csv_path()
+    if not target_path.exists():
         return {}
-    df = pd.read_csv(TARGETS_PATH, dtype={"company_code": str})
+    df = pd.read_csv(target_path, dtype={"company_code": str})
     return {
         str(row["company_code"]): str(row["company_name"])
         for _, row in df[["company_code", "company_name"]].drop_duplicates().iterrows()

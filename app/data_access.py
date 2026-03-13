@@ -108,7 +108,7 @@ def _read_table_if_available(table_name: str, columns: list[str]) -> pd.DataFram
     return pd.DataFrame(columns=columns)
 
 
-def _resolve_targets_csv_path() -> Path:
+def resolve_targets_csv_path() -> Path:
     if settings.target_pool_path.strip():
         return Path(settings.target_pool_path.strip())
     if settings.target_pool_mode.strip().lower() == 'expanded':
@@ -121,7 +121,7 @@ def _resolve_targets_csv_path() -> Path:
 def load_targets() -> pd.DataFrame:
     frame = _read_table_if_available('companies', TARGET_COLUMNS)
     if frame.empty:
-        frame = _read_csv(_resolve_targets_csv_path(), TARGET_COLUMNS)
+        frame = _read_csv(resolve_targets_csv_path(), TARGET_COLUMNS)
     if not frame.empty:
         frame = frame[TARGET_COLUMNS].copy()
         frame['company_code'] = frame['company_code'].astype(str)
