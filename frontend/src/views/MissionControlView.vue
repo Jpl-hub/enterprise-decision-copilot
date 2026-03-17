@@ -23,25 +23,29 @@
         </div>
       </header>
 
-      <section class="mission-control-frame">
-        <article class="mission-panel">
+      <section class="mission-top-strip">
+        <article class="mission-panel mission-mini-panel">
           <div class="mission-panel-head">
             <span>控制面定位</span>
             <strong>不是用户问答页</strong>
           </div>
-          <p class="mission-line-item">面向展示：解释系统规模、工程架构和当前推进状态。</p>
-          <p class="mission-line-item">面向控制：观察数据、模型、Agent、计算和交付五条主线是否正常。</p>
-          <p class="mission-line-item">面向治理：承接发布门禁、阻塞项、下一步动作和可交付物。</p>
+          <div class="mission-mini-tags">
+            <span>展示系统规模</span>
+            <span>观察五条主线</span>
+            <span>承接发布门禁</span>
+          </div>
         </article>
 
-        <article class="mission-panel">
+        <article class="mission-panel mission-mini-panel">
           <div class="mission-panel-head">
             <span>三层结构</span>
             <strong>用户层 / 智能层 / 工程层</strong>
           </div>
-          <p class="mission-line-item"><strong>用户层：</strong>企业问答、数字人聊天室、报告与导出。</p>
-          <p class="mission-line-item"><strong>智能层：</strong>Agent 编排、领域 skills、检索增强、验证与记忆。</p>
-          <p class="mission-line-item"><strong>工程层：</strong>数据采集、分布式存储、计算引擎、中间件与治理。</p>
+          <div class="mission-mini-tags">
+            <span>问答 / 数字人 / 导出</span>
+            <span>Agent / Skills / 记忆</span>
+            <span>数据 / 计算 / 治理</span>
+          </div>
         </article>
       </section>
 
@@ -110,7 +114,13 @@
             </div>
           </div>
           <p class="mission-summary">{{ lane.summary }}</p>
-          <p class="mission-focus">{{ lane.current_focus }}</p>
+          <div class="mission-progress-track">
+            <div class="mission-progress-bar" :style="{ width: `${Math.max(8, Math.round(lane.readiness_score * 100))}%` }"></div>
+          </div>
+          <div class="mission-focus-box compact">
+            <span>当前焦点</span>
+            <p>{{ lane.current_focus }}</p>
+          </div>
 
           <div class="mission-chip-row" v-if="lane.linked_engines.length">
             <span v-for="item in lane.linked_engines" :key="item">{{ item }}</span>
@@ -119,11 +129,11 @@
           <div class="mission-subgrid">
             <div>
               <strong>当前阻塞</strong>
-              <p v-for="item in lane.blockers" :key="item">{{ item }}</p>
+              <p v-for="item in laneBlockers(lane)" :key="item">{{ item }}</p>
             </div>
             <div>
               <strong>下一步</strong>
-              <p v-for="item in lane.next_actions" :key="item">{{ item }}</p>
+              <p v-for="item in laneNextActions(lane)" :key="item">{{ item }}</p>
             </div>
           </div>
 
@@ -161,7 +171,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { api } from '../api/client';
-import type { AIMissionControlResponse } from '../api/types';
+import type { AIMissionControlResponse, AIMissionLane } from '../api/types';
 import EChartPanel from '../components/EChartPanel.vue';
 
 const payload = ref<AIMissionControlResponse | null>(null);
@@ -222,6 +232,30 @@ function handleLaneChartClick(params: Record<string, unknown>) {
   }
 }
 
+function laneBlockers(lane: AIMissionLane) {
+  return lane.blockers.slice(0, 2).map(formatMissionNote);
+}
+
+function laneNextActions(lane: AIMissionLane) {
+  return lane.next_actions.slice(0, 2).map(formatMissionNote);
+}
+
+function formatMissionNote(value: string) {
+  const text = String(value || '').trim();
+  if (!text) return text;
+  if (text.startsWith('{') && text.includes("'title'")) {
+    const titleMatch = text.match(/'title':\s*'([^']+)'/);
+    const detailMatch = text.match(/'detail':\s*'([^']+)'/);
+    if (titleMatch?.[1] && detailMatch?.[1]) {
+      return `${titleMatch[1]}：${detailMatch[1]}`;
+    }
+    if (titleMatch?.[1]) {
+      return titleMatch[1];
+    }
+  }
+  return text;
+}
+
 onMounted(async () => {
   loading.value = true;
   error.value = null;
@@ -257,7 +291,7 @@ watch(payload, (value) => {
   max-width: 1680px;
   margin: 0 auto;
   display: grid;
-  gap: 20px;
+  gap: 18px;
 }
 
 .mission-hero,
@@ -273,8 +307,8 @@ watch(payload, (value) => {
 .mission-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr);
-  gap: 24px;
-  padding: 30px 34px;
+  gap: 20px;
+  padding: 26px 30px;
   border-radius: 30px;
 }
 
@@ -293,9 +327,9 @@ watch(payload, (value) => {
 }
 
 .mission-hero h1 {
-  margin: 16px 0 12px;
+  margin: 14px 0 10px;
   font-family: 'Syne', 'DM Sans', sans-serif;
-  font-size: clamp(40px, 4.6vw, 66px);
+  font-size: clamp(34px, 4vw, 58px);
   line-height: 1.04;
   letter-spacing: -0.05em;
   color: #0f172a;
@@ -341,6 +375,12 @@ watch(payload, (value) => {
 .mission-gate-badge strong {
   font-size: 22px;
   line-height: 1.1;
+}
+
+.mission-top-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .mission-metric-strip {
@@ -415,6 +455,29 @@ watch(payload, (value) => {
   color: #0f172a;
 }
 
+.mission-mini-panel {
+  gap: 14px;
+}
+
+.mission-mini-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mission-mini-tags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .mission-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -423,8 +486,8 @@ watch(payload, (value) => {
 
 .mission-lane-card {
   display: grid;
-  gap: 16px;
-  padding: 24px;
+  gap: 14px;
+  padding: 22px;
   border-radius: 28px;
 }
 
@@ -488,6 +551,19 @@ watch(payload, (value) => {
   font-family: 'DM Mono', monospace;
   font-size: 32px;
   color: #0f172a;
+}
+
+.mission-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.mission-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0f172a, #2563eb);
 }
 
 .mission-chip-row,
@@ -588,6 +664,10 @@ watch(payload, (value) => {
   border: 1px solid rgba(15, 23, 42, 0.06);
 }
 
+.mission-focus-box.compact {
+  padding: 12px 14px;
+}
+
 .mission-focus-box span {
   font-size: 12px;
   font-weight: 700;
@@ -622,6 +702,7 @@ watch(payload, (value) => {
 }
 
 @media (max-width: 1280px) {
+  .mission-top-strip,
   .mission-metric-strip,
   .mission-grid,
   .mission-lower-grid {
@@ -631,6 +712,7 @@ watch(payload, (value) => {
 
 @media (max-width: 980px) {
   .mission-hero,
+  .mission-top-strip,
   .mission-visual-grid,
   .mission-metric-strip,
   .mission-grid,

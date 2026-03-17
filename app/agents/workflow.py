@@ -115,6 +115,27 @@ class AgentWorkflow:
         }
         return mapping.get(intent, ('已完成分析', ['分析结论']))
 
+    def _missing_entity_guard(self, context: WorkflowContext) -> None:
+        skill = self.skill_registry.by_intent.get(context.intent)
+        required_match_count = skill.contract.minimum_match_count if skill is not None else 0
+        if required_match_count <= 0 or len(context.matches) >= required_match_count:
+            return
+        original_intent = context.intent
+        context.intent = AgentIntent.FALLBACK
+        context.add_trace(
+            '补充对象',
+            (
+                f"{self._intent_label(original_intent)} 至少需要 {required_match_count} 个分析对象，"
+                f"当前只命中 {len(context.matches)} 个，已回退到默认引导。"
+            ),
+            status='warning',
+        )
+        context.add_plan(
+            '补充对象',
+            '当前问题还没有锁定足够的企业对象，先引导用户补充企业范围再继续分析。',
+            status='warning',
+        )
+
     def _plan_for_intent(self, context: WorkflowContext) -> None:
         if context.intent == AgentIntent.COMPANY_COMPARE:
             context.add_plan('确认对比范围', '确认参与对比的企业集合，并统一年度口径。')
@@ -300,6 +321,7 @@ class AgentWorkflow:
                     context.add_trace('承接上下文', f"沿用线程上一轮任务模式：{self._intent_label(context.intent)}。")
                 context.add_plan('判断任务类型', f"当前问题属于：{self._intent_label(context.intent)}。")
                 context.add_trace('任务识别', f"已识别为：{self._intent_label(context.intent)}。")
+            self._missing_entity_guard(context)
             self._plan_for_intent(context)
 
         context.selected_tool = self._select_tool_name(context.intent)

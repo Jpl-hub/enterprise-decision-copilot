@@ -147,6 +147,15 @@ def test_agent_can_generate_decision_brief() -> None:
     assert any("证据：" in item for item in payload["highlights"])
 
 
+def test_agent_falls_back_when_entity_required_intent_has_no_match() -> None:
+    container = build_service_container()
+    payload = container.agent_service.answer("用轻松点的方式解释一下企业经营风险")
+
+    assert payload["title"] == "问题已接收"
+    assert payload["task_mode"] == "fallback"
+    assert any(step["step"] == "补充对象" for step in payload["trace"])
+
+
 def test_agent_can_generate_executive_boardroom() -> None:
     container = build_service_container()
     payload = container.agent_service.answer("给迈瑞医疗开一个管理层决策会议室，让财务市场风险多个agent一起会诊")

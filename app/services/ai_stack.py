@@ -86,6 +86,24 @@ class AIStackService:
     def _headline_metric(self, label: str, value: str, tone: str = 'neutral') -> dict:
         return {'label': label, 'value': value, 'tone': tone}
 
+    def _compact_mission_findings(self, findings: list[object]) -> list[str]:
+        compact: list[str] = []
+        for item in findings:
+            if isinstance(item, dict):
+                title = str(item.get('title') or '').strip()
+                detail = str(item.get('detail') or '').strip()
+                if title and detail:
+                    compact.append(f'{title}：{detail}')
+                elif title:
+                    compact.append(title)
+                elif detail:
+                    compact.append(detail)
+                continue
+            text = str(item).strip()
+            if text:
+                compact.append(text)
+        return compact
+
     def _safe_path(self, path: Path) -> str | None:
         return str(path.resolve()) if path.exists() else None
 
@@ -530,7 +548,7 @@ class AIStackService:
         warehouse_tables = self._safe_int(foundation_summary.get('warehouse_table_count'))
         trust_status = str(trust_center.get('trust_status') or 'limited')
         trust_score = self._safe_int(trust_center.get('trust_score'))
-        release_blockers = [str(item).strip() for item in list(trust_center.get('findings') or []) if str(item).strip()]
+        release_blockers = self._compact_mission_findings(list(trust_center.get('findings') or []))
         registry_items = list(engine_room.get('model_registry') or [])
         active_model_count = sum(1 for item in registry_items if str(item.get('status') or '') == 'active')
 

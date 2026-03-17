@@ -137,10 +137,13 @@ const messagePreview = computed(() => agentStore.messages);
 function selectScene(id: HumanScene['id']) {
   sceneId.value = id;
   draft.value = '';
+  resetChat();
 }
 
 function resetChat() {
-  agentStore.resetThread(null, activeScene.value.label);
+  agentStore.resetThread(null, null);
+  agentStore.threadTitle = activeScene.value.label;
+  agentStore.setTaskMode(null);
   draft.value = '';
 }
 
@@ -154,14 +157,15 @@ async function submit() {
   if (!question) return;
   await agentStore.ask(question, {
     companyCode: null,
-    companyName: activeScene.value.label,
+    companyName: null,
+    taskMode: null,
   });
   draft.value = '';
 }
 
 onMounted(() => {
   if (!agentStore.messages.length) {
-    agentStore.resetThread(null, activeScene.value.label);
+    resetChat();
   }
 });
 </script>
