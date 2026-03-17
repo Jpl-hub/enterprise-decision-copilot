@@ -3,15 +3,15 @@
     <div class="mission-shell">
       <header class="mission-hero">
         <div class="mission-hero-copy">
-          <span class="mission-kicker">业务总览</span>
-          <h1>查看当前系统能做什么、数据够不够新、结果能不能直接用</h1>
+          <span class="mission-kicker">分析总览</span>
+          <h1>从这里看报告、风险、数据更新和结果交付</h1>
           <p>
-            这里不讲产品外叙事，只讲用户真正关心的三件事：系统当前有哪些分析能力、底层数据是否可信、结果是否适合直接继续使用。
+            先看数据和结果状态，再决定是继续问答、查看报告，还是直接导出材料。
           </p>
           <div class="mission-audience-row">
-            <span>当前可用能力</span>
-            <span>数据可信状态</span>
-            <span>结果交付能力</span>
+            <span>看数据更新</span>
+            <span>看分析结果</span>
+            <span>看导出状态</span>
           </div>
         </div>
         <div class="mission-hero-side" v-if="payload">
@@ -26,8 +26,8 @@
       <section class="mission-top-strip">
         <article class="mission-panel mission-mini-panel">
           <div class="mission-panel-head">
-            <span>你现在能用什么</span>
-            <strong>围绕企业问答、报告、风险和导出使用系统</strong>
+            <span>常用入口</span>
+            <strong>问答、报告、风险、导出</strong>
           </div>
           <div class="mission-mini-tags">
             <span>企业问答</span>
@@ -38,13 +38,13 @@
 
         <article class="mission-panel mission-mini-panel">
           <div class="mission-panel-head">
-            <span>当前最重要</span>
-            <strong>先看可用能力，再看证据，再决定要不要继续深入</strong>
+            <span>使用建议</span>
+            <strong>先看状态，再决定下一步</strong>
           </div>
           <div class="mission-mini-tags">
-            <span>能力状态</span>
-            <span>数据新鲜度</span>
-            <span>结果可信度</span>
+            <span>数据更新</span>
+            <span>结果状态</span>
+            <span>导出可用</span>
           </div>
         </article>
       </section>
