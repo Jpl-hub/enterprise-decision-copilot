@@ -3,21 +3,21 @@
     <div class="mission-shell">
       <header class="mission-hero">
         <div class="mission-hero-copy">
-          <span class="mission-kicker">系统控制面</span>
-          <h1>把数据、Agent、模型、计算和交付拉到同一个 control plane</h1>
+          <span class="mission-kicker">业务总览</span>
+          <h1>查看当前系统能做什么、数据够不够新、结果能不能直接用</h1>
           <p>
-            这不是普通用户的主功能页，而是系统侧控制面。老师、评委、项目负责人和管理员进来之后，能快速看清系统五条主线现在跑到哪、卡在哪里、下一步推什么。
+            这里不讲产品外叙事，只讲用户真正关心的三件事：系统当前有哪些分析能力、底层数据是否可信、结果是否适合直接继续使用。
           </p>
           <div class="mission-audience-row">
-            <span>评委视角</span>
-            <span>项目负责人</span>
-            <span>系统管理员</span>
+            <span>当前可用能力</span>
+            <span>数据可信状态</span>
+            <span>结果交付能力</span>
           </div>
         </div>
         <div class="mission-hero-side" v-if="payload">
           <div class="mission-gate-badge" :class="payload.release_gate.gate_status">
-            <span>发布门禁</span>
-            <strong>{{ payload.release_gate.gate_status === 'open' ? '可正式推进' : '仍需复核' }}</strong>
+            <span>当前可用性</span>
+            <strong>{{ gateLabel }}</strong>
           </div>
           <p>{{ payload.release_gate.release_note }}</p>
         </div>
@@ -26,25 +26,25 @@
       <section class="mission-top-strip">
         <article class="mission-panel mission-mini-panel">
           <div class="mission-panel-head">
-            <span>控制面定位</span>
-            <strong>不是用户问答页</strong>
+            <span>你现在能用什么</span>
+            <strong>围绕企业问答、报告、风险和导出使用系统</strong>
           </div>
           <div class="mission-mini-tags">
-            <span>展示系统规模</span>
-            <span>观察五条主线</span>
-            <span>承接发布门禁</span>
+            <span>企业问答</span>
+            <span>企业对比</span>
+            <span>报告导出</span>
           </div>
         </article>
 
         <article class="mission-panel mission-mini-panel">
           <div class="mission-panel-head">
-            <span>三层结构</span>
-            <strong>用户层 / 智能层 / 工程层</strong>
+            <span>当前最重要</span>
+            <strong>先看可用能力，再看证据，再决定要不要继续深入</strong>
           </div>
           <div class="mission-mini-tags">
-            <span>问答 / 数字人 / 导出</span>
-            <span>Agent / Skills / 记忆</span>
-            <span>数据 / 计算 / 治理</span>
+            <span>能力状态</span>
+            <span>数据新鲜度</span>
+            <span>结果可信度</span>
           </div>
         </article>
       </section>
@@ -64,7 +64,7 @@
       <section v-if="payload" class="mission-visual-grid">
         <article class="mission-panel">
           <div class="mission-panel-head">
-            <span>任务泳道热力图</span>
+            <span>能力状态分布</span>
             <div class="mission-filter-row">
               <button
                 v-for="lane in payload.mission_lanes"
@@ -82,7 +82,7 @@
 
         <article class="mission-panel mission-focus-panel" v-if="selectedLane">
           <div class="mission-panel-head">
-            <span>焦点泳道</span>
+            <span>当前焦点能力</span>
             <strong>{{ selectedLane.name }}</strong>
           </div>
           <p class="mission-focus-copy">{{ selectedLane.summary }}</p>
@@ -91,11 +91,11 @@
             <strong>{{ (selectedLane.readiness_score * 100).toFixed(0) }}</strong>
           </div>
           <div class="mission-focus-box">
-            <span>当前焦点</span>
+            <span>当前状态</span>
             <p>{{ selectedLane.current_focus }}</p>
           </div>
           <div class="mission-focus-box">
-            <span>下一步动作</span>
+            <span>推荐继续使用</span>
             <p v-for="item in selectedLane.next_actions" :key="item">{{ item }}</p>
           </div>
         </article>
@@ -118,7 +118,7 @@
             <div class="mission-progress-bar" :style="{ width: `${Math.max(8, Math.round(lane.readiness_score * 100))}%` }"></div>
           </div>
           <div class="mission-focus-box compact">
-            <span>当前焦点</span>
+            <span>当前状态</span>
             <p>{{ lane.current_focus }}</p>
           </div>
 
@@ -128,11 +128,11 @@
 
           <div class="mission-subgrid">
             <div>
-              <strong>当前阻塞</strong>
+              <strong>当前限制</strong>
               <p v-for="item in laneBlockers(lane)" :key="item">{{ item }}</p>
             </div>
             <div>
-              <strong>下一步</strong>
+              <strong>继续完善</strong>
               <p v-for="item in laneNextActions(lane)" :key="item">{{ item }}</p>
             </div>
           </div>
@@ -146,22 +146,22 @@
       <section class="mission-lower-grid" v-if="payload">
         <article class="mission-panel">
           <div class="mission-panel-head">
-            <span>展示路线</span>
-            <RouterLink to="/board">回到态势屏</RouterLink>
+            <span>常用路径</span>
+            <RouterLink to="/">开始分析</RouterLink>
           </div>
           <p v-for="item in payload.showcase_flows" :key="item" class="mission-line-item">{{ item }}</p>
         </article>
 
         <article class="mission-panel">
           <div class="mission-panel-head">
-            <span>总控台判断</span>
-            <RouterLink to="/">返回分析中枢</RouterLink>
+            <span>系统摘要</span>
+            <RouterLink to="/workbench">进入企业分析</RouterLink>
           </div>
           <p v-for="item in payload.control_tower_brief" :key="item" class="mission-line-item">{{ item }}</p>
         </article>
       </section>
 
-      <div v-if="loading" class="mission-empty">正在加载系统控制面...</div>
+      <div v-if="loading" class="mission-empty">正在加载业务总览...</div>
       <div v-else-if="error" class="mission-empty danger">{{ error }}</div>
     </div>
   </div>
@@ -186,6 +186,7 @@ function statusLabel(status: string) {
 }
 
 const selectedLane = computed(() => payload.value?.mission_lanes.find((item) => item.lane_id === selectedLaneId.value) || payload.value?.mission_lanes?.[0] || null);
+const gateLabel = computed(() => payload.value?.release_gate.gate_status === 'open' ? '可直接使用' : '建议先复查');
 
 const laneChartOption = computed(() => {
   const lanes = payload.value?.mission_lanes || [];
@@ -263,7 +264,7 @@ onMounted(async () => {
     payload.value = await api.getAIMissionControl();
     selectedLaneId.value = payload.value.mission_lanes[0]?.lane_id || '';
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '加载项目总控台失败';
+    error.value = err instanceof Error ? err.message : '加载业务总览失败';
   } finally {
     loading.value = false;
   }
@@ -344,6 +345,26 @@ watch(payload, (value) => {
   font-size: 15px;
   line-height: 1.8;
   color: #475569;
+}
+
+.mission-audience-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.mission-audience-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .mission-hero-side {

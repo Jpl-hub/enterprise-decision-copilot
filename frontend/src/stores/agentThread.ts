@@ -61,6 +61,16 @@ export const useAgentThreadStore = defineStore('agent-thread', {
     async ask(question: string, options?: { companyCode?: string | null; companyName?: string | null; taskMode?: string | null }) {
       this.loading = true;
       this.error = null;
+      const previousMessages = [...this.messages];
+      const now = new Date().toISOString();
+      const liveStatus = options?.taskMode
+        ? '正在检索证据并整理回答...'
+        : '正在理解问题并整理回答...';
+      this.messages = [
+        ...this.messages,
+        { role: 'user', content: question, created_at: now },
+        { role: 'assistant', content: liveStatus, created_at: now },
+      ];
       if (options?.companyCode || options?.companyName) {
         this.setFocus(options.companyCode, options.companyName);
       }
@@ -84,9 +94,10 @@ export const useAgentThreadStore = defineStore('agent-thread', {
         this.taskMode = response.task_mode || this.taskMode;
         this.latest = response;
         this.messages = response.thread_messages;
-        await this.loadHistory();
+        void this.loadHistory();
         return response;
       } catch (error) {
+        this.messages = previousMessages;
         this.error = error instanceof Error ? error.message : 'Agent 请求失败';
         throw error;
       } finally {

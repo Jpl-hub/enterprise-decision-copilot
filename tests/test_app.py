@@ -432,6 +432,10 @@ def test_ai_mission_control_route_returns_lanes_and_release_gate() -> None:
     assert payload['release_gate']['gate_status'] in {'open', 'review_required'}
     assert payload['showcase_flows']
     assert payload['control_tower_brief']
+    rendered_text = '\n'.join(payload['showcase_flows'] + payload['control_tower_brief'] + [lane['summary'] for lane in payload['mission_lanes']])
+    assert '老师' not in rendered_text
+    assert '评委' not in rendered_text
+    assert '竞赛' not in rendered_text
 
 
 def test_ai_model_registry_route_returns_registry_summary() -> None:

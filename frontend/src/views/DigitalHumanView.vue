@@ -3,11 +3,11 @@
     <section class="human-hero">
       <div>
         <span class="human-kicker">Digital Human Studio</span>
-        <h1>数字人聊天室</h1>
-        <p>这是单独的活体聊天模块，不和分析问答混在一起。后面接实时语音、娱乐话题或数字人驱动，都从这里扩。</p>
+        <h1>数字人预留页</h1>
+        <p>这里先只保留数字人模块的入口和场景位，不再继续做半成品聊天。等主问答稳定后，再把实时语音、视频和数字形象单独接进来。</p>
       </div>
       <div class="human-hero-actions">
-        <button class="button-ghost" @click="resetChat">清空会话</button>
+        <button class="button-ghost" @click="resetChat">回到默认场景</button>
         <RouterLink to="/" class="button-primary">回到问答中枢</RouterLink>
       </div>
     </section>
@@ -50,25 +50,34 @@
     <section class="human-chat-shell">
       <div class="human-chat-head">
         <div>
-          <span>实时聊天</span>
-          <strong>{{ activeScene.label }}</strong>
+          <span>模块状态</span>
+          <strong>数字人先保留入口，后续再单独深化</strong>
         </div>
         <div class="human-chat-chips">
           <span v-for="item in activeScene.tags" :key="item">{{ item }}</span>
         </div>
       </div>
 
-      <div class="human-message-scroll">
-        <AgentThreadPanel :messages="messagePreview" />
-      </div>
-
-      <div class="human-input-row">
-        <input v-model="draft" class="text-input hero-input" :placeholder="activeScene.placeholder" @keydown.enter="submit" />
-        <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading">发送</button>
+      <div class="human-placeholder-grid">
+        <article class="human-placeholder-card">
+          <span>当前决定</span>
+          <strong>先不继续做聊天交互</strong>
+          <p>数字人页面当前只保留场景入口和展示位，不再继续和企业问答争抢交互优先级。</p>
+        </article>
+        <article class="human-placeholder-card">
+          <span>后续扩展</span>
+          <strong>语音 / 视频 / WebSocket</strong>
+          <p>等企业问答、证据链和报告链稳定后，再单独推进实时会话、数字形象和娱乐化互动。</p>
+        </article>
+        <article class="human-placeholder-card">
+          <span>当前预留场景</span>
+          <strong>{{ activeScene.label }}</strong>
+          <p>{{ activeScene.summary }}</p>
+        </article>
       </div>
 
       <div class="human-prompt-row">
-        <button v-for="item in activeScene.prompts" :key="item" class="human-prompt-chip" @click="applyPrompt(item)">
+        <button v-for="item in activeScene.prompts" :key="item" class="human-prompt-chip" type="button">
           {{ item }}
         </button>
       </div>
@@ -77,11 +86,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-
-import AgentThreadPanel from '../components/AgentThreadPanel.vue';
-import { useAgentThreadStore } from '../stores/agentThread';
 
 interface HumanScene {
   id: string;
@@ -89,7 +95,6 @@ interface HumanScene {
   host: string;
   avatar: string;
   summary: string;
-  placeholder: string;
   prompts: string[];
   tags: string[];
 }
@@ -101,7 +106,6 @@ const scenes: HumanScene[] = [
     host: '数智助理',
     avatar: '智',
     summary: '适合轻量追问、观点陪跑和问题拆解，偏专业但不压迫。',
-    placeholder: '问数字人一个轻量问题...',
     prompts: ['用轻松点的方式解释一下企业经营风险', '把这家公司最近的亮点讲得像路演串词', '先别严肃分析，陪我理一下这家公司的重点'],
     tags: ['专业', '轻量', '陪跑'],
   },
@@ -111,7 +115,6 @@ const scenes: HumanScene[] = [
     host: '答辩搭子',
     avatar: '演',
     summary: '适合口语化问答、答辩预演和表达润色。',
-    placeholder: '输入你要彩排的问题...',
     prompts: ['你当评委来问我三个刁钻问题', '把这段结论改得更像答辩现场表达', '帮我模拟一个路演问答场景'],
     tags: ['答辩', '彩排', '表达'],
   },
@@ -121,53 +124,21 @@ const scenes: HumanScene[] = [
     host: '娱乐陪聊体',
     avatar: '聊',
     summary: '预留娱乐化和人格化聊天场景，后续接更鲜活的数字人设定。',
-    placeholder: '随便聊点轻松的...',
     prompts: ['如果这家公司是个角色，它会是什么性格', '用吐槽但不低级的方式讲讲这个行业', '给我来一个轻松一点的互动话题'],
     tags: ['轻松', '娱乐', '人格化'],
   },
 ];
 
-const agentStore = useAgentThreadStore();
 const sceneId = ref<HumanScene['id']>('briefing');
-const draft = ref('');
-
 const activeScene = computed(() => scenes.find((item) => item.id === sceneId.value) || scenes[0]);
-const messagePreview = computed(() => agentStore.messages);
 
 function selectScene(id: HumanScene['id']) {
   sceneId.value = id;
-  draft.value = '';
-  resetChat();
 }
 
 function resetChat() {
-  agentStore.resetThread(null, null);
-  agentStore.threadTitle = activeScene.value.label;
-  agentStore.setTaskMode(null);
-  draft.value = '';
+  sceneId.value = 'briefing';
 }
-
-function applyPrompt(text: string) {
-  draft.value = text;
-  void submit();
-}
-
-async function submit() {
-  const question = draft.value.trim();
-  if (!question) return;
-  await agentStore.ask(question, {
-    companyCode: null,
-    companyName: null,
-    taskMode: null,
-  });
-  draft.value = '';
-}
-
-onMounted(() => {
-  if (!agentStore.messages.length) {
-    resetChat();
-  }
-});
 </script>
 
 <style scoped>
@@ -180,7 +151,8 @@ onMounted(() => {
 .human-scene-list,
 .human-chat-shell,
 .human-prompt-row,
-.human-chat-chips {
+.human-chat-chips,
+.human-placeholder-grid {
   display: grid;
   gap: 18px;
 }
@@ -372,24 +344,36 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.human-message-scroll {
-  height: 420px;
-  overflow: auto;
-  border-radius: 24px;
-  border: 1px solid rgba(10, 31, 68, 0.08);
-  background:
-    radial-gradient(circle at top right, rgba(58, 132, 255, 0.08), transparent 20%),
-    linear-gradient(180deg, #fbfdff, #f3f6fa);
+.human-placeholder-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.human-message-scroll :deep(.thread-timeline) {
-  padding: 18px;
-}
-
-.human-input-row {
+.human-placeholder-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 108px;
-  gap: 12px;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(10, 31, 68, 0.08);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.human-placeholder-card span {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #6c7e95;
+}
+
+.human-placeholder-card strong {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.human-placeholder-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
 }
 
 .human-prompt-row {
@@ -420,8 +404,7 @@ onMounted(() => {
 
 @media (max-width: 760px) {
   .human-hero-actions,
-  .human-chat-chips,
-  .human-input-row {
+  .human-chat-chips {
     grid-auto-flow: row;
     grid-template-columns: 1fr;
   }
@@ -432,9 +415,8 @@ onMounted(() => {
     align-items: start;
   }
 
-  .human-message-scroll {
-    height: auto;
-    max-height: none;
+  .human-placeholder-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

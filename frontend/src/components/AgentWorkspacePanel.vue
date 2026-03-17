@@ -92,21 +92,70 @@
           <span>当前线程</span>
           <strong>{{ agentStore.threadTitle || '新线程' }}</strong>
         </div>
-        <div class="qa-chat-meta">
-          <span>{{ activeTaskLabel }}</span>
-          <span>{{ agentStore.focusCompanyName || '未固定企业' }}</span>
+        <div class="qa-chat-head-side">
+          <div class="qa-chat-meta">
+            <span>{{ activeTaskLabel }}</span>
+            <span>{{ agentStore.focusCompanyName || '未固定企业' }}</span>
+          </div>
+          <div class="qa-chat-tools">
+            <button class="qa-link-button" @click="copyLatestSummary" :disabled="!agentStore.latest?.summary">复制结论</button>
+            <button class="qa-link-button" @click="fillSeedQuestion">填入推荐问题</button>
+          </div>
         </div>
       </div>
 
+      <div v-if="starterPrompts.length" class="qa-starter-row">
+        <button
+          v-for="item in starterPrompts"
+          :key="item"
+          class="qa-starter-chip"
+          :disabled="agentStore.loading"
+          @click="applyPrompt(item)"
+        >
+          {{ item }}
+        </button>
+      </div>
+
+      <div v-if="threadMemoryTips.length" class="qa-memory-strip">
+        <span class="qa-memory-title">线程记忆</span>
+        <button
+          v-for="item in threadMemoryTips"
+          :key="item"
+          class="qa-memory-chip"
+          :disabled="agentStore.loading"
+          @click="injectMemoryTip(item)"
+        >
+          {{ item }}
+        </button>
+      </div>
+
       <div class="qa-chat-scroll">
-        <AgentThreadPanel :messages="messagePreview" />
+        <AgentThreadPanel :messages="displayMessages" />
       </div>
 
       <div v-if="agentStore.error" class="error-banner">{{ agentStore.error }}</div>
 
-      <div class="qa-input-row">
-        <input v-model="draft" class="text-input hero-input" :placeholder="placeholder" @keydown.enter="submit" />
-        <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading">发送</button>
+      <div class="qa-composer-shell">
+        <textarea
+          ref="composerRef"
+          v-model="draft"
+          class="qa-textarea"
+          :placeholder="placeholder"
+          rows="3"
+          @keydown="handleComposerKeydown"
+        />
+        <div class="qa-composer-foot">
+          <div class="qa-composer-hint">
+            <span>{{ composerStatus }}</span>
+            <button class="qa-link-button" @click="insertLastConclusion" :disabled="!agentStore.threadMemory?.conclusion || agentStore.loading">
+              引用上轮结论
+            </button>
+          </div>
+          <div class="qa-input-actions">
+            <button class="button-ghost compact-action" @click="clearDraft" :disabled="!draft.trim() || agentStore.loading">清空</button>
+            <button class="button-primary hero-button" @click="submit" :disabled="agentStore.loading || !canSubmit">发送</button>
+          </div>
+        </div>
       </div>
 
       <div v-if="followUpQuestions.length" class="qa-followup-row">
@@ -157,6 +206,34 @@ const taskModeLabels: Record<string, string> = {
   data_quality: '数据治理',
 };
 
+const starterPromptMap: Record<string, string[]> = {
+  company_diagnosis: [
+    '当前最值得关注的经营问题是什么？',
+    '把营收、利润和现金流拆开看一遍。',
+    '给我一个先结论后证据的版本。',
+  ],
+  company_risk_forecast: [
+    '未来一年最需要盯住的风险是什么？',
+    '把风险分成财务、经营和行业三层。',
+    '给我一版适合管理层看的预警清单。',
+  ],
+  company_decision_brief: [
+    '如果现在只能抓三件事，优先级怎么排？',
+    '把问题、原因和动作建议压成一页。',
+    '给我一个适合汇报的决策摘要。',
+  ],
+  industry_trend: [
+    '行业最近的变化会先影响哪些指标？',
+    '给我一个行业趋势和公司映射的版本。',
+    '从研报和宏观看，接下来要关注什么？',
+  ],
+  data_quality: [
+    '当前哪些数据缺口会影响判断？',
+    '把待复核问题和时效风险列出来。',
+    '如果要继续完善数据链，先补哪几块？',
+  ],
+};
+
 const loadingPreviewMap: Record<string, Array<{ title: string; detail: string; live: boolean }>> = {
   company_diagnosis: [
     { title: '问题拆解', detail: '确认范围', live: false },
@@ -190,12 +267,35 @@ const draft = ref(props.seedQuestion);
 const manualTaskMode = ref<string | null>(null);
 const showReasoning = ref(false);
 const showHistory = ref(false);
+const composerRef = ref<HTMLTextAreaElement | null>(null);
 
 const activeTaskMode = computed(() => manualTaskMode.value || agentStore.taskMode || 'company_diagnosis');
 const activeTaskLabel = computed(() => taskModeLabels[activeTaskMode.value] || '企业分析');
-const messagePreview = computed(() => props.compact ? agentStore.messages.slice(-4) : agentStore.messages);
+const displayMessages = computed(() => props.compact ? agentStore.messages.slice(-4) : agentStore.messages);
 const followUpQuestions = computed(() => agentStore.latest?.suggested_questions?.slice(0, props.compact ? 3 : 4) || []);
 const historyItems = computed(() => agentStore.history.slice(0, props.compact ? 5 : 8));
+const starterPrompts = computed(() => {
+  const companyName = props.companyName || agentStore.focusCompanyName || '';
+  return (starterPromptMap[activeTaskMode.value] || starterPromptMap.company_diagnosis)
+    .map((item) => (companyName ? `${companyName}${item}` : item))
+    .slice(0, 3);
+});
+const threadMemoryTips = computed(() => {
+  const memory = agentStore.threadMemory;
+  if (!memory) return [];
+  return [
+    ...(memory.key_signals || []),
+    ...(memory.next_steps || []),
+  ].filter(Boolean).slice(0, 4);
+});
+const canSubmit = computed(() => Boolean(draft.value.trim()));
+const composerStatus = computed(() => {
+  if (agentStore.loading) return '系统正在检索证据并整理回答...';
+  if (agentStore.latest?.execution_digest?.evidence_count) {
+    return `本轮已引用 ${agentStore.latest.execution_digest.evidence_count} 条证据，Enter 发送，Shift+Enter 换行`;
+  }
+  return 'Enter 发送，Shift+Enter 换行';
+});
 
 const reasoningPreview = computed(() => {
   if (agentStore.latest?.trace?.length) {
@@ -256,6 +356,36 @@ function applyPrompt(text: string) {
   void submit();
 }
 
+function clearDraft() {
+  draft.value = '';
+  composerRef.value?.focus();
+}
+
+function fillSeedQuestion() {
+  draft.value = props.seedQuestion || starterPrompts.value[0] || draft.value;
+  composerRef.value?.focus();
+}
+
+function injectMemoryTip(text: string) {
+  draft.value = draft.value.trim()
+    ? `${draft.value.trim()}\n请围绕这一点继续展开：${text}`
+    : `请围绕这一点继续展开：${text}`;
+  composerRef.value?.focus();
+}
+
+function insertLastConclusion() {
+  const conclusion = agentStore.threadMemory?.conclusion?.trim();
+  if (!conclusion) return;
+  draft.value = `接着上轮结论继续分析：${conclusion}`;
+  composerRef.value?.focus();
+}
+
+async function copyLatestSummary() {
+  const summary = agentStore.latest?.summary?.trim();
+  if (!summary || !navigator?.clipboard?.writeText) return;
+  await navigator.clipboard.writeText(summary);
+}
+
 async function refreshHistory() {
   await agentStore.loadHistory();
 }
@@ -269,12 +399,22 @@ async function submit() {
   const question = draft.value.trim();
   if (!question) return;
   showReasoning.value = false;
-  await agentStore.ask(question, {
-    companyCode: props.companyCode,
-    companyName: props.companyName,
-    taskMode: manualTaskMode.value ?? undefined,
-  });
-  draft.value = '';
+  try {
+    await agentStore.ask(question, {
+      companyCode: props.companyCode,
+      companyName: props.companyName,
+      taskMode: manualTaskMode.value ?? undefined,
+    });
+    draft.value = '';
+  } catch {
+    composerRef.value?.focus();
+  }
+}
+
+function handleComposerKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.shiftKey) return;
+  event.preventDefault();
+  void submit();
 }
 
 watch(() => props.seedQuestion, (value) => {
@@ -478,10 +618,27 @@ onMounted(async () => {
   margin-bottom: 14px;
 }
 
+.qa-chat-head-side,
 .qa-chat-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.qa-chat-head-side {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.qa-chat-tools,
+.qa-memory-strip,
+.qa-starter-row,
+.qa-input-actions,
+.qa-composer-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 .qa-chat-scroll {
@@ -499,12 +656,59 @@ onMounted(async () => {
   padding: 18px;
 }
 
-.qa-input-row {
+.qa-starter-chip,
+.qa-memory-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(10, 31, 68, 0.08);
+  background: #f5f8fb;
+  color: #35577f;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.qa-memory-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6a7b90;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.qa-composer-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.qa-textarea {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(10, 31, 68, 0.1);
+  background: #fbfdff;
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.6;
+}
+
+.qa-textarea:focus {
+  outline: 2px solid rgba(35, 74, 120, 0.14);
+  border-color: rgba(35, 74, 120, 0.26);
+}
+
+.qa-composer-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  margin-top: 14px;
+}
+
+.qa-composer-hint span {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .qa-followup-row {
@@ -520,7 +724,7 @@ onMounted(async () => {
 @media (max-width: 900px) {
   .qa-reasoning-detail,
   .qa-status-row,
-  .qa-input-row {
+  .qa-composer-foot {
     grid-template-columns: 1fr;
   }
 }

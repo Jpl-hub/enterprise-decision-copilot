@@ -230,7 +230,7 @@ class AIStackService:
                     '分析结果能回连财报、研报、行业证据与数据质量状态。',
                 ],
                 'gaps': [
-                    '企业页里的证据流和任务轨迹还可以再做得更强，不够竞赛级震撼。',
+                    '企业页里的证据流和任务轨迹还可以继续做强，结果表达还不够扎实。',
                     '多角色协同和批处理任务调度还没有进系统主界面。',
                 ],
                 'next_steps': [
@@ -293,7 +293,7 @@ class AIStackService:
                 ],
                 'next_steps': [
                     '给现有湖仓补一层 Spark-ready 的批处理接口和任务说明，明确可扩展方向。',
-                    '继续扩充企业池和官方报告样本，把仓层规模从演示级拉到竞赛级。',
+                    '继续扩充企业池和官方报告样本，把仓层规模从演示级拉到更稳的可用区间。',
                 ],
             },
         ]
@@ -568,8 +568,8 @@ class AIStackService:
         mission_lanes = [
             {
                 'lane_id': 'real-data-command',
-                'name': '真实数据指挥线',
-                'owner_role': '数据治理负责人',
+                'name': '数据可信与覆盖',
+                'owner_role': '数据可信层',
                 'status': 'active' if trust_status == 'trusted' else 'building',
                 'readiness_score': round(max(0.2, min(0.95, official_coverage_ratio * 0.72 + 0.2)), 2),
                 'summary': '围绕交易所财报、东方财富研报和国家统计局宏观数据，持续保证来源可信、口径统一、可追溯。',
@@ -577,31 +577,31 @@ class AIStackService:
                 'blockers': release_blockers[:3] or ['继续补齐扩池公司的官方财报和多模态证据。'],
                 'next_actions': [
                     '继续补齐扩池候选公司的交易所年报和字段抽取。',
-                    '把待复核项压到可控区间，再推进正式发布材料。',
+                    '把待复核项压到可控区间，保证用户拿到的结论更稳。',
                 ],
                 'deliverables': ['来源登记', '可信评分', '待复核清单', '官方财报覆盖统计'],
                 'linked_engines': ['data-governance', 'lakehouse-compute'],
             },
             {
                 'lane_id': 'agent-boardroom',
-                'name': '多智能体会议线',
-                'owner_role': '产品 / Agent 负责人',
+                'name': '问答与分析能力',
+                'owner_role': '交互分析层',
                 'status': str(traditional_agent.get('status') or 'building'),
                 'readiness_score': self._safe_float(traditional_agent.get('readiness_score')),
-                'summary': '把企业分析、双企业对抗和行业专题会议统一到多角色协同框架里，形成老师能看懂的决策会议室。',
-                'current_focus': '当前已支持单企业、双企业、行业专题三种会议模式，并能回传 SQL 动作板。',
+                'summary': '围绕企业问答、对比分析和专题协作，提供可追问、可回链、可继续展开的分析能力。',
+                'current_focus': '当前已支持单企业、双企业和行业专题三类分析路径，并能回传动作建议。',
                 'blockers': list(traditional_agent.get('gaps') or [])[:2],
                 'next_actions': [
-                    '把会议室和批任务中台打通，形成可复用任务链。',
-                    '继续增强证据流、管理层动作板和导出材料的一致性。',
+                    '继续增强追问体验、证据流和线程复用能力。',
+                    '把分析结论、动作建议和导出材料进一步打通。',
                 ],
-                'deliverables': ['会议纪要', '多角色观点', '红线清单', 'SQL 动作板'],
+                'deliverables': ['问答结论', '证据摘要', '行动建议', '线程记忆'],
                 'linked_engines': ['agent-orchestrator'],
             },
             {
                 'lane_id': 'model-lab',
-                'name': '预测与多模态实验线',
-                'owner_role': '算法负责人',
+                'name': '预测与多模态能力',
+                'owner_role': '模型能力层',
                 'status': str(deep_learning.get('status') or 'building'),
                 'readiness_score': self._safe_float(deep_learning.get('readiness_score')),
                 'summary': '围绕风险预测、多模态财报抽取和 SFT 数据集建设，逐步把“会解释过去”升级为“能预测未来”。',
@@ -613,8 +613,8 @@ class AIStackService:
             },
             {
                 'lane_id': 'batch-compute',
-                'name': '湖仓批处理线',
-                'owner_role': '数据平台负责人',
+                'name': '数据处理与计算',
+                'owner_role': '数据底座层',
                 'status': str(big_data.get('status') or 'building'),
                 'readiness_score': self._safe_float(big_data.get('readiness_score')),
                 'summary': '以 Parquet + DuckDB 跑通当前真实链路，并把 Spark-ready 批处理作业整理成可继续扩张的计算底座。',
@@ -629,21 +629,21 @@ class AIStackService:
             },
             {
                 'lane_id': 'release-studio',
-                'name': '正式交付线',
-                'owner_role': '项目负责人',
+                'name': '报告与交付',
+                'owner_role': '结果交付层',
                 'status': 'active' if trust_status == 'trusted' and pending_review_count <= 6 else 'building',
                 'readiness_score': round(max(0.18, min(0.91, 0.55 + (0.16 if trust_status == 'trusted' else 0.0) - min(pending_review_count, 12) * 0.015)), 2),
-                'summary': '把企业报告、决策简报、会议纪要和竞赛导出材料收束成一套正式交付能力，而不是零散页面。',
-                'current_focus': f'当前发布门禁 {trust_status}，待复核 {pending_review_count} 项，适合继续强化导出一致性和材料感。',
+                'summary': '把企业报告、决策简报、摘要结论和导出材料收束成一套稳定交付能力，而不是零散页面。',
+                'current_focus': f'当前可用状态 {trust_status}，待复核 {pending_review_count} 项，适合继续强化导出一致性和结果表达。',
                 'blockers': [
                     '正式导出仍需继续压缩发布阻塞项。',
                     '部分专题会议和导出材料之间还没有完全打通。',
                 ],
                 'next_actions': [
-                    '把会议室输出和竞赛导出包继续对齐成统一口径。',
-                    '让老师现场追问时，系统能从工作台一路追到正式材料。',
+                    '把问答输出和正式导出继续对齐成统一口径。',
+                    '让用户从工作台一路追到正式材料与动作建议。',
                 ],
-                'deliverables': ['企业综合报告', '决策简报', '会议纪要', '正式导出包'],
+                'deliverables': ['企业综合报告', '决策简报', '摘要结论', '正式导出包'],
                 'linked_engines': ['agent-orchestrator', 'data-governance'],
             },
         ]
@@ -655,9 +655,9 @@ class AIStackService:
             'blocking_issue_count': len(release_blockers) + max(0, pending_review_count - 6),
             'pending_review_count': pending_review_count,
             'release_note': (
-                '当前可以支撑正式材料导出，但仍需持续补齐扩池公司和多模态证据。'
+                '当前系统结果已可直接使用，但仍需持续补齐扩池公司和多模态证据。'
                 if trust_status == 'trusted' and pending_review_count <= 6
-                else '当前仍应先处理数据可信或待复核问题，再进行正式发布。'
+                else '当前仍有数据可信或待复核问题，重要结论建议先复查来源。'
             ),
         }
 
@@ -667,13 +667,13 @@ class AIStackService:
             'mission_lanes': mission_lanes,
             'release_gate': release_gate,
             'showcase_flows': [
-                '真实财报 / 研报 / 宏观数据 -> 湖仓主题表 -> Agent 会议室 -> 导出正式材料',
-                '用户追问 -> 多角色辩论 -> SQL 动作板 -> 线程记忆 -> 复用到下一轮会议',
-                '风险预测 / 多模态抽取 -> 模型注册表 -> 质量治理 -> 正式发布门禁',
+                '真实财报 / 研报 / 宏观数据 -> 检索与分析 -> 问答结论 -> 正式导出',
+                '用户追问 -> 任务路由 -> 证据整理 -> 线程记忆 -> 下一轮继续分析',
+                '风险预测 / 多模态抽取 -> 模型注册表 -> 质量治理 -> 更稳的结果交付',
             ],
             'control_tower_brief': [
-                '这个系统不再只是多个页面，而是有数据线、智能体线、模型线、批处理线和交付线五条主任务泳道。',
-                '老师现场追问时，可以从会议室、仓层、模型、质量、导出五个方向继续展开，不会一问就到头。',
-                '产品展示上，当前最重要的是把这五条线说清楚、做厚、串起来，而不是继续堆零散 feature。',
+                '这个页面应该帮助用户理解系统当前能做什么、数据是否可靠、结果能不能直接用。',
+                '系统当前由数据可信、问答分析、模型能力、数据处理和结果交付五条能力线组成。',
+                '后续重点不是继续堆页面，而是把问答体验、证据链和交付链继续做深做稳。',
             ],
         }
